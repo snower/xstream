@@ -119,8 +119,9 @@ class Session(BaseSession):
                     connection.loop()
                 for stream_id,stream in self._streams.items():
                     stream.loop()
-                    self.check()
-            except:pass
+                self.check()
+            except Exception,e:
+                logging.error("session %s loop error:%s",self._session_id,e)
             time.sleep(2)
 
     def open(self):
