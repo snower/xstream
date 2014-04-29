@@ -23,6 +23,10 @@ class Connection(EventEmitter):
         self._time=time.time()
         self._ping_time=0
 
+    @property
+    def addr(self):
+        return self._connection.addr
+
     def on_data(self, connection, data):
         self._buffer+=data
         while self.read():pass

@@ -48,8 +48,9 @@ class Server(BaseSession):
 
     def on_frame(self,connection,frame):
         if frame.stream_id==0 and frame.frame_id==0 and frame.data[:5]=="hello":
+            addr=connection.addr or ('',0)
             if frame.session_id ==0:
-                session=Session('',0,Session.SESSION_TYPE.SERVER,**json.loads(frame.data[5:]))
+                session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,**json.loads(frame.data[5:]))
                 connection.on("frame",session.on_frame)
                 connection.on("close",session.on_connection_close)
                 session._connections.append(connection)
@@ -62,17 +63,19 @@ class Server(BaseSession):
                 frame=Frame("hello",session.id,0,0)
                 session.write(frame)
                 logging.info("server session %s connection %s connected",session._session_id,connection)
+                return
             elif frame.session_id in self._sessions:
                 session=self._sessions[frame.session_id]
-                connection.on("frame",session.on_frame)
-                connection.on("close",session.on_connection_close)
-                session._connections.append(connection)
+                if session._ip==addr[0]:
+                    connection.on("frame",session.on_frame)
+                    connection.on("close",session.on_connection_close)
+                    session._connections.append(connection)
 
-                frame=Frame("hello",session.id,0,0)
-                session.write(frame)
-                logging.info("server session %s connection %s connected",session._session_id,connection)
-            else:
-                connection.close()
+                    frame=Frame("hello",session.id,0,0)
+                    session.write(frame)
+                    logging.info("server session %s connection %s connected",session._session_id,connection)
+                    return
+        connection.close()
 
 class Session(BaseSession):
     class SESSION_TYPE:
@@ -196,12 +199,12 @@ class Session(BaseSession):
         if frame.stream_id==0 and frame.frame_id==0:
             self.command(connection,frame)
         elif frame.session_id==self._session_id:
-            if frame.stream_id not in self._streams:
+            if frame.stream_id not in self._streams and frame.frame_id==1:
                 stream=Stream(self,frame.stream_id)
                 self._streams[frame.stream_id]=stream
                 self.emit("stream",self,stream)
                 logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
-            self._streams[frame.stream_id].on_frame(frame)
+            if frame.stream_id in self._streams:self._streams[frame.stream_id].on_frame(frame)
 
     def write(self,frame):
         if self._status!=self.STATUS.CONNECTED:return False
