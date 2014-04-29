@@ -126,34 +126,32 @@ class Session(BaseSession):
         BaseSession.loop()
 
     def close(self):
-        frame=Frame("close",self._session_id,0,0)
-        self.write(frame)
-        time.sleep(1)
+        if self._status==self.STATUS.CLOSED:return
         self._status=self.STATUS.CLOSED
         for stram_id in self._streams.keys():
             self._streams[stram_id].close()
         for connection in self._connections:
             connection.close()
         self.emit("close",self)
+        del self._sessions[self._session_id]
         logging.info("session %s close",self._session_id)
 
     def check(self):
-        if self._type!=self.SESSION_TYPE.CLIENT:return
-        if self._status!=self.STATUS.CLOSED:
-            if len(self._connections)==self._config.get("connect_count",20) and self._status==self.STATUS.INITING:
+        if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
+            if len(self._connections)>=self._config.get("connect_count",20) and self._status==self.STATUS.INITING:
                 self._status=self.STATUS.CONNECTED
                 self.emit("ready",self)
                 self._thread.start()
                 logging.info("session %s ready",self._session_id)
-                return
-            if len(self._connections)<self._config.get("connect_count",20):
+            elif len(self._connections)<self._config.get("connect_count",20):
                 connection=ssloop.Socket(self._loop)
                 connection.once("connect",self.on_connection)
                 connection.connect((self._ip,self._port))
-        else:
-            if not self._connections:
-                del self._sessions[self._session_id]
-                self.emit("close",self)
+        if self._type==self.SESSION_TYPE.SERVER and not self._connections:
+            self._status=self.STATUS.CLOSED
+            del self._sessions[self._session_id]
+            self.emit("close",self)
+            logging.info("session %s close",self._session_id)
 
     def stream(self):
         sid=self.get_next_stream_id()
@@ -184,12 +182,6 @@ class Session(BaseSession):
             if connection not in self._connections:self._connections.append(connection)
             self.check()
             logging.info("session %s connection %s connected",self._session_id,connection)
-        elif frame.data=="close":
-            self._status=self.STATUS.CLOSED
-            del self._sessions[self._session_id]
-            self.emit("close",self)
-        else:
-            connection.close()
 
     def on_frame(self,connection,frame):
         if frame.stream_id==0 and frame.frame_id==0:

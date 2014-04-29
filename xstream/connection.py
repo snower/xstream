@@ -61,7 +61,7 @@ class Connection(EventEmitter):
 
     def loop(self):
         if self._ping_time!=0 and time.time()-self._ping_time>=30:
-            pass
+            self._connection.close()
         elif time.time()-self._time>=30:
             frame=Frame("ping",0,0,0)
             self._ping_time=time.time()
