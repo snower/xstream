@@ -51,6 +51,7 @@ class Server(BaseSession):
             if frame.session_id ==0:
                 session=Session('',0,Session.SESSION_TYPE.SERVER,**json.loads(frame.data[5:]))
                 connection.on("frame",session.on_frame)
+                connection.on("close",session.on_connection_close)
                 session._connections.append(connection)
 
                 self._sessions[session.id]=session
@@ -64,6 +65,7 @@ class Server(BaseSession):
             elif frame.session_id in self._sessions:
                 session=self._sessions[frame.session_id]
                 connection.on("frame",session.on_frame)
+                connection.on("close",session.on_connection_close)
                 session._connections.append(connection)
 
                 frame=Frame("hello",session.id,0,0)
@@ -127,9 +129,9 @@ class Session(BaseSession):
 
     def close(self):
         if self._status==self.STATUS.CLOSED:return
-        self._status=self.STATUS.CLOSED
         for stram_id in self._streams.keys():
             self._streams[stram_id].close()
+        self._status=self.STATUS.CLOSED
         for connection in self._connections:
             connection.close()
         self.emit("close",self)
@@ -149,6 +151,8 @@ class Session(BaseSession):
                 connection.connect((self._ip,self._port))
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
+            for stram_id in self._streams.keys():
+                self._streams[stram_id].close()
             del self._sessions[self._session_id]
             self.emit("close",self)
             logging.info("session %s close",self._session_id)
