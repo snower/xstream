@@ -114,11 +114,13 @@ class Session(BaseSession):
 
     def session_loop(self):
         while self._status==self.STATUS.CONNECTED:
-            for connection in self._connections:
-                connection.loop()
-            for stream_id,stream in self._streams.items():
-                stream.loop()
-            self.check()
+            try:
+                for connection in self._connections:
+                    connection.loop()
+                for stream_id,stream in self._streams.items():
+                    stream.loop()
+                    self.check()
+            except:pass
             time.sleep(2)
 
     def open(self):
