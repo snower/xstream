@@ -4,6 +4,7 @@
 
 import time
 import json
+import bisect
 import logging
 from ssloop import EventEmitter
 from frame import Frame
@@ -48,18 +49,17 @@ class Stream(EventEmitter):
             self.emit("data",self,frame.data)
             if not self._frames:return
         else:
-            self._frames.append(frame)
-            self._frames=sorted(self._frames,lambda x,y:cmp(x.frame_id,y.frame_id))
+            bisect.insort(self._frames,frame)
 
-        data=""
-        while self._frames[0].frame_id==self._current_frame_id:
+        data=[]
+        while self._frames and self._frames[0].frame_id==self._current_frame_id:
             frame=self._frames.pop(0)
-            data+=frame.data
+            data.append(frame.data)
             self._current_frame_id+=1
             if not self._frames:break
         if data:
             self._last_data_time=time.time()
-            self.emit("data",self,data)
+            self.emit("data",self,"".join(data))
 
     def command(self,data):
         info=json.loads(data)

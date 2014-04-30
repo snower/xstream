@@ -93,6 +93,7 @@ class Session(BaseSession):
         self._session_id=0 if type==self.SESSION_TYPE.CLIENT else self.get_next_session_id()
         self._streams={}
         self._connections=[]
+        self._connectings=[]
         self._status=self.STATUS.CONNECTED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITING
         self._config=kwargs
         self._thread=threading.Thread(target=self.session_loop)
@@ -132,6 +133,8 @@ class Session(BaseSession):
     def open(self):
         connection=ssloop.Socket(self._loop)
         connection.once("connect",self.on_connection)
+        connection.once("close",self.on_connection_close)
+        self._connectings.append(connection)
         connection.connect((self._ip,self._port))
         BaseSession.loop()
 
@@ -153,10 +156,13 @@ class Session(BaseSession):
                 self.emit("ready",self)
                 self._thread.start()
                 logging.info("session %s ready",self._session_id)
-            elif len(self._connections)<self._config.get("connect_count",20):
-                connection=ssloop.Socket(self._loop)
-                connection.once("connect",self.on_connection)
-                connection.connect((self._ip,self._port))
+            elif len(self._connections)+len(self._connectings)<self._config.get("connect_count",20):
+                for i in range(self._config.get("connect_count",20)-len(self._connections)-len(self._connectings)):
+                    connection=ssloop.Socket(self._loop)
+                    connection.once("connect",self.on_connection)
+                    connection.once("close",self.on_connection_close)
+                    self._connectings.append(connection)
+                    connection.connect((self._ip,self._port))
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
             for stram_id in self._streams.keys():
@@ -185,13 +191,15 @@ class Session(BaseSession):
         connection.write(frame)
 
     def on_connection_close(self,connection):
-        self._connections.remove(connection)
+        if connection._connection in self._connectings:self._connectings.remove(connection._connection)
+        if connection in self._connections:self._connections.remove(connection)
         logging.info("session %s connection %s colse",self._session_id,connection)
 
     def command(self,connection,frame):
         if frame.data=="hello":
             self._session_id=frame.session_id
             if connection not in self._connections:self._connections.append(connection)
+            if connection._connection in self._connectings:self._connectings.remove(connection._connection)
             self.check()
             logging.info("session %s connection %s connected",self._session_id,connection)
 
@@ -199,7 +207,7 @@ class Session(BaseSession):
         if frame.stream_id==0 and frame.frame_id==0:
             self.command(connection,frame)
         elif frame.session_id==self._session_id:
-            if frame.stream_id not in self._streams and frame.frame_id==1:
+            if frame.stream_id not in self._streams and (frame.frame_id==0 or frame.frame_id==1):
                 stream=Stream(self,frame.stream_id)
                 self._streams[frame.stream_id]=stream
                 self.emit("stream",self,stream)

@@ -21,6 +21,9 @@ class Frame(object):
     def get_data(self):
         return self.data
 
+    def __cmp__(self, other):
+        return cmp(self.frame_id,other.frame_id)
+
     def __str__(self):
         data=''
         data+=struct.pack('H',self.session_id)
