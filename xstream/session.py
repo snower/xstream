@@ -116,7 +116,7 @@ class Session(BaseSession):
         return sid
 
     def session_loop(self):
-        while self._status==self.STATUS.CONNECTED:
+        if self._status==self.STATUS.CONNECTED:
             try:
                 for connection in self._connections:
                     connection.loop()
