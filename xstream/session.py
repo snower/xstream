@@ -184,6 +184,7 @@ class Session(BaseSession):
             del self._streams[stream.id]
 
     def on_connection(self,connection):
+        connection.remove_listener("close",self.on_connection_close)
         frame=Frame("hello"+json.dumps(self._config),self._session_id,0,0)
         connection=Connection(connection)
         connection.on("frame",self.on_frame)
