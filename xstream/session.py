@@ -61,7 +61,7 @@ class Server(BaseSession):
                 logging.info("server session %s connect",session._session_id)
 
                 frame=Frame("hello",session.id,0,0)
-                session.write(frame)
+                connection.write(frame)
                 logging.info("server session %s connection %s connected",session._session_id,connection)
                 return
             elif frame.session_id in self._sessions:
@@ -72,7 +72,7 @@ class Server(BaseSession):
                     session._connections.append(connection)
 
                     frame=Frame("hello",session.id,0,0)
-                    session.write(frame)
+                    connection.write(frame)
                     logging.info("server session %s connection %s connected",session._session_id,connection)
                     return
         connection.close()
