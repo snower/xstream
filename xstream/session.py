@@ -191,8 +191,11 @@ class Session(BaseSession):
         connection.write(frame)
 
     def on_connection_close(self,connection):
-        if connection._connection in self._connectings:self._connectings.remove(connection._connection)
-        if connection in self._connections:self._connections.remove(connection)
+        if isinstance(connection,Connection):
+            if connection._connection in self._connectings:self._connectings.remove(connection._connection)
+            if connection in self._connections:self._connections.remove(connection)
+        else:
+            if connection in self._connectings:self._connectings.remove(connection)
         logging.info("session %s connection %s colse",self._session_id,connection)
 
     def command(self,connection,frame):
