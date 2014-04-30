@@ -57,7 +57,7 @@ class Server(BaseSession):
 
                 self._sessions[session.id]=session
                 self.emit("session",self,session)
-                session._thread.start()
+                self._loop.timeout(2,session.session_loop)
                 logging.info("server session %s connect",session._session_id)
 
                 frame=Frame("hello",session.id,0,0)
@@ -96,9 +96,6 @@ class Session(BaseSession):
         self._connectings=[]
         self._status=self.STATUS.CONNECTED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITING
         self._config=kwargs
-        self._thread=threading.Thread(target=self.session_loop)
-
-        self._thread.setDaemon(True)
 
     @property
     def id(self):
@@ -128,7 +125,7 @@ class Session(BaseSession):
                 self.check()
             except Exception,e:
                 logging.error("session %s loop error:%s",self._session_id,e)
-            time.sleep(2)
+            self._loop.timeout(2,self.session_loop)
 
     def open(self):
         connection=ssloop.Socket(self._loop)
@@ -154,7 +151,7 @@ class Session(BaseSession):
             if len(self._connections)>=self._config.get("connect_count",20) and self._status==self.STATUS.INITING:
                 self._status=self.STATUS.CONNECTED
                 self.emit("ready",self)
-                self._thread.start()
+                self._loop.timeout(2,self.session_loop)
                 logging.info("session %s ready",self._session_id)
             elif len(self._connections)+len(self._connectings)<self._config.get("connect_count",20):
                 for i in range(self._config.get("connect_count",20)-len(self._connections)-len(self._connectings)):

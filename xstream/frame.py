@@ -25,8 +25,4 @@ class Frame(object):
         return cmp(self.frame_id,other.frame_id)
 
     def __str__(self):
-        data=''
-        data+=struct.pack('H',self.session_id)
-        data+=struct.pack('H',self.stream_id)
-        data+=struct.pack('I',self.frame_id)
-        return data+self.data
+        return "".join([struct.pack('H',self.session_id),struct.pack('H',self.stream_id),struct.pack('I',self.frame_id),self.data])

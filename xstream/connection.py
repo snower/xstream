@@ -50,7 +50,7 @@ class Connection(EventEmitter):
 
     def write(self,frame):
         data=str(frame)
-        self._connection.write(struct.pack('H',len(data))+data)
+        self._connection.write("".join([struct.pack('H',len(data)),data]))
         self._time=time.time()
 
     def close(self):

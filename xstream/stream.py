@@ -56,7 +56,6 @@ class Stream(EventEmitter):
             frame=self._frames.pop(0)
             data.append(frame.data)
             self._current_frame_id+=1
-            if not self._frames:break
         if data:
             self._last_data_time=time.time()
             self.emit("data",self,"".join(data))
