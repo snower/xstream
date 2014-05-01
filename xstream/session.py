@@ -27,7 +27,7 @@ class BaseSession(EventEmitter):
         self._port=port
 
     @staticmethod
-    def loop():
+    def loop_forever():
         if BaseSession.loop is None:
             BaseSession.loop=ssloop.instance()
             BaseSession.loop.start()
@@ -42,7 +42,7 @@ class Server(BaseSession):
         self._server.on("connection",self.on_connection)
         self._server.listen(1024)
         logging.info("server %s listen %s:%s",self,self._ip,self._port)
-        BaseSession.loop()
+        BaseSession.loop_forever()
 
     def on_connection(self,server,connection):
         connection.on("data",self.on_data)
@@ -131,7 +131,7 @@ class Session(BaseSession):
         self._connectings.append(connection)
         self._status=self.STATUS.CONNECTING
         connection.connect((self._ip,self._port))
-        BaseSession.loop()
+        BaseSession.loop_forever()
 
     def close(self):
         if self._status==self.STATUS.CLOSED:return
