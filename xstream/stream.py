@@ -25,7 +25,7 @@ class BaseStream(EventEmitter):
         CLOSED=6
 
     def __init__(self,session,stream_id):
-        super(Stream,self).__init__()
+        super(BaseStream,self).__init__()
         self._stream_id=stream_id
         self._session=session
         self._frames=[]
@@ -94,7 +94,7 @@ class BaseStream(EventEmitter):
         if time.time()-self._last_recv_time>600:
             self.close()
 
-class Stream(EventEmitter):
+class Stream(BaseStream):
     def __init__(self,session,stream_id):
         super(Stream,self).__init__(session,stream_id)
 
@@ -121,7 +121,7 @@ class Stream(EventEmitter):
 
 class StrictStream(BaseStream):
     def __init__(self,session,stream_id):
-        super(Stream,self).__init__(session,stream_id)
+        super(StrictStream,self).__init__(session,stream_id)
 
     def open(self):
         self._status=self.STATUS.CONNECTING

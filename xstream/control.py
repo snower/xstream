@@ -16,6 +16,7 @@ class SessionControl(EventEmitter):
     def on_stream_streaming(self,stream):
         if stream.id==self._stream.id:
             self._session.streaming()
+            self._is_open=True
 
     def on_timeout(self):
         if not self._is_open:

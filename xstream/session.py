@@ -10,7 +10,6 @@ import ssloop
 from ssloop import EventEmitter
 from connection import Connection
 from stream import Stream,StrictStream
-from frame import Frame
 from control import SessionControl
 
 SYN_SESSION=0x01
@@ -53,7 +52,7 @@ class Server(BaseSession):
         if type==SYN_SESSION:
             config=bson.loads(data[1:])
             session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,**config)
-            connection.write(struct.pack("BH",SYN_OK,session.id)+bson.dumps(session._config))
+            connection.write(struct.pack("B",SYN_OK)+struct.pack("H",session.id)+bson.dumps(session._config))
             self._sessions[session.id]=session
             self.emit("session",self,session)
             logging.info("server session %s connect",session._session_id)
@@ -92,7 +91,7 @@ class Session(BaseSession):
         self._streams={}
         self._connections=[]
         self._connectings=[]
-        self._status=self.STATUS.CONNECTED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
+        self._status=self.STATUS.AUTHED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
         self._config=kwargs
         self._control=None
 
@@ -119,6 +118,9 @@ class Session(BaseSession):
         connection.on("frame",self.on_frame)
         connection.on("close",self.on_connection_close)
         self._connections.append(connection)
+
+        if self._status==self.STATUS.AUTHED and len(self._connections)>=self._config.get("connect_count",20):
+            self.connection_ready()
 
     def on_connection_close(self,connection):
         if connection in self._connections:self._connections.remove(connection)
@@ -153,14 +155,16 @@ class Session(BaseSession):
         if type==SYN_OK:
             self._session_id=struct.unpack("H",data[1:3])[0]
             self._status=self.STATUS.CONNECTED
+            logging.info("session %s connected",self._session_id)
 
             self._status=self.STATUS.AUTHED
+            logging.info("session %s authed",self._session_id)
 
             connection.remove_listener("close",self.on_close)
             connection.remove_listener("data",self.on_data)
             connection.on("close",self.on_fork_close)
             connection.on("data",self.on_fork_data)
-            connection.write(struct.pack("BH",SYN_CONNECTION,self._session_id))
+            connection.write(struct.pack("B",SYN_CONNECTION)+struct.pack("H",self._session_id))
             self.fork_connection()
 
     def on_close(self,connection):
@@ -177,7 +181,7 @@ class Session(BaseSession):
 
     def on_fork_connection(self,connection):
         connection.on("data",self.on_fork_data)
-        connection.write(struct.pack("BH",SYN_CONNECTION,self._session_id))
+        connection.write(struct.pack("B",SYN_CONNECTION)+struct.pack("H",self._session_id))
 
     def on_fork_data(self,connection,data):
         type=ord(data[0])
@@ -187,8 +191,7 @@ class Session(BaseSession):
             connection.remove_listener("data",self.on_fork_data)
             self.add_connection(connection)
 
-            if self._status==self.STATUS.AUTHED and len(self._connections)>=self._config.get("connect_count",20):
-                self._connection_ready()
+            logging.info("session %s connection %s connected",self._session_id,connection)
 
     def on_fork_close(self,connection):
         self._connectings.remove(connection)
@@ -196,10 +199,11 @@ class Session(BaseSession):
     def connection_ready(self):
         self.emit("ready",self)
         self._status=self.STATUS.STREAMING
-        stream=StrictStream(self,0)
-        self._control=SessionControl(stream)
-        self._streams[0]=stream
-        stream.open()
+        if self._type==self.SESSION_TYPE.CLIENT:
+            stream=StrictStream(self,0)
+            self._control=SessionControl(self,stream)
+            self._streams[0]=stream
+            stream.open()
         logging.info("session %s ready",self._session_id)
 
     def streaming(self):
@@ -246,7 +250,7 @@ class Session(BaseSession):
         if frame.stream_id==0:
             if not self._control:
                 stream=StrictStream(self,0)
-                self._control=SessionControl(stream)
+                self._control=SessionControl(self,stream)
                 self._streams[0]=stream
         else:
             if frame.frame_id==0:
