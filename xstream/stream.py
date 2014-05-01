@@ -105,6 +105,7 @@ class Stream(BaseStream):
         self.streaming()
 
     def close(self):
+        if self._status==self.STATUS.CLOSED:return
         self.write_control(SYN_FIN)
         self._session.close_stream(self)
         self._status=self.STATUS.CLOSED
@@ -128,6 +129,7 @@ class StrictStream(BaseStream):
         self.write_control(SYN_STREAM)
 
     def close(self):
+        if self._status==self.STATUS.CLOSED:return
         self._status=self.STATUS.CLOSING
         self.write_control(SYN_FIN)
 
