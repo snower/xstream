@@ -8,18 +8,15 @@ import logging
 from ssloop import EventEmitter
 from frame import Frame
 
-class Connection(EventEmitter):
-    class STATUS:
-        UNINIT=0
-        CONNECTED=1
+SYN_PING=0x01
 
+class Connection(EventEmitter):
     def __init__(self,connection):
         super(Connection,self).__init__()
         self._connection=connection
         self._connection.on("data",self.on_data)
         self._connection.on("close",self.on_close)
         self._buffer=''
-        self.status=self.STATUS.UNINIT
         self._time=time.time()
         self._ping_time=0
 
@@ -32,21 +29,21 @@ class Connection(EventEmitter):
         while self.read():pass
         self._time=time.time()
 
+    def on_close(self,s):
+        self.emit("close",self)
+
     def read(self):
         if len(self._buffer)<2:return False
         flen=struct.unpack('H',self._buffer[:2])[0]
         if len(self._buffer)>=flen+2:
             frame=Frame(self._buffer[2:flen+2])
-            if frame.session_id==0 and frame.stream_id==0 and frame.frame_id==0 and frame.data=="ping":
-                self.ping()
+            if frame.session_id==0 and frame.stream_id==0 and frame.frame_id==0:
+                self.control(frame)
             else:
                 self.emit("frame",self,frame)
             self._buffer=self._buffer[flen+2:]
             return True
         return False
-
-    def on_close(self,s):
-        self.emit("close",self)
 
     def write(self,frame):
         data=str(frame)
@@ -56,10 +53,19 @@ class Connection(EventEmitter):
     def close(self):
         self._connection.close()
 
+    def control(self,frame):
+        type=ord(frame.data[0])
+        if type==SYN_PING:
+            self.ping()
+
+    def write_control(self,type,data=""):
+        data=struct.pack("B",type)+data
+        frame=Frame(data,0,0,0)
+        self.write(frame)
+
     def ping(self):
         if self._ping_time==0:
-            frame=Frame("ping",0,0,0)
-            self.write(frame)
+            self.write_control(SYN_PING)
         self._ping_time=0
         logging.debug("connection %s ping",self)
 
@@ -68,6 +74,5 @@ class Connection(EventEmitter):
             self._connection.close()
             logging.error("connection %s ping timeout close",self)
         elif time.time()-self._time>=30:
-            frame=Frame("ping",0,0,0)
+            self.write_control(SYN_PING)
             self._ping_time=time.time()
-            self.write(frame)
