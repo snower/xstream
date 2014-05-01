@@ -151,7 +151,7 @@ class Session(BaseSession):
     def on_data(self,connection,data):
         type=ord(data[0])
         if type==SYN_OK:
-            self._session_id=struct.unpack("H",data[1:2])[0]
+            self._session_id=struct.unpack("H",data[1:3])[0]
             self._status=self.STATUS.CONNECTED
 
             self._status=self.STATUS.AUTHED
