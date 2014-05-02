@@ -94,6 +94,7 @@ class Session(BaseSession):
         self._status=self.STATUS.AUTHED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
         self._config=kwargs
         self._control=None
+        self._stream_current_id=1 if type==self.SESSION_TYPE.CLIENT else 2
 
     @property
     def id(self):
@@ -106,11 +107,12 @@ class Session(BaseSession):
         return sid
 
     def get_next_stream_id(self):
-        sid=self._streams.keys()[-1]+1 if len(self._streams)>0 else (1 if self._type==self.SESSION_TYPE.CLIENT else 2)
-        if self._type==self.SESSION_TYPE.CLIENT and sid % 2 ==0 : sid+=1
-        elif self._type==self.SESSION_TYPE.SERVER and sid % 2 !=0 : sid+=1
-        if sid>0xffff:sid=1 if self._type==self.SESSION_TYPE.CLIENT else 2
-        while sid in self._streams: sid+=2
+        if self._stream_current_id>0xffff:
+            self._stream_current_id=1 if self._type==self.SESSION_TYPE.CLIENT else 2
+        while self._stream_current_id in self._streams:
+            self._stream_current_id+=2
+        sid=self._stream_current_id
+        self._stream_current_id+=2
         return sid
 
     def add_connection(self,connection):
