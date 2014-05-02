@@ -41,8 +41,7 @@ class BaseStream(EventEmitter):
 
     def streaming(self):
         self._status=self.STATUS.STREAMING
-        if self._session.open_stream(self):
-            self.emit("streaming",self)
+        self.emit("streaming",self)
 
     def write(self,data):
         if self._status!=self.STATUS.STREAMING:
@@ -103,6 +102,7 @@ class Stream(BaseStream):
 
     def open(self):
         self._status=self.STATUS.CONNECTED
+        self._session.open_stream(self)
         self.streaming()
 
     def close(self):
@@ -127,6 +127,7 @@ class StrictStream(BaseStream):
 
     def open(self):
         self._status=self.STATUS.CONNECTING
+        self._session.open_stream(self)
         self.write_control(SYN_STREAM)
 
     def close(self):
@@ -138,8 +139,9 @@ class StrictStream(BaseStream):
         type=ord(frame.data[0])
         if type==SYN_STREAM:
             self._status=self.STATUS.CONNECTED
-            self.streaming()
+            self._session.open_stream(self)
             self.write_control(SYN_REPLY)
+            self.streaming()
         elif type==SYN_REPLY:
             self._status=self.STATUS.CONNECTED
             self.streaming()

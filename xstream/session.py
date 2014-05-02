@@ -279,6 +279,6 @@ class Session(BaseSession):
                 self._streams[frame.stream_id].on_frame(frame)
 
     def write(self,frame):
-        if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and (frame.frame_id==0 or frame.stream_id in self._streams):
+        if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
             connection=random.choice(self._connections)
             connection.write(frame)
