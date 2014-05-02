@@ -212,7 +212,7 @@ class Session(BaseSession):
         logging.info("session %s streaming",self._session_id)
 
     def session_loop(self):
-        if self._status==self.STATUS.CONNECTED:
+        if self._status==self.STATUS.STREAMING:
             try:
                 for connection in self._connections:
                     connection.loop()
