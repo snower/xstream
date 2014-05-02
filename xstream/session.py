@@ -129,6 +129,7 @@ class Session(BaseSession):
         logging.info("session %s connection %s colse",self._session_id,connection)
 
     def open(self):
+        if self._status!=self.STATUS.INITED:return
         connection=ssloop.Socket(self.loop)
         connection.once("connect",self.on_connection)
         connection.once("close",self.on_close)
@@ -238,18 +239,19 @@ class Session(BaseSession):
     def stream(self,strict=False):
         sid=self.get_next_stream_id()
         stream=StrictStream(self,sid) if strict else Stream(self,sid)
-        self.emit("stream",self,stream)
-        logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
         return stream
 
     def open_stream(self,stream):
         if stream.id in self._streams:return False
         self._streams[stream.id]=stream
+        self.emit("stream",self,stream)
+        logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
         return True
 
     def close_stream(self,stream):
         if stream.id in self._streams:
             del self._streams[stream.id]
+            logging.debug("session %s stream %s close",self._session_id,stream._stream_id)
             return True
         return False
 
@@ -263,13 +265,9 @@ class Session(BaseSession):
             if frame.frame_id==0:
                 stream=StrictStream(self,frame.stream_id)
                 stream.on_frame(frame)
-                self.emit("stream",self,stream)
-                logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
             elif frame.frame_id==1:
                 stream=Stream(self,frame.stream_id)
-                self.emit("stream",self,stream)
                 stream.on_frame(frame)
-                logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
 
     def on_frame(self,connection,frame):
         if frame.session_id==self._session_id:

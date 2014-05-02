@@ -101,6 +101,7 @@ class Stream(BaseStream):
         self.open()
 
     def open(self):
+        if self._status!=self.STATUS.INITED:return
         self._status=self.STATUS.CONNECTED
         self._session.open_stream(self)
         self.streaming()
@@ -111,7 +112,7 @@ class Stream(BaseStream):
         self._status=self.STATUS.CLOSED
         if self._session.close_stream(self):
             self.emit("close",self)
-        logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+            logging.debug("session %s stream %s close",self._session.id,self._stream_id)
 
     def control(self,frame):
         type=ord(frame.data[0])
@@ -119,13 +120,14 @@ class Stream(BaseStream):
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-            logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
 
 class StrictStream(BaseStream):
     def __init__(self,session,stream_id):
         super(StrictStream,self).__init__(session,stream_id)
 
     def open(self):
+        if self._status!=self.STATUS.INITED:return
         self._status=self.STATUS.CONNECTING
         self._session.open_stream(self)
         self.write_control(SYN_STREAM)
@@ -150,9 +152,9 @@ class StrictStream(BaseStream):
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-            logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
         elif type==SYN_CLOSE:
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-            logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
