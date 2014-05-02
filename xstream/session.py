@@ -204,7 +204,6 @@ class Session(BaseSession):
         if self._type==self.SESSION_TYPE.CLIENT:
             stream=StrictStream(self,0)
             self._control=SessionControl(self,stream)
-            self._streams[0]=stream
             stream.open()
         logging.info("session %s ready",self._session_id)
 
@@ -239,41 +238,47 @@ class Session(BaseSession):
     def stream(self,strict=False):
         sid=self.get_next_stream_id()
         stream=StrictStream(self,sid) if strict else Stream(self,sid)
-        self._streams[sid]=stream
         self.emit("stream",self,stream)
         logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
         return stream
 
+    def open_stream(self,stream):
+        if stream.id in self._streams:return False
+        self._streams[stream.id]=stream
+        return True
+
     def close_stream(self,stream):
         if stream.id in self._streams:
             del self._streams[stream.id]
+            return True
+        return False
 
     def stream_fault(self,connection,frame):
         if frame.stream_id==0:
             if not self._control:
                 stream=StrictStream(self,0)
                 self._control=SessionControl(self,stream)
-                self._streams[0]=stream
+                stream.on_frame(frame)
         else:
             if frame.frame_id==0:
                 stream=StrictStream(self,frame.stream_id)
-                self._streams[frame.stream_id]=stream
+                stream.on_frame(frame)
                 self.emit("stream",self,stream)
                 logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
             elif frame.frame_id==1:
                 stream=Stream(self,frame.stream_id)
-                self._streams[frame.stream_id]=stream
                 self.emit("stream",self,stream)
+                stream.on_frame(frame)
                 logging.debug("session %s stream %s open",self._session_id,stream._stream_id)
 
     def on_frame(self,connection,frame):
         if frame.session_id==self._session_id:
             if frame.stream_id not in self._streams:
                 self.stream_fault(connection,frame)
-            if frame.stream_id in self._streams:
+            else:
                 self._streams[frame.stream_id].on_frame(frame)
 
     def write(self,frame):
-        if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
+        if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and (frame.frame_id==0 or frame.stream_id in self._streams):
             connection=random.choice(self._connections)
             connection.write(frame)

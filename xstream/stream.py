@@ -41,7 +41,8 @@ class BaseStream(EventEmitter):
 
     def streaming(self):
         self._status=self.STATUS.STREAMING
-        self.emit("streaming",self)
+        if self._session.open_stream(self):
+            self.emit("streaming",self)
 
     def write(self,data):
         if self._status!=self.STATUS.STREAMING:
@@ -107,17 +108,17 @@ class Stream(BaseStream):
     def close(self):
         if self._status==self.STATUS.CLOSED:return
         self.write_control(SYN_FIN)
-        self._session.close_stream(self)
         self._status=self.STATUS.CLOSED
-        self.emit("close",self)
+        if self._session.close_stream(self):
+            self.emit("close",self)
         logging.debug("session %s stream %s close",self._session.id,self._stream_id)
 
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_FIN:
-            self._session.close_stream(self)
             self._status=self.STATUS.CLOSED
-            self.emit("close",self)
+            if self._session.close_stream(self):
+                self.emit("close",self)
             logging.debug("session %s stream %s close",self._session.id,self._stream_id)
 
 class StrictStream(BaseStream):
@@ -136,20 +137,20 @@ class StrictStream(BaseStream):
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_STREAM:
-            self.write_control(SYN_REPLY)
             self._status=self.STATUS.CONNECTED
             self.streaming()
+            self.write_control(SYN_REPLY)
         elif type==SYN_REPLY:
             self._status=self.STATUS.CONNECTED
             self.streaming()
         elif type==SYN_FIN:
             self.write_control(SYN_CLOSE)
-            self._session.close_stream(self)
             self._status=self.STATUS.CLOSED
-            self.emit("close",self)
+            if self._session.close_stream(self):
+                self.emit("close",self)
             logging.debug("session %s stream %s close",self._session.id,self._stream_id)
         elif type==SYN_CLOSE:
-            self._session.close_stream(self)
             self._status=self.STATUS.CLOSED
-            self.emit("close",self)
+            if self._session.close_stream(self):
+                self.emit("close",self)
             logging.debug("session %s stream %s close",self._session.id,self._stream_id)
