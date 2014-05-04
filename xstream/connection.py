@@ -67,12 +67,12 @@ class Connection(EventEmitter):
         if self._ping_time==0:
             self.write_control(SYN_PING)
         self._ping_time=0
-        logging.debug("connection %s ping",self)
+        logging.debug("xstream connection %s ping",self)
 
     def loop(self):
         if self._ping_time!=0 and time.time()-self._ping_time>=30:
             self._connection.close()
-            logging.error("connection %s ping timeout close",self)
+            logging.error("xstream connection %s ping timeout close",self)
         elif time.time()-self._time>=30:
             self.write_control(SYN_PING)
             self._ping_time=time.time()

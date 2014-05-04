@@ -112,7 +112,7 @@ class Stream(BaseStream):
         self._status=self.STATUS.CLOSED
         if self._session.close_stream(self):
             self.emit("close",self)
-            logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+            logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
 
     def control(self,frame):
         type=ord(frame.data[0])
@@ -120,7 +120,7 @@ class Stream(BaseStream):
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
 
 class StrictStream(BaseStream):
     def __init__(self,session,stream_id):
@@ -152,9 +152,9 @@ class StrictStream(BaseStream):
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
         elif type==SYN_CLOSE:
             self._status=self.STATUS.CLOSED
             if self._session.close_stream(self):
                 self.emit("close",self)
-                logging.debug("session %s stream %s close",self._session.id,self._stream_id)
+                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
