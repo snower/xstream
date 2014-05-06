@@ -31,6 +31,7 @@ class BaseStream(EventEmitter):
         self._frames=[]
         self._frame_id=1
         self._current_frame_id=1
+        self._fin_frame_id=0
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
         self._status=self.STATUS.INITED
@@ -59,15 +60,13 @@ class BaseStream(EventEmitter):
             self.control(frame)
             return
         self._last_recv_time=time.time()
+        data=[]
         if frame.frame_id==self._current_frame_id:
             self._current_frame_id+=1
-            self._last_data_time=time.time()
-            self.emit("data",self,frame.data)
-            if not self._frames:return
+            data.append(frame.data)
         else:
             bisect.insort(self._frames,frame)
 
-        data=[]
         while self._frames and self._frames[0].frame_id==self._current_frame_id:
             frame=self._frames.pop(0)
             data.append(frame.data)
@@ -75,6 +74,8 @@ class BaseStream(EventEmitter):
         if data:
             self._last_data_time=time.time()
             self.emit("data",self,"".join(data))
+            if self._status==self.STATUS.CLOSING and self.fin_frame_id and self._fin_frame_id==self._current_frame_id:
+                self.do_close()
 
     def open(self):
         pass
@@ -94,6 +95,12 @@ class BaseStream(EventEmitter):
         if time.time()-self._last_recv_time>600:
             self.close()
 
+    def do_close(self):
+        self._status=self.STATUS.CLOSED
+        if self._session.close_stream(self):
+            self.emit("close",self)
+            logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
+
 class Stream(BaseStream):
     def __init__(self,session,stream_id):
         super(Stream,self).__init__(session,stream_id)
@@ -108,19 +115,17 @@ class Stream(BaseStream):
 
     def close(self):
         if self._status==self.STATUS.CLOSED:return
-        self.write_control(SYN_FIN)
-        self._status=self.STATUS.CLOSED
-        if self._session.close_stream(self):
-            self.emit("close",self)
-            logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
+        self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
+        self.do_close()
 
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_FIN:
-            self._status=self.STATUS.CLOSED
-            if self._session.close_stream(self):
-                self.emit("close",self)
-                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
+            self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
+            if self._current_frame_id==self._fin_frame_id:
+                self.do_close()
+            else:
+                self._status=self.STATUS.CLOSING
 
 class StrictStream(BaseStream):
     def __init__(self,session,stream_id):
@@ -135,7 +140,7 @@ class StrictStream(BaseStream):
     def close(self):
         if self._status==self.STATUS.CLOSED:return
         self._status=self.STATUS.CLOSING
-        self.write_control(SYN_FIN)
+        self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
 
     def control(self,frame):
         type=ord(frame.data[0])
@@ -148,13 +153,13 @@ class StrictStream(BaseStream):
             self._status=self.STATUS.CONNECTED
             self.streaming()
         elif type==SYN_FIN:
-            self.write_control(SYN_CLOSE)
-            self._status=self.STATUS.CLOSED
-            if self._session.close_stream(self):
-                self.emit("close",self)
-                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
+            self.write_control(SYN_CLOSE,bson.dumps({"frame_id":self._frame_id}))
+            self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
+            if self._current_frame_id==self._fin_frame_id:
+                self.do_close()
+            else:
+                self._status=self.STATUS.CLOSING
         elif type==SYN_CLOSE:
-            self._status=self.STATUS.CLOSED
-            if self._session.close_stream(self):
-                self.emit("close",self)
-                logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
+            self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
+            if self._current_frame_id==self._fin_frame_id:
+                self.do_close()
