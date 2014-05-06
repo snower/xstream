@@ -45,8 +45,8 @@ class Connection(EventEmitter):
             return True
         return False
 
-    def write(self,frame):
-        if len(self._connection._buffers)>2:return False
+    def write(self,frame,force=False):
+        if not force and len(self._connection._buffers)>1:return False
         data=str(frame)
         self._connection.write("".join([struct.pack('H',len(data)),data]))
         self._time=time.time()
