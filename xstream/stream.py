@@ -74,7 +74,7 @@ class BaseStream(EventEmitter):
         if data:
             self._last_data_time=time.time()
             self.emit("data",self,"".join(data))
-            if self._status==self.STATUS.CLOSING and self.fin_frame_id and self._fin_frame_id==self._current_frame_id:
+            if self._status==self.STATUS.CLOSING and self._fin_frame_id and self._fin_frame_id==self._current_frame_id:
                 self.do_close()
 
     def open(self):
