@@ -90,7 +90,7 @@ class BaseStream(EventEmitter):
     def write_control(self,type,data=''):
         data=struct.pack("B",type)+data
         frame=Frame(data,self._session.id,self._stream_id,0)
-        self._session.write(frame)
+        self._session.write(self,frame)
 
     def loop(self):
         if time.time()-self._last_recv_time>600:
