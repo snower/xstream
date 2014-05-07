@@ -35,6 +35,7 @@ class BaseStream(EventEmitter):
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
         self._status=self.STATUS.INITED
+        self.last_write_connection=None
 
     @property
     def id(self):
@@ -49,7 +50,7 @@ class BaseStream(EventEmitter):
             return False
         for i in xrange(int(len(data)/Frame.FRAME_LEN)+1):
             frame=Frame(data[i*Frame.FRAME_LEN:(i+1)*Frame.FRAME_LEN],self._session.id,self._stream_id,self._frame_id)
-            self._session.write(frame)
+            self._session.write(self,frame)
             if self._frame_id==0xffffffff:
                 self._frame_id=0
             self._frame_id+=1
