@@ -285,7 +285,7 @@ class Session(BaseSession):
             if frame.frame_id==0:
                 stream=StrictStream(self,frame.stream_id)
                 stream.on_frame(frame)
-            elif frame.frame_id==1:
+            elif frame.frame_id>=1:
                 stream=Stream(self,frame.stream_id)
                 stream.on_frame(frame)
 
