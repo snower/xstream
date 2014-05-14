@@ -247,7 +247,10 @@ class Session(BaseSession):
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
-            self.fork_connection()
+            if not self._connections:
+                self.close()
+            else:
+                self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
             for stram_id in self._streams.keys():
@@ -299,6 +302,7 @@ class Session(BaseSession):
 
 
     def write(self,stream,frame):
+        if not self._connections:return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
             connection=stream.last_write_connection if stream.last_write_connection and stream.last_write_connection in self._connections else random.choice(self._connections)
             try_count=0
