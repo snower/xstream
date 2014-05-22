@@ -35,7 +35,7 @@ class BaseStream(EventEmitter):
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
         self._status=self.STATUS.INITED
-        self.last_write_connection=None
+        self.last_write_connection_id=0
 
     @property
     def id(self):

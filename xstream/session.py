@@ -100,7 +100,8 @@ class Session(BaseSession):
         self._type=type
         self._session_id=0 if type==self.SESSION_TYPE.CLIENT else self.get_next_session_id()
         self._streams={}
-        self._connections=[]
+        self._connections={}
+        self._connections_list=[]
         self._connectings=[]
         self._status=self.STATUS.AUTHED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
         self._config=kwargs
@@ -130,13 +131,16 @@ class Session(BaseSession):
         connection=Connection(connection)
         connection.on("frame",self.on_frame)
         connection.on("close",self.on_connection_close)
-        self._connections.append(connection)
+        self._connections[id(connection)]=connection
+        self._connections_list=self._connections.values()
 
         if self._status==self.STATUS.AUTHED and len(self._connections)>=self._config.get("connect_count",20):
             self.connection_ready()
 
     def on_connection_close(self,connection):
-        if connection in self._connections:self._connections.remove(connection)
+        if id(connection) in self._connections:
+            del self._connections[id(connection)]
+            self._connections_list=self._connections.values()
         logging.info("xstream session %s connection %s colse",self._session_id,connection)
 
     def open(self):
@@ -154,7 +158,7 @@ class Session(BaseSession):
         for stram_id in self._streams.keys():
             self._streams[stram_id].close()
         self._status=self.STATUS.CLOSED
-        for connection in self._connections:
+        for id,connection in self._connections.items():
             connection.close()
         self.emit("close",self)
         del self._sessions[self._session_id]
@@ -236,7 +240,7 @@ class Session(BaseSession):
     def session_loop(self):
         if self._status==self.STATUS.STREAMING:
             try:
-                for connection in self._connections:
+                for id,connection in self._connections.items():
                     connection.loop()
                 for stream_id,stream in self._streams.items():
                     stream.loop()
@@ -304,13 +308,13 @@ class Session(BaseSession):
     def write(self,stream,frame):
         if not self._connections:return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
-            connection=stream.last_write_connection if stream.last_write_connection and stream.last_write_connection in self._connections else random.choice(self._connections)
+            connection=self._connections[stream.last_write_connection_id] if stream.last_write_connection_id and stream.last_write_connection_id in self._connections else random.choice(self._connections_list)
             try_count=0
             while not connection.write(frame):
-                connection=random.choice(self._connections)
+                connection=random.choice(self._connections_list)
                 try_count+=1
                 if try_count>len(self._connections)*2:
                     connection.write(frame,True)
                     break
-            stream.last_write_connection=connection
+            stream.last_write_connection_id=id(connection)
             logging.debug("xstream session write:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
