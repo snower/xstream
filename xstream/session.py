@@ -4,6 +4,7 @@
 
 import random
 import logging
+import time
 import bson
 import struct
 import ssloop
@@ -107,6 +108,7 @@ class Session(BaseSession):
         self._config=kwargs
         self._control=None
         self._stream_current_id=1 if type==self.SESSION_TYPE.CLIENT else 2
+        self._stream_time=time.time()
 
     @property
     def id(self):
@@ -192,7 +194,8 @@ class Session(BaseSession):
         self.emit("close",self)
 
     def fork_connection(self):
-        for i in range(self._config.get("connect_count",20)-len(self._connections)-len(self._connectings)):
+        count=self._config.get("connect_count",20)-len(self._connections)-len(self._connectings) if time.time-self._stream_time<180 else (0 if len(self._connections)>1 else 1)
+        for i in range(count):
             connection=ssloop.Socket(self.loop)
             connection.once("connect",self.on_fork_connection)
             connection.once("close",self.on_fork_close)
@@ -221,6 +224,7 @@ class Session(BaseSession):
     def on_error(self,data):
         code,msg=struct.unpack("I",data[:4])[0],data[4:]
         self.emit("error",self,code,msg)
+        self.close()
         logging.error("xstream session error:%s,%s",code,msg)
 
     def connection_ready(self):
@@ -241,7 +245,7 @@ class Session(BaseSession):
         if self._status==self.STATUS.STREAMING:
             try:
                 for id,connection in self._connections.items():
-                    connection.loop()
+                    connection.loop(bool(self._connections))
                 for stream_id,stream in self._streams.items():
                     stream.loop()
                 self.check()
@@ -266,6 +270,7 @@ class Session(BaseSession):
     def stream(self,strict=False):
         sid=self.get_next_stream_id()
         stream=StrictStream(self,sid) if strict else Stream(self,sid)
+        self._stream_time=time.time()
         return stream
 
     def open_stream(self,stream):

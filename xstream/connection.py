@@ -4,6 +4,7 @@
 
 import struct
 import time
+import random
 import logging
 from ssloop import EventEmitter
 from frame import Frame
@@ -17,6 +18,7 @@ class Connection(EventEmitter):
         self._connection.on("data",self.on_data)
         self._connection.on("close",self.on_close)
         self._buffer=''
+        self._expired_time=time.time()+random.randint(180,300)
         self._time=time.time()
         self._ping_time=0
 
@@ -71,8 +73,10 @@ class Connection(EventEmitter):
         self._ping_time=0
         logging.debug("xstream connection %s ping",self)
 
-    def loop(self):
-        if self._ping_time!=0 and time.time()-self._ping_time>=30:
+    def loop(self,expired=True):
+        if expired and len(self._connection._buffers)==0 and time.time()>self._expired_time:
+            self.close()
+        elif self._ping_time!=0 and time.time()-self._ping_time>=30:
             self._connection.close()
             logging.error("xstream connection %s ping timeout close",self)
         elif time.time()-self._time>=30:
