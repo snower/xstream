@@ -194,7 +194,7 @@ class Session(BaseSession):
         self.emit("close",self)
 
     def fork_connection(self):
-        count=self._config.get("connect_count",20)-len(self._connections)-len(self._connectings) if time.time-self._stream_time<180 else (0 if len(self._connections)>1 else 1)
+        count=self._config.get("connect_count",20)-len(self._connections)-len(self._connectings) if time.time()-self._stream_time<180 else (0 if len(self._connections)>1 else 1)
         for i in range(count):
             connection=ssloop.Socket(self.loop)
             connection.once("connect",self.on_fork_connection)
