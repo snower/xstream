@@ -93,7 +93,7 @@ class BaseStream(EventEmitter):
         self._session.write(self,frame)
 
     def loop(self):
-        if time.time()-self._last_recv_time>600:
+        if time.time()-self._last_recv_time>120:
             self.close()
 
     def do_close(self):

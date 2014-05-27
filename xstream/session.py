@@ -109,6 +109,7 @@ class Session(BaseSession):
         self._control=None
         self._stream_current_id=1 if type==self.SESSION_TYPE.CLIENT else 2
         self._stream_time=time.time()
+        self._connection_count=1
 
     @property
     def id(self):
@@ -136,7 +137,7 @@ class Session(BaseSession):
         self._connections[id(connection)]=connection
         self._connections_list=self._connections.values()
 
-        if self._status==self.STATUS.AUTHED and len(self._connections)>=self._config.get("connect_count",20):
+        if self._status==self.STATUS.AUTHED and len(self._connections)>=self._connection_count:
             self.connection_ready()
 
     def on_connection_close(self,connection):
@@ -194,8 +195,7 @@ class Session(BaseSession):
         self.emit("close",self)
 
     def fork_connection(self):
-        count=self._config.get("connect_count",20)-len(self._connections)-len(self._connectings) if time.time()-self._stream_time<180 else (0 if len(self._connections)>1 else 1)
-        for i in range(count):
+        for i in range(self._connection_count-len(self._connections)-len(self._connectings)):
             connection=ssloop.Socket(self.loop)
             connection.once("connect",self.on_fork_connection)
             connection.once("close",self.on_fork_close)
@@ -248,6 +248,7 @@ class Session(BaseSession):
                     connection.loop(bool(self._connections))
                 for stream_id,stream in self._streams.items():
                     stream.loop()
+                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) or 2)
                 self.check()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
