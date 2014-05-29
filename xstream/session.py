@@ -144,7 +144,7 @@ class Session(BaseSession):
         if id(connection) in self._connections:
             del self._connections[id(connection)]
             self._connections_list=self._connections.values()
-        logging.info("xstream session %s connection %s colse",self._session_id,connection)
+        logging.info("xstream session %s connection %s colse %s",self._session_id,connection,len(self._connections))
 
     def open(self):
         if self._status!=self.STATUS.INITED:return
@@ -214,7 +214,7 @@ class Session(BaseSession):
             connection.remove_listener("data",self.on_fork_data)
             self.add_connection(connection)
 
-            logging.info("xstream session %s connection %s connected",self._session_id,connection)
+            logging.info("xstream session %s connection %s connected %s",self._session_id,connection,len(self._connections))
         elif type==SYN_ERROR:
             self.on_error(data[1:])
 
@@ -245,10 +245,10 @@ class Session(BaseSession):
         if self._status==self.STATUS.STREAMING:
             try:
                 for id,connection in self._connections.items():
-                    connection.loop(bool(self._connections))
+                    connection.loop(len(self._connections)>1)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
-                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) or 2)
+                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) if len(self._streams)>1 else 2)
                 self.check()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
