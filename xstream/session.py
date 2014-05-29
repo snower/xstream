@@ -260,7 +260,7 @@ class Session(BaseSession):
             if not self._connections:
                 self.close()
             else:
-                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) if len(self._streams)>1 else 2)
+                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams)/2 if len(self._streams)>4 else 2)
                 self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
