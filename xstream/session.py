@@ -244,11 +244,11 @@ class Session(BaseSession):
     def session_loop(self):
         if self._status==self.STATUS.STREAMING:
             try:
+                sleep=not self._streams and time.time()-self._stream_time>900
                 for id,connection in self._connections.items():
-                    connection.loop(len(self._connections)>1)
+                    connection.loop(len(self._connections)>1 or sleep)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
-                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) if len(self._streams)>1 else 2)
                 self.check()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
@@ -256,9 +256,11 @@ class Session(BaseSession):
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
+            if not self._streams and time.time()-self._stream_time>900:return
             if not self._connections:
                 self.close()
             else:
+                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams) if len(self._streams)>1 else 2)
                 self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
@@ -271,13 +273,13 @@ class Session(BaseSession):
     def stream(self,strict=False):
         sid=self.get_next_stream_id()
         stream=StrictStream(self,sid) if strict else Stream(self,sid)
-        self._stream_time=time.time()
         return stream
 
     def open_stream(self,stream):
         if stream.id in self._streams:return False
         self._streams[stream.id]=stream
         self.emit("stream",self,stream)
+        self._stream_time=time.time()
         logging.debug("xstream session %s stream %s open",self._session_id,stream._stream_id)
         return True
 
