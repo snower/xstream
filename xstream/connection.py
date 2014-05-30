@@ -10,6 +10,7 @@ from ssloop import EventEmitter
 from frame import Frame
 
 SYN_PING=0x01
+SYN_CLOSING=0x02
 
 class Connection(EventEmitter):
     def __init__(self,connection):
@@ -21,6 +22,7 @@ class Connection(EventEmitter):
         self._expired_time=time.time()+random.randint(180,600)
         self._time=time.time()
         self._ping_time=0
+        self._closing=False
 
     @property
     def addr(self):
@@ -48,24 +50,27 @@ class Connection(EventEmitter):
         return False
 
     def write(self,frame,force=False):
+        if self._closing:return False
         if not force and len(self._connection._buffers)>0:return False
         data=str(frame)
-        self._connection.write("".join([struct.pack('H',len(data)),data]))
         self._time=time.time()
-        return True
+        return self._connection.write("".join([struct.pack('H',len(data)),data]))
 
     def close(self):
-        self._connection.close()
+        self._connection.end()
 
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_PING:
             self.ping()
+        elif type==SYN_CLOSING:
+            self._closing=True
+            self.close()
 
     def write_control(self,type,data=""):
         data=struct.pack("B",type)+data
         frame=Frame(data,0,0,0)
-        self.write(frame)
+        self.write(frame,True)
 
     def ping(self):
         if self._ping_time==0:
@@ -75,7 +80,8 @@ class Connection(EventEmitter):
 
     def loop(self,expired=True):
         if expired and len(self._connection._buffers)==0 and time.time()>self._expired_time:
-            self.close()
+            self.write_control(SYN_CLOSING)
+            self._closing=True
         elif self._ping_time!=0 and time.time()-self._ping_time>=30:
             self._connection.close()
             logging.error("xstream connection %s ping timeout close",self)

@@ -31,6 +31,7 @@ class BaseStream(EventEmitter):
         self._frames=[]
         self._frame_id=1
         self._current_frame_id=1
+        self._current_frame_id_loop=0
         self._fin_frame_id=0
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
@@ -61,6 +62,8 @@ class BaseStream(EventEmitter):
             self.control(frame)
             return
         self._last_recv_time=time.time()
+        if frame.frame_id<self._current_frame_id_loop*0xffffffff+self._current_frame_id:return
+
         data=[]
         if frame.frame_id==self._current_frame_id:
             self._current_frame_id+=1
@@ -72,11 +75,15 @@ class BaseStream(EventEmitter):
             frame=self._frames.pop(0)
             data.append(frame.data)
             self._current_frame_id+=1
+
         if data:
             self._last_data_time=time.time()
             self.emit("data",self,"".join(data))
             if self._status==self.STATUS.CLOSING and self._fin_frame_id and self._fin_frame_id==self._current_frame_id:
                 self.do_close()
+            if self._current_frame_id==0xffffffff:
+                self._current_frame_id=1
+                self._current_frame_id_loop+=1
 
     def open(self):
         pass

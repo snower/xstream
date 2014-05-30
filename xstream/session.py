@@ -325,7 +325,7 @@ class Session(BaseSession):
                 connection=random.choice(self._connections_list)
                 try_count+=1
                 if try_count>len(self._connections)*2:
-                    connection.write(frame,True)
-                    break
+                    if connection.write(frame,True):
+                        break
             stream.last_write_connection_id=id(connection)
             logging.debug("xstream session write:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
