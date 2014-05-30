@@ -2,6 +2,7 @@
 #14-4-22
 # create by: snower
 
+import math
 import random
 import logging
 import time
@@ -260,7 +261,8 @@ class Session(BaseSession):
             if not self._connections:
                 self.close()
             else:
-                self._connection_count=self._config.get("connect_count",20) if len(self._streams)>self._config.get("connect_count",20) else (len(self._streams)/2 if len(self._streams)>4 else 2)
+                count=int(math.sqrt(len(self._streams))*1.5+1)
+                self._connection_count=self._config.get("connect_count",20) if count>self._config.get("connect_count",20) else (count if self._streams else 2)
                 self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
