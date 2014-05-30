@@ -251,18 +251,19 @@ class Session(BaseSession):
                 for stream_id,stream in self._streams.items():
                     stream.loop()
                 self.check()
+                self._control.loop()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
             self.loop.timeout(2,self.session_loop)
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
-            if not self._streams and time.time()-self._stream_time>900:return
+            if len(self._streams)==1 and time.time()-self._stream_time>900:return
             if not self._connections:
                 self.close()
             else:
-                count=int(math.sqrt(len(self._streams))*1.5+1)
-                self._connection_count=self._config.get("connect_count",20) if count>self._config.get("connect_count",20) else (count if self._streams else 2)
+                count=int(math.sqrt(len(self._streams))*1.5)
+                self._connection_count=self._config.get("connect_count",20) if count>self._config.get("connect_count",20) else (count if len(self._streams)>1 else 2)
                 self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
             self._status=self.STATUS.CLOSED
