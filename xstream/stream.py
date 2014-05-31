@@ -12,8 +12,9 @@ from frame import Frame
 
 SYN_STREAM=0x01
 SYN_REPLY=0x02
-SYN_FIN=0x03
-SYN_CLOSE=0x04
+SYN_ACK=0x003
+SYN_FIN=0x04
+SYN_CLOSE=0x05
 
 class BaseStream(EventEmitter):
     class STATUS:
@@ -24,10 +25,11 @@ class BaseStream(EventEmitter):
         CLOSING=5
         CLOSED=6
 
-    def __init__(self,session,stream_id):
+    def __init__(self,session,stream_id,time_out=300):
         super(BaseStream,self).__init__()
         self._stream_id=stream_id
         self._session=session
+        self._time_out=time_out
         self._frames=[]
         self._frame_id=1
         self._current_frame_id=1
@@ -51,16 +53,22 @@ class BaseStream(EventEmitter):
             return False
         for i in xrange(int(len(data)/Frame.FRAME_LEN)+1):
             frame=Frame(data[i*Frame.FRAME_LEN:(i+1)*Frame.FRAME_LEN],self._session.id,self._stream_id,self._frame_id)
-            self._session.write(self,frame)
+            self.write_frame(frame)
             if self._frame_id==0xffffffff:
                 self._frame_id=0
             self._frame_id+=1
         return len(data)
 
+    def write_frame(self,frame):
+        self._session.write(self,frame)
+
     def on_frame(self,frame):
         if frame.frame_id==0:
             self.control(frame)
             return
+        self.on_data(frame)
+
+    def on_data(self,frame):
         self._last_recv_time=time.time()
         if frame.frame_id<self._current_frame_id_loop*0xffffffff+self._current_frame_id:return
 
@@ -97,10 +105,10 @@ class BaseStream(EventEmitter):
     def write_control(self,type,data=''):
         data=struct.pack("B",type)+data
         frame=Frame(data,self._session.id,self._stream_id,0)
-        self._session.write(self,frame)
+        self.write_frame(frame)
 
     def loop(self):
-        if time.time()-self._last_recv_time>300:
+        if time.time()-self._last_recv_time>self._time_out:
             self.close()
 
     def do_close(self):
@@ -110,8 +118,8 @@ class BaseStream(EventEmitter):
             logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
 
 class Stream(BaseStream):
-    def __init__(self,session,stream_id):
-        super(Stream,self).__init__(session,stream_id)
+    def __init__(self,*args,**kwargs):
+        super(Stream,self).__init__(*args,**kwargs)
 
         self.open()
 
@@ -136,8 +144,19 @@ class Stream(BaseStream):
                 self._status=self.STATUS.CLOSING
 
 class StrictStream(BaseStream):
-    def __init__(self,session,stream_id):
-        super(StrictStream,self).__init__(session,stream_id)
+    def __init__(self,*args,**kwargs):
+        super(StrictStream,self).__init__(*args,**kwargs)
+
+        self._wframes={}
+
+    def write_frame(self,frame):
+        if frame.frame_id!=0:
+            self._wframes[frame.frame_id]=(frame,time.time())
+        self._session.write(self,frame)
+
+    def on_data(self,frame):
+        self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
+        return super(StrictStream,self).on_frame(frame)
 
     def open(self):
         if self._status!=self.STATUS.INITED:return
@@ -160,6 +179,10 @@ class StrictStream(BaseStream):
         elif type==SYN_REPLY:
             self._status=self.STATUS.CONNECTED
             self.streaming()
+        elif type==SYN_ACK:
+            frame_id=bson.loads(frame.data[1:])["frame_id"]
+            if frame_id in self._wframes:
+                del self._wframes[frame_id]
         elif type==SYN_FIN:
             self.write_control(SYN_CLOSE,bson.dumps({"frame_id":self._frame_id}))
             self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
@@ -171,3 +194,9 @@ class StrictStream(BaseStream):
             self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
             if self._current_frame_id==self._fin_frame_id:
                 self.do_close()
+
+    def loop(self):
+        for frame_id,frame in self._wframes:
+            if time.time()-frame[1]>1:
+                self.write_frame(frame[0])
+        return super(StrictStream,self).loop()

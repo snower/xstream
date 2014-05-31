@@ -49,7 +49,7 @@ class Server(BaseSession):
     def listen(self,blocklog=1024):
         self._server=ssloop.Server((self._ip,self._port))
         self._server.on("connection",self.on_connection)
-        self._server.listen(blocklog)
+        self._server.listen(self._config.get("blocklog",blocklog))
         logging.info("xstream server %s listen %s:%s",self,self._ip,self._port)
         BaseSession.loop_forever()
 
@@ -254,15 +254,15 @@ class Session(BaseSession):
                 self._control.loop()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
-            self.loop.timeout(2,self.session_loop)
+            self.loop.timeout(1,self.session_loop)
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
-            if len(self._streams)==1 and time.time()-self._stream_time>900:return
+            if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",900):return
             if not self._connections:
                 self.close()
             else:
-                count=int(math.sqrt(len(self._streams))*1.5)
+                count=int(math.sqrt(len(self._streams))*(math.sqrt(self._config.get("connect_count",20))/10+1.2))
                 self._connection_count=self._config.get("connect_count",20) if count>self._config.get("connect_count",20) else (count if len(self._streams)>1 else 2)
                 self.fork_connection()
         if self._type==self.SESSION_TYPE.SERVER and not self._connections:
@@ -275,7 +275,7 @@ class Session(BaseSession):
 
     def stream(self,strict=False):
         sid=self.get_next_stream_id()
-        stream=StrictStream(self,sid) if strict else Stream(self,sid)
+        stream=StrictStream(self,sid,self._config.get("stream_time_out",300)) if strict else Stream(self,sid,self._config.get("stream_time_out",300))
         return stream
 
     def open_stream(self,stream):
@@ -296,15 +296,15 @@ class Session(BaseSession):
     def stream_fault(self,connection,frame):
         if frame.stream_id==0:
             if not self._control:
-                stream=StrictStream(self,0)
+                stream=StrictStream(self,0,self._config.get("stream_time_out",300))
                 self._control=SessionControl(self,stream)
                 stream.on_frame(frame)
         else:
             if frame.frame_id==0:
-                stream=StrictStream(self,frame.stream_id)
+                stream=StrictStream(self,frame.stream_id,self._config.get("stream_time_out",300))
                 stream.on_frame(frame)
             elif frame.frame_id>=1:
-                stream=Stream(self,frame.stream_id)
+                stream=Stream(self,frame.stream_id,self._config.get("stream_time_out",300))
                 stream.on_frame(frame)
 
     def on_frame(self,connection,frame):
