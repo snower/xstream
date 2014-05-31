@@ -156,7 +156,7 @@ class StrictStream(BaseStream):
 
     def on_data(self,frame):
         self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
-        return super(StrictStream,self).on_frame(frame)
+        return super(StrictStream,self).on_data(frame)
 
     def open(self):
         if self._status!=self.STATUS.INITED:return
