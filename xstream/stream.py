@@ -37,6 +37,7 @@ class BaseStream(EventEmitter):
         self._fin_frame_id=0
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
+        self._last_write_time=time.time()
         self._status=self.STATUS.INITED
         self.last_write_connection_id=0
 
@@ -57,6 +58,7 @@ class BaseStream(EventEmitter):
             if self._frame_id==0xffffffff:
                 self._frame_id=0
             self._frame_id+=1
+        self._last_write_time=time.time()
         return len(data)
 
     def write_frame(self,frame):
@@ -108,7 +110,7 @@ class BaseStream(EventEmitter):
         self.write_frame(frame)
 
     def loop(self):
-        if time.time()-self._last_recv_time>self._time_out:
+        if time.time()-max(self._last_write_time,self._last_recv_time)>self._time_out:
             self.close()
 
     def do_close(self):
