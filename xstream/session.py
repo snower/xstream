@@ -168,6 +168,9 @@ class Session(BaseSession):
         del self._sessions[self._session_id]
         logging.info("xstream session %s close",self._session_id)
 
+    def __del__(self):
+        self.close()
+
     def on_connection(self,connection):
         connection.on("data",self.on_data)
         connection.write(struct.pack("B",SYN_SESSION)+bson.dumps(self._config))

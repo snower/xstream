@@ -57,7 +57,12 @@ class Connection(EventEmitter):
         return self._connection.write("".join([struct.pack('H',len(data)),data]))
 
     def close(self):
-        self._connection.end()
+        if self._connection:
+            self._connection.end()
+            self._connection=None
+
+    def __del__(self):
+        self.close()
 
     def control(self,frame):
         type=ord(frame.data[0])

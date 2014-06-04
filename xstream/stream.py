@@ -119,6 +119,9 @@ class BaseStream(EventEmitter):
             self.emit("close",self)
             logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
 
+    def __del__(self):
+        self.close()
+
 class Stream(BaseStream):
     def __init__(self,*args,**kwargs):
         super(Stream,self).__init__(*args,**kwargs)
@@ -198,7 +201,12 @@ class StrictStream(BaseStream):
                 self.do_close()
 
     def loop(self):
+        now=time.time()
         for frame_id,frame in self._wframes.iteritems():
-            if time.time()-frame[1]>1:
+            if now-frame[1]>180:
+                self.do_close()
+                self._wframes={}
+                return
+            if now-frame[1]>2:
                 self.write_frame(frame[0])
         return super(StrictStream,self).loop()
