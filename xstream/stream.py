@@ -198,7 +198,7 @@ class StrictStream(BaseStream):
                 self.do_close()
 
     def loop(self):
-        for frame_id,frame in self._wframes:
+        for frame_id,frame in self._wframes.iteritems():
             if time.time()-frame[1]>1:
                 self.write_frame(frame[0])
         return super(StrictStream,self).loop()
