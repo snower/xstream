@@ -164,8 +164,11 @@ class Session(BaseSession):
         self._status=self.STATUS.CLOSED
         for id,connection in self._connections.items():
             connection.close()
+        for connection in self._connectings:
+            connection.close()
         self.emit("close",self)
-        del self._sessions[self._session_id]
+        if self._session_id in self._sessions:
+            del self._sessions[self._session_id]
         logging.info("xstream session %s close",self._session_id)
 
     def __del__(self):
