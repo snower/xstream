@@ -384,7 +384,7 @@ class Session(BaseSession):
 
     def write(self,stream,frame,backup=False):
         if backup:
-            connection=self.backup_write(stream,frame)
+            connection=self.backup_write_frame(stream,frame)
         else:
             connection=self.write_frame(stream,frame)
         logging.debug("xstream session write:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
