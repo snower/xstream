@@ -91,11 +91,12 @@ class Session(BaseSession):
         INITED=0,
         CONNECTING=1
         CONNECTED=2
-        AUTHING=3,
-        AUTHED=4,
-        STREAMING=5,
-        CLOSING=6,
-        CLOSED=7
+        AUTHING=3
+        AUTHED=4
+        SLEEPING=5
+        STREAMING=6
+        CLOSING=7
+        CLOSED=8
 
     def __init__(self,ip,port,type=SESSION_TYPE.CLIENT,**kwargs):
         super(Session,self).__init__(ip,port)
@@ -111,6 +112,7 @@ class Session(BaseSession):
         self._stream_current_id=1 if type==self.SESSION_TYPE.CLIENT else 2
         self._stream_time=time.time()
         self._connection_count=1
+        self._wbuffers=[]
 
     @property
     def id(self):
@@ -245,8 +247,35 @@ class Session(BaseSession):
 
     def streaming(self):
         self.emit("streaming",self)
+        for frame in self._wbuffers:
+            frame.session_id=self._session_id
+            self.write(frame)
+        self._wbuffers=[]
         self.loop.timeout(2,self.session_loop)
         logging.info("xstream session %s streaming",self._session_id)
+
+    def sleep(self):
+        self._status=self.STATUS.SLEEPING
+        logging.error("xstream session %s sleeping",self._session_id)
+
+    def wakeup(self):
+        if self._connections:
+            self._status=self.STATUS.STREAMING
+        else:
+            for stram_id in self._streams.keys():
+                self._streams[stram_id].close()
+            self._session_id=0
+            self._streams={}
+            self._connections={}
+            self._connections_list=[]
+            self._connectings=[]
+            self._status=self.STATUS.INITED
+            self._control=None
+            self._stream_current_id=1
+            self._stream_time=time.time()
+            self._connection_count=1
+            self.open()
+        logging.error("xstream session wakeup")
 
     def session_loop(self):
         if self._status==self.STATUS.STREAMING:
@@ -256,30 +285,34 @@ class Session(BaseSession):
                     connection.loop(len(self._connections)>1 or sleep)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
-                self.check()
                 self._control.loop()
+                self.check()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
             self.loop.timeout(1,self.session_loop)
 
     def check(self):
-        if self._type==self.SESSION_TYPE.CLIENT and self._status!=self.STATUS.CLOSED:
-            if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",900):return
-            if not self._connections:
+        if self._type==self.SESSION_TYPE.CLIENT:
+            if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",900):
+                self.sleep()
+            elif not self._connections:
                 self.close()
             else:
                 count=int(math.sqrt(len(self._streams))*(math.sqrt(self._config.get("connect_count",20))/10+1.2))
                 self._connection_count=min(self._config.get("connect_count",20),max(count,2))
                 self.fork_connection()
-        if self._type==self.SESSION_TYPE.SERVER and not self._connections:
-            self._status=self.STATUS.CLOSED
-            for stram_id in self._streams.keys():
-                self._streams[stram_id].close()
-            del self._sessions[self._session_id]
-            self.emit("close",self)
-            logging.info("xstream session %s close",self._session_id)
+        if self._type==self.SESSION_TYPE.SERVER:
+            if not self._connections:
+                self._status=self.STATUS.CLOSED
+                for stram_id in self._streams.keys():
+                    self._streams[stram_id].close()
+                del self._sessions[self._session_id]
+                self.emit("close",self)
+                logging.info("xstream session %s close",self._session_id)
 
     def stream(self,strict=False):
+        if self._status==self.STATUS.SLEEPING:
+            self.wakeup()
         sid=self.get_next_stream_id()
         stream=StrictStream(self,sid,self._config.get("stream_time_out",300)) if strict else Stream(self,sid,self._config.get("stream_time_out",300))
         return stream
@@ -323,7 +356,10 @@ class Session(BaseSession):
 
 
     def write(self,stream,frame):
-        if not self._connections:return
+        if not self._connections or self._status<self.STATUS.STREAMING:
+            if frame.session_id!=0 and frame.stream_id!=0:
+                self._wbuffers.append(frame)
+            return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
             connection=self._connections[stream.last_write_connection_id] if stream.last_write_connection_id and stream.last_write_connection_id in self._connections else random.choice(self._connections_list)
             try_count=0
