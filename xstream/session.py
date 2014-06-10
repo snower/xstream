@@ -360,9 +360,11 @@ class Session(BaseSession):
             self.write(frame)
 
     def backup_write_frame(self,stream,frame):
-        connection=random.choice(self._connections_list)
-        while stream.last_write_connection_id==id(connection):
-            connection=random.choice(self._connections_list)
+        if len(self._connections)<=1:return
+        index=int(random.random()*len(self._connections_list))
+        while stream.last_write_connection_id==id(self._connections_list[index]):
+            index=0 if index==len(self._connections_list) else index+1
+        connection=self._connections_list[index]
         connection.write(frame,True)
         return connection
 
