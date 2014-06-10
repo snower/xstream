@@ -72,7 +72,7 @@ class BaseStream(EventEmitter):
 
     def on_data(self,frame):
         self._last_recv_time=time.time()
-        if frame.frame_id<self._current_frame_id_loop*0xffffffff+self._current_frame_id:return
+        if frame.frame_id<self._current_frame_id and self._current_frame_id-frame.frame_id<0x7fffffff:return
 
         data=[]
         if frame.frame_id==self._current_frame_id:
@@ -126,7 +126,14 @@ class Stream(BaseStream):
     def __init__(self,*args,**kwargs):
         super(Stream,self).__init__(*args,**kwargs)
 
+        self._wlen=0
         self.open()
+
+    def write_frame(self,frame):
+        super(Stream,self).write_frame(frame)
+        if self._wlen<65536:
+            self._session.write(self,frame,True)
+        self._wlen+=len(frame.data)
 
     def open(self):
         if self._status!=self.STATUS.INITED:return

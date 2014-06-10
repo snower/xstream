@@ -355,13 +355,23 @@ class Session(BaseSession):
             logging.debug("xstream session read:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
 
 
-    def write(self,stream,frame):
+    def backup_write_frame(self,stream,frame):
+        connection=random.choice(self._connections_list)
+        while stream.last_write_connection_id==id(connection):
+            connection=random.choice(self._connections_list)
+        connection.write(frame,True)
+        return connection
+
+    def write_frame(self,stream,frame):
         if not self._connections or self._status<self.STATUS.STREAMING:
             if frame.session_id!=0 and frame.stream_id!=0:
                 self._wbuffers.append(frame)
             return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
-            connection=self._connections[stream.last_write_connection_id] if stream.last_write_connection_id and stream.last_write_connection_id in self._connections else random.choice(self._connections_list)
+            if stream.last_write_connection_id and stream.last_write_connection_id in self._connections:
+                connection=self._connections[stream.last_write_connection_id]
+            else:
+                connection=random.choice(self._connections_list)
             try_count=0
             while not connection.write(frame):
                 connection=random.choice(self._connections_list)
@@ -370,4 +380,11 @@ class Session(BaseSession):
                     if connection.write(frame,True):
                         break
             stream.last_write_connection_id=id(connection)
-            logging.debug("xstream session write:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
+            return connection
+
+    def write(self,stream,frame,backup=False):
+        if backup:
+            connection=self.backup_write(stream,frame)
+        else:
+            connection=self.write_frame(stream,frame)
+        logging.debug("xstream session write:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
