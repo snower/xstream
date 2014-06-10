@@ -247,11 +247,8 @@ class Session(BaseSession):
 
     def streaming(self):
         self.emit("streaming",self)
-        for frame in self._wbuffers:
-            frame.session_id=self._session_id
-            self.write(frame)
-        self._wbuffers=[]
-        self.loop.timeout(2,self.session_loop)
+        self.write_buffer_frame()
+        self.loop.timeout(1,self.session_loop)
         logging.info("xstream session %s streaming",self._session_id)
 
     def sleep(self):
@@ -280,9 +277,9 @@ class Session(BaseSession):
     def session_loop(self):
         if self._status==self.STATUS.STREAMING:
             try:
-                sleep=not self._streams and time.time()-self._stream_time>900
-                for id,connection in self._connections.items():
-                    connection.loop(len(self._connections)>1 or sleep)
+                self.write_buffer_frame()
+                for connection in self._connections_list:
+                    connection.loop(len(self._connections)>1 or self._status==self.STATUS.SLEEPING)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
                 self._control.loop()
@@ -354,6 +351,13 @@ class Session(BaseSession):
                 self._streams[frame.stream_id].on_frame(frame)
             logging.debug("xstream session read:session_id=%s,stream_id=%s,frame_id=%s,connection=%s,data_len=%s",frame.session_id,frame.stream_id,frame.frame_id,id(connection),len(frame.data))
 
+    def write_buffer_frame(self):
+        if not self._wbuffers:return
+        wbuffers=self._wbuffers
+        self._wbuffers=[]
+        for frame in wbuffers:
+            frame.session_id=self._session_id
+            self.write(frame)
 
     def backup_write_frame(self,stream,frame):
         connection=random.choice(self._connections_list)
@@ -377,8 +381,10 @@ class Session(BaseSession):
                 connection=random.choice(self._connections_list)
                 try_count+=1
                 if try_count>len(self._connections)*2:
-                    if connection.write(frame,True):
-                        break
+                    if not connection.write(frame,True):
+                        self._wbuffers.append(frame)
+                        return
+                    break
             stream.last_write_connection_id=id(connection)
             return connection
 
