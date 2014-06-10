@@ -81,9 +81,12 @@ class BaseStream(EventEmitter):
         else:
             bisect.insort(self._frames,frame)
 
-        while self._frames and self._frames[0].frame_id==self._current_frame_id:
+        while self._frames:
+            if self._frames[0].frame_id<self._current_frame_id and self._current_frame_id-self._frames[0].frame_id<0x7fffffff:
+                self._frames.pop(0)
+                continue
+            if self._frames[0].frame_id!=self._current_frame_id:break
             frame=self._frames.pop(0)
-            if frame.frame_id<self._current_frame_id and self._current_frame_id-frame.frame_id<0x7fffffff:continue
             data.append(frame.data)
             self._current_frame_id+=1
 
