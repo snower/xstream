@@ -355,23 +355,24 @@ class Session(BaseSession):
         if not self._wbuffers:return
         wbuffers=self._wbuffers
         self._wbuffers=[]
-        for frame in wbuffers:
+        for stream,frame in wbuffers:
             frame.session_id=self._session_id
-            self.write(frame)
+            self.write(stream,frame)
 
     def backup_write_frame(self,stream,frame):
         if len(self._connections)<=1:return
-        index=int(random.random()*len(self._connections_list))
-        while stream.last_write_connection_id==id(self._connections_list[index]):
-            index=0 if index==len(self._connections_list)-1 else index+1
-        connection=self._connections_list[index]
-        connection.write(frame,True)
-        return connection
+        if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
+            index=int(random.random()*len(self._connections_list))
+            while stream.last_write_connection_id==id(self._connections_list[index]):
+                index=0 if index==len(self._connections_list)-1 else index+1
+            connection=self._connections_list[index]
+            connection.write(frame,True)
+            return connection
 
     def write_frame(self,stream,frame):
         if not self._connections or self._status<self.STATUS.STREAMING:
             if frame.session_id!=0 and frame.stream_id!=0:
-                self._wbuffers.append(frame)
+                self._wbuffers.append((stream,frame))
             return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
             if stream.last_write_connection_id and stream.last_write_connection_id in self._connections:
@@ -384,7 +385,7 @@ class Session(BaseSession):
                 try_count+=1
                 if try_count>len(self._connections)*2:
                     if not connection.write(frame,True):
-                        self._wbuffers.append(frame)
+                        self._wbuffers.append((stream,frame))
                         return
                     break
             stream.last_write_connection_id=id(connection)
