@@ -23,23 +23,23 @@ class Frame(object):
     def pack_frame_id(self):
         if self.frame_id<=0xff:
             self.flag |=0x00
-            return struct.pack('!B')
+            return struct.pack('!B',self.frame_id)
         elif self.frame_id<=0xffff:
             self.flag |=0x01
-            return struct.pack('!H')
+            return struct.pack('!H',self.frame_id)
         elif self.frame_id<=0xffffffff:
             self.flag |=0x02
-            return struct.pack('!I')
+            return struct.pack('!I',self.frame_id)
         self.flag |=0x03
-        return struct.pack('!Q')
+        return struct.pack('!Q',self.frame_id)
 
     def unpack_frame_id(self,data):
-        self.flag &=0x03
-        if self.flag==0x00:
+        flag=self.flag & 0x03
+        if flag==0x00:
             return 1,struct.unpack('!B',data[5])[0]
-        elif self.flag==0x01:
+        elif flag==0x01:
             return 2,struct.unpack('!H',data[5:7])[0]
-        elif self.flag==0x02:
+        elif flag==0x02:
             return 4,struct.unpack('!I',data[5:9])[0]
         return 8,struct.unpack('!Q',data[5:13])[0]
 
