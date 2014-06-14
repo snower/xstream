@@ -38,7 +38,7 @@ class Connection(EventEmitter):
 
     def read(self):
         if len(self._buffer)<2:return False
-        flen=struct.unpack('H',self._buffer[:2])[0]
+        flen=struct.unpack('!H',self._buffer[:2])[0]
         if len(self._buffer)>=flen+2:
             frame=Frame(self._buffer[2:flen+2])
             if frame.session_id==0 and frame.stream_id==0 and frame.frame_id==0:
@@ -54,7 +54,7 @@ class Connection(EventEmitter):
         if not force and len(self._connection._buffers)>0:return False
         data=str(frame)
         self._time=time.time()
-        return self._connection.write("".join([struct.pack('H',len(data)),data]))
+        return self._connection.write("".join([struct.pack('!H',len(data)),data]))
 
     def close(self):
         if self._connection:
@@ -73,7 +73,7 @@ class Connection(EventEmitter):
             self.close()
 
     def write_control(self,type,data=""):
-        data=struct.pack("B",type)+data
+        data=struct.pack("!B",type)+data
         frame=Frame(data,0,0,0)
         self.write(frame,True)
 

@@ -42,7 +42,7 @@ class Server(BaseSession):
         self._config=kwargs
 
     def write_error(self,connection,error):
-        connection.write(struct.pack("B",SYN_ERROR)+struct.pack("I",error[0])+error[1])
+        connection.write(struct.pack("!B",SYN_ERROR)+struct.pack("!I",error[0])+error[1])
         connection.end()
         logging.error("xstream server error:%s,%s",*error)
 
@@ -64,12 +64,12 @@ class Server(BaseSession):
                 return self.write_error(connection,error.SS_OUT_MAX_SESSION_ERROR)
             config=bson.loads(data[1:])
             session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,**config)
-            connection.write(struct.pack("B",SYN_OK)+struct.pack("H",session.id)+bson.dumps(session._config))
+            connection.write(struct.pack("!B",SYN_OK)+struct.pack("!H",session.id)+bson.dumps(session._config))
             self._sessions[session.id]=session
             self.emit("session",self,session)
             logging.info("xstream server session %s connect",session._session_id)
         elif type==SYN_CONNECTION:
-            session_id=struct.unpack("H",data[1:])[0]
+            session_id=struct.unpack("!H",data[1:])[0]
             if session_id not in self._sessions:
                 return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
             session=self._sessions[session_id]
@@ -79,7 +79,7 @@ class Server(BaseSession):
                 return self.write_error(connection,error.SS_OUT_MAX_CONNECT_ERROR)
             connection.remove_listener("data",self.on_data)
             session.add_connection(connection)
-            connection.write(struct.pack("B",SYN_OK))
+            connection.write(struct.pack("!B",SYN_OK))
             logging.info("xstream server session %s connection %s connected",session._session_id,connection)
 
 class Session(BaseSession):
@@ -178,12 +178,12 @@ class Session(BaseSession):
 
     def on_connection(self,connection):
         connection.on("data",self.on_data)
-        connection.write(struct.pack("B",SYN_SESSION)+bson.dumps(self._config))
+        connection.write(struct.pack("!B",SYN_SESSION)+bson.dumps(self._config))
 
     def on_data(self,connection,data):
         type=ord(data[0])
         if type==SYN_OK:
-            self._session_id=struct.unpack("H",data[1:3])[0]
+            self._session_id=struct.unpack("!H",data[1:3])[0]
             self._status=self.STATUS.CONNECTED
             logging.info("xstream session %s connected",self._session_id)
 
@@ -194,7 +194,7 @@ class Session(BaseSession):
             connection.remove_listener("data",self.on_data)
             connection.on("close",self.on_fork_close)
             connection.on("data",self.on_fork_data)
-            connection.write(struct.pack("B",SYN_CONNECTION)+struct.pack("H",self._session_id))
+            connection.write(struct.pack("!B",SYN_CONNECTION)+struct.pack("!H",self._session_id))
             self.fork_connection()
         elif type==SYN_ERROR:
             self.on_error(data[1:])
@@ -213,7 +213,7 @@ class Session(BaseSession):
 
     def on_fork_connection(self,connection):
         connection.on("data",self.on_fork_data)
-        connection.write(struct.pack("B",SYN_CONNECTION)+struct.pack("H",self._session_id))
+        connection.write(struct.pack("!B",SYN_CONNECTION)+struct.pack("!H",self._session_id))
 
     def on_fork_data(self,connection,data):
         type=ord(data[0])
@@ -231,7 +231,7 @@ class Session(BaseSession):
         self._connectings.remove(connection)
 
     def on_error(self,data):
-        code,msg=struct.unpack("I",data[:4])[0],data[4:]
+        code,msg=struct.unpack("!I",data[:4])[0],data[4:]
         self.emit("error",self,code,msg)
         self.close()
         logging.error("xstream session error:%s,%s",code,msg)

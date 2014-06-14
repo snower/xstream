@@ -33,7 +33,6 @@ class BaseStream(EventEmitter):
         self._frames=[]
         self._frame_id=1
         self._current_frame_id=1
-        self._current_frame_id_loop=0
         self._fin_frame_id=0
         self._last_recv_time=time.time()
         self._last_data_time=time.time()
@@ -55,8 +54,6 @@ class BaseStream(EventEmitter):
         for i in xrange(int(len(data)/Frame.FRAME_LEN)+1):
             frame=Frame(data[i*Frame.FRAME_LEN:(i+1)*Frame.FRAME_LEN],self._session.id,self._stream_id,self._frame_id)
             self.write_frame(frame)
-            if self._frame_id==0xffffffff:
-                self._frame_id=0
             self._frame_id+=1
         self._last_write_time=time.time()
         return len(data)
@@ -72,7 +69,7 @@ class BaseStream(EventEmitter):
 
     def on_data(self,frame):
         self._last_recv_time=time.time()
-        if frame.frame_id<self._current_frame_id and self._current_frame_id-frame.frame_id<0x7fffffff:return
+        if frame.frame_id<self._current_frame_id:return
 
         data=[]
         if frame.frame_id==self._current_frame_id:
@@ -80,9 +77,10 @@ class BaseStream(EventEmitter):
             data.append(frame.data)
         else:
             bisect.insort(self._frames,frame)
+            return
 
         while self._frames:
-            if self._frames[0].frame_id<self._current_frame_id and self._current_frame_id-self._frames[0].frame_id<0x7fffffff:
+            if self._frames[0].frame_id<self._current_frame_id:
                 self._frames.pop(0)
                 continue
             if self._frames[0].frame_id!=self._current_frame_id:break
@@ -95,9 +93,6 @@ class BaseStream(EventEmitter):
             self.emit("data",self,"".join(data))
             if self._status==self.STATUS.CLOSING and self._fin_frame_id and self._fin_frame_id==self._current_frame_id:
                 self.do_close()
-            if self._current_frame_id==0xffffffff:
-                self._current_frame_id=1
-                self._current_frame_id_loop+=1
 
     def open(self):
         pass
@@ -109,7 +104,7 @@ class BaseStream(EventEmitter):
         pass
 
     def write_control(self,type,data=''):
-        data=struct.pack("B",type)+data
+        data=struct.pack("!B",type)+data
         frame=Frame(data,self._session.id,self._stream_id,0)
         self.write_frame(frame)
 
