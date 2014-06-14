@@ -35,6 +35,7 @@ class Connection(EventEmitter):
 
     def on_close(self,s):
         self.emit("close",self)
+        self._connection=None
 
     def read(self):
         if len(self._buffer)<2:return False
@@ -59,7 +60,6 @@ class Connection(EventEmitter):
     def close(self):
         if self._connection:
             self._connection.end()
-            self._connection=None
 
     def __del__(self):
         self.close()
@@ -84,6 +84,7 @@ class Connection(EventEmitter):
         logging.debug("xstream connection %s ping",self)
 
     def loop(self,expired=True):
+        if self._closing:return
         if expired and len(self._connection._buffers)==0 and time.time()>self._expired_time:
             self.write_control(SYN_CLOSING)
             self._closing=True

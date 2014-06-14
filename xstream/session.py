@@ -383,7 +383,7 @@ class Session(BaseSession):
             while not connection.write(frame):
                 connection=random.choice(self._connections_list)
                 try_count+=1
-                if try_count>len(self._connections)*2:
+                if try_count>len(self._connections)*1.4:
                     if not connection.write(frame,True):
                         self._wbuffers.append((stream,frame))
                         return
