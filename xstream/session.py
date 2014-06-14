@@ -286,7 +286,7 @@ class Session(BaseSession):
                 self.check()
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
-            self.loop.timeout(1,self.session_loop)
+            self.loop.timeout(0.5,self.session_loop)
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT:
