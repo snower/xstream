@@ -141,7 +141,7 @@ class Stream(BaseStream):
 
     def on_data(self,frame):
         if frame.flag & 0x04:
-            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
+            self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
         return super(Stream,self).on_data(frame)
 
     def open(self):
@@ -191,7 +191,7 @@ class StrictStream(BaseStream):
             self._wframes[frame.frame_id]=(frame,time.time())
 
     def on_data(self,frame):
-        self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
+        self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
         return super(StrictStream,self).on_data(frame)
 
     def open(self):
