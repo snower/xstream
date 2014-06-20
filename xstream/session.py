@@ -72,7 +72,7 @@ class Server(BaseSession):
             self.emit("session",self,session)
             logging.info("xstream server session %s connect",session._session_id)
         elif type==SYN_CONNECTION:
-            session_id=struct.unpack("!H",data[1:])[0]
+            session_id=struct.unpack("!H",data[1:3])[0]
             if session_id not in self._sessions:
                 return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
             session=self._sessions[session_id]
