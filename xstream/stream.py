@@ -136,7 +136,7 @@ class Stream(BaseStream):
                 self._session.write(self,frame,True)
             else:
                 frame.flag |=0x04
-                self._wframes[frame.frame_id]=(frame,time.time())
+                self._wframes[frame.frame_id]=[frame,time.time(),2+len(self._wframes)]
             self._wlen+=len(frame.data)
 
     def on_data(self,frame):
@@ -171,12 +171,13 @@ class Stream(BaseStream):
     def loop(self):
         now=time.time()
         for frame_id,frame in self._wframes.iteritems():
-            if now-frame[1]>180:
+            if now-frame[1]>frame[2]+180:
                 self.do_close()
                 self._wframes={}
                 return
-            if now-frame[1]>2:
+            if now-frame[1]>frame[2]:
                 super(Stream,self).write_frame(frame[0])
+                frame[2] +=2
         return super(Stream,self).loop()
 
 class StrictStream(BaseStream):
@@ -188,7 +189,7 @@ class StrictStream(BaseStream):
     def write_frame(self,frame):
         super(StrictStream,self).write_frame(frame)
         if frame.frame_id!=0:
-            self._wframes[frame.frame_id]=(frame,time.time())
+            self._wframes[frame.frame_id]=[frame,time.time(),2+len(self._wframes)]
 
     def on_data(self,frame):
         self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
@@ -234,10 +235,11 @@ class StrictStream(BaseStream):
     def loop(self):
         now=time.time()
         for frame_id,frame in self._wframes.iteritems():
-            if now-frame[1]>180:
+            if now-frame[1]>frame[2]+180:
                 self.do_close()
                 self._wframes={}
                 return
-            if now-frame[1]>2:
+            if now-frame[1]>frame[2]:
                 super(StrictStream,self).write_frame(frame[0])
+                frame[2] +=2
         return super(StrictStream,self).loop()
