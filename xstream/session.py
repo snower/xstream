@@ -81,7 +81,7 @@ class Server(BaseSession):
             if len(session._connections)>max(session._config.get("connect_count",20),20):
                 return self.write_error(connection,error.SS_OUT_MAX_CONNECT_ERROR)
             connection.remove_listener("data",self.on_data)
-            crypto=Crypto(self._crypto_alg,self._crypto_key)
+            crypto=Crypto(self._crypto_key,self._crypto_alg)
             secret=crypto.init_encrypt()
             crypto.init_decrypt(data[5:5+struct.unpack('!H',data[3:5])[0]])
             session.add_connection(connection,crypto)
