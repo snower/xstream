@@ -136,7 +136,7 @@ class Stream(BaseStream):
                 self._session.write(self,frame,True)
             else:
                 frame.flag |=0x04
-                self._wframes[frame.frame_id]=[frame,time.time(),2+len(self._wframes)]
+                self._wframes[frame.frame_id]=[frame,time.time(),5+len(self._wframes)]
             self._wlen+=len(frame.data)
 
     def on_data(self,frame):
@@ -177,7 +177,7 @@ class Stream(BaseStream):
                 return
             if now-frame[1]>frame[2]:
                 super(Stream,self).write_frame(frame[0])
-                frame[2] +=2
+                frame[2] +=5
         return super(Stream,self).loop()
 
 class StrictStream(BaseStream):
