@@ -292,7 +292,7 @@ class Session(BaseSession):
             try:
                 self.write_buffer_frame()
                 for connection in self._connections_list:
-                    connection.loop(len(self._connections)>1 or self._status==self.STATUS.SLEEPING)
+                    connection.loop(len(self._connections)>1)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
                 self._control.loop()
@@ -300,6 +300,11 @@ class Session(BaseSession):
             except Exception,e:
                 logging.error("xstream session %s loop error:%s",self._session_id,e)
             self.loop.timeout(0.5,self.session_loop)
+        elif self._status==self.STATUS.SLEEPING and self._connections:
+            for connection in self._connections_list:
+                connection.loop()
+            self.loop.timeout(0.5,self.session_loop)
+
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT:
