@@ -45,9 +45,9 @@ class Crypto(object):
     
     def bytes_to_key(self,salt):
         key_len=ALG_KEY_IV_LEN.get(self._alg)[0]
-        s=EVP.MessageDigest('sha1')
         d1,d2=self._key.encode('utf-8') if isinstance(self._key,unicode) else self._key,''
         for i in range(5):
+            s=EVP.MessageDigest('sha1')
             s.update(d1+salt)
             d2=d1
             d1=s.digest()
