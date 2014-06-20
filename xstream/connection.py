@@ -13,9 +13,10 @@ SYN_PING=0x01
 SYN_CLOSING=0x02
 
 class Connection(EventEmitter):
-    def __init__(self,connection):
+    def __init__(self,connection,crypto):
         super(Connection,self).__init__()
         self._connection=connection
+        self._crypto=crypto
         self._connection.on("data",self.on_data)
         self._connection.on("close",self.on_close)
         self._buffer=''
@@ -29,7 +30,7 @@ class Connection(EventEmitter):
         return self._connection.addr
 
     def on_data(self, connection, data):
-        self._buffer+=data
+        self._buffer+=self._crypto.decrypt(data)
         while self.read():pass
         self._time=time.time()
 
@@ -59,7 +60,8 @@ class Connection(EventEmitter):
         if not force and len(self._connection._buffers)>0:return False
         data=str(frame)
         self._time=time.time()
-        return self._connection.write("".join([struct.pack('!H',len(data)),data,'\x00\xff\x00\xff']))
+        data="".join([struct.pack('!H',len(data)),data,'\x00\xff\x00\xff'])
+        return self._connection.write(self._crypto.encrypt(data))
 
     def close(self):
         self._closing=True
