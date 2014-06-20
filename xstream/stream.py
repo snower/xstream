@@ -126,13 +126,23 @@ class Stream(BaseStream):
         super(Stream,self).__init__(*args,**kwargs)
 
         self._wlen=0
+        self._wframes={}
         self.open()
 
     def write_frame(self,frame):
         super(Stream,self).write_frame(frame)
-        if self._wlen<65536:
-            self._session.write(self,frame,True)
-        self._wlen+=len(frame.data)
+        if  frame.frame_id!=0:
+            if self._wlen<131072:
+                self._session.write(self,frame,True)
+            else:
+                frame.flag |=0x04
+                self._wframes[frame.frame_id]=(frame,time.time())
+            self._wlen+=len(frame.data)
+
+    def on_data(self,frame):
+        if frame.flag & 0x04:
+            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
+        return super(Stream,self).on_data(frame)
 
     def open(self):
         if self._status!=self.STATUS.INITED:return
@@ -153,6 +163,21 @@ class Stream(BaseStream):
                 self.do_close()
             else:
                 self._status=self.STATUS.CLOSING
+        elif type==SYN_ACK:
+            frame_id=bson.loads(frame.data[1:])["frame_id"]
+            if frame_id in self._wframes:
+                del self._wframes[frame_id]
+
+    def loop(self):
+        now=time.time()
+        for frame_id,frame in self._wframes.iteritems():
+            if now-frame[1]>180:
+                self.do_close()
+                self._wframes={}
+                return
+            if now-frame[1]>2:
+                super(Stream,self).write_frame(frame[0])
+        return super(Stream,self).loop()
 
 class StrictStream(BaseStream):
     def __init__(self,*args,**kwargs):
@@ -161,9 +186,9 @@ class StrictStream(BaseStream):
         self._wframes={}
 
     def write_frame(self,frame):
+        super(StrictStream,self).write_frame(frame)
         if frame.frame_id!=0:
             self._wframes[frame.frame_id]=(frame,time.time())
-        self._session.write(self,frame)
 
     def on_data(self,frame):
         self.write_control(SYN_ACK,bson.dumps({"frame_id":self._frame_id}))
@@ -214,5 +239,5 @@ class StrictStream(BaseStream):
                 self._wframes={}
                 return
             if now-frame[1]>2:
-                self.write_frame(frame[0])
+                super(StrictStream,self).write_frame(frame[0])
         return super(StrictStream,self).loop()

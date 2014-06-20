@@ -40,13 +40,17 @@ class Connection(EventEmitter):
     def read(self):
         if len(self._buffer)<2:return False
         flen=struct.unpack('!H',self._buffer[:2])[0]
-        if len(self._buffer)>=flen+2:
+        if len(self._buffer)>=flen+6:
+            if self._buffer[flen+2:flen+6]!='\x00\xff\x00\xff':
+                logging.error("stream connection %s  verify error",self)
+                self.close()
+                return False
             frame=Frame(self._buffer[2:flen+2])
             if frame.session_id==0 and frame.stream_id==0 and frame.frame_id==0:
                 self.control(frame)
             else:
                 self.emit("frame",self,frame)
-            self._buffer=self._buffer[flen+2:]
+            self._buffer=self._buffer[flen+6:]
             return True
         return False
 
@@ -55,9 +59,10 @@ class Connection(EventEmitter):
         if not force and len(self._connection._buffers)>0:return False
         data=str(frame)
         self._time=time.time()
-        return self._connection.write("".join([struct.pack('!H',len(data)),data]))
+        return self._connection.write("".join([struct.pack('!H',len(data)),data,'\x00\xff\x00\xff']))
 
     def close(self):
+        self._closing=True
         if self._connection:
             self._connection.end()
 
@@ -69,7 +74,6 @@ class Connection(EventEmitter):
         if type==SYN_PING:
             self.ping()
         elif type==SYN_CLOSING:
-            self._closing=True
             self.close()
 
     def write_control(self,type,data=""):
