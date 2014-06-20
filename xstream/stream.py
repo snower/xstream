@@ -189,7 +189,7 @@ class StrictStream(BaseStream):
     def write_frame(self,frame):
         super(StrictStream,self).write_frame(frame)
         if frame.frame_id!=0:
-            self._wframes[frame.frame_id]=[frame,time.time(),2+len(self._wframes)]
+            self._wframes[frame.frame_id]=[frame,time.time(),5+len(self._wframes)]
 
     def on_data(self,frame):
         self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
@@ -241,5 +241,5 @@ class StrictStream(BaseStream):
                 return
             if now-frame[1]>frame[2]:
                 super(StrictStream,self).write_frame(frame[0])
-                frame[2] +=2
+                frame[2] +=5
         return super(StrictStream,self).loop()
