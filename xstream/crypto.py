@@ -32,7 +32,7 @@ class Crypto(object):
 
     def init_decrypt(self,secret):
         self._desecret=(secret[:32],secret[32:])
-        self._decipher=EVP.Cipher(self._alg,self.bytes_to_key(self._ensecret[0]),self._desecret[1],0,0)
+        self._decipher=EVP.Cipher(self._alg,self.bytes_to_key(self._desecret[0]),self._desecret[1],0,0)
 
     def encrypt(self,data):
         return self._encipher.update(data)
