@@ -266,7 +266,7 @@ class Session(BaseSession):
 
     def sleep(self):
         self._status=self.STATUS.SLEEPING
-        logging.error("xstream session %s sleeping",self._session_id)
+        logging.info("xstream session %s sleeping",self._session_id)
 
     def wakeup(self):
         if self._connections:
@@ -285,14 +285,14 @@ class Session(BaseSession):
             self._stream_time=time.time()
             self._connection_count=1
             self.open()
-        logging.error("xstream session wakeup")
+        logging.info("xstream session wakeup")
 
     def session_loop(self):
         if self._status==self.STATUS.STREAMING:
             try:
                 self.write_buffer_frame()
                 for connection in self._connections_list:
-                    connection.loop(len(self._connections)>1)
+                    connection.loop(len(self._connections)>1 and self._type==self.SESSION_TYPE.CLIENT)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
                 self._control.loop()
