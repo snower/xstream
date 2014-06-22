@@ -50,7 +50,10 @@ class Connection(EventEmitter):
             self.close()
             return False
         except FrameUnpackFinish,e:
-            self.emit("frame",self,self._frame)
+            if self._frame.session_id==0 and self._frame.stream_id==0 and self._frame.frame_id==0:
+                self.control(self._frame)
+            else:
+                self.emit("frame",self,self._frame)
             self._frame=Frame()
             self._buffer=e.data
             return True
