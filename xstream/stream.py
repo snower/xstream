@@ -52,7 +52,7 @@ class BaseStream(EventEmitter):
         if self._status!=self.STATUS.STREAMING:
             return False
         for i in xrange(int(len(data)/Frame.FRAME_LEN)+1):
-            frame=Frame(data[i*Frame.FRAME_LEN:(i+1)*Frame.FRAME_LEN],self._session.id,self._stream_id,self._frame_id)
+            frame=Frame(self._session.id,self._stream_id,self._frame_id,data[i*Frame.FRAME_LEN:(i+1)*Frame.FRAME_LEN])
             self.write_frame(frame)
             self._frame_id+=1
         self._last_write_time=time.time()
@@ -105,7 +105,7 @@ class BaseStream(EventEmitter):
 
     def write_control(self,type,data=''):
         data=struct.pack("!B",type)+data
-        frame=Frame(data,self._session.id,self._stream_id,0)
+        frame=Frame(self._session.id,self._stream_id,0,data)
         self.write_frame(frame)
 
     def loop(self):
@@ -135,12 +135,12 @@ class Stream(BaseStream):
             if self._wlen<131072:
                 self._session.write(self,frame,True)
             else:
-                frame.flag |=0x04
+                frame.flag |=0x01
                 self._wframes[frame.frame_id]=[frame,time.time(),5+len(self._wframes)]
             self._wlen+=len(frame.data)
 
     def on_data(self,frame):
-        if frame.flag & 0x04:
+        if frame.flag & 0x01:
             self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
         return super(Stream,self).on_data(frame)
 
@@ -154,6 +154,10 @@ class Stream(BaseStream):
         if self._status==self.STATUS.CLOSED:return
         self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
         self.do_close()
+
+    def do_close(self):
+        self._wframes={}
+        super(Stream,self).do_close()
 
     def control(self,frame):
         type=ord(frame.data[0])
@@ -172,8 +176,8 @@ class Stream(BaseStream):
         now=time.time()
         for frame_id,frame in self._wframes.iteritems():
             if now-frame[1]>frame[2]+180:
-                self.do_close()
                 self._wframes={}
+                self.do_close()
                 return
             if now-frame[1]>frame[2]:
                 super(Stream,self).write_frame(frame[0])
@@ -205,6 +209,10 @@ class StrictStream(BaseStream):
         if self._status==self.STATUS.CLOSED:return
         self._status=self.STATUS.CLOSING
         self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
+
+    def do_close(self):
+        self._wframes={}
+        super(StrictStream,self).do_close()
 
     def control(self,frame):
         type=ord(frame.data[0])

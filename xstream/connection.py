@@ -7,7 +7,7 @@ import time
 import random
 import logging
 from ssloop import EventEmitter
-from frame import Frame
+from frame import Frame,FrameUnpackFinish,FrameUnpackVerifyError
 
 SYN_PING=0x01
 SYN_CLOSING=0x02
@@ -20,6 +20,7 @@ class Connection(EventEmitter):
         self._connection.on("data",self.on_data)
         self._connection.on("close",self.on_close)
         self._buffer=''
+        self._frame=None
         self._expired_time=time.time()+random.randint(180,300)
         self._time=time.time()
         self._ping_time=0
@@ -31,37 +32,34 @@ class Connection(EventEmitter):
 
     def on_data(self, connection, data):
         self._buffer+=self._crypto.decrypt(data)
-        while self.read():pass
+        while self.read(self._buffer):pass
         self._time=time.time()
 
     def on_close(self,s):
         self.emit("close",self)
         self._connection=None
 
-    def read(self):
-        if len(self._buffer)<2:return False
-        flen=struct.unpack('!H',self._buffer[:2])[0]
-        if len(self._buffer)>=flen+6:
-            if self._buffer[flen+2:flen+6]!='\x00\xff\x00\xff':
-                logging.error("stream connection %s  verify error",self)
-                self.close()
-                return False
-            frame=Frame(self._buffer[2:flen+2])
-            if frame.session_id==0 and frame.stream_id==0 and frame.frame_id==0:
-                self.control(frame)
-            else:
-                self.emit("frame",self,frame)
-            self._buffer=self._buffer[flen+6:]
+    def read(self,data):
+        if not self._frame:
+            self._frame=Frame()
+        try:
+            self._buffer=self._frame.unpack(data)
+            return False
+        except FrameUnpackVerifyError:
+            logging.error("stream connection %s frame verify error",self)
+            self.close()
+            return False
+        except FrameUnpackFinish,e:
+            self.emit("frame",self,self._frame)
+            self._frame=Frame()
+            self._buffer=e.data
             return True
-        return False
 
     def write(self,frame,force=False):
         if self._closing:return False
         if not force and len(self._connection._buffers)>0:return False
-        data=str(frame)
         self._time=time.time()
-        data="".join([struct.pack('!H',len(data)),data,'\x00\xff\x00\xff'])
-        return self._connection.write(self._crypto.encrypt(data))
+        return self._connection.write(self._crypto.encrypt(frame.pack()))
 
     def close(self):
         self._closing=True
@@ -80,7 +78,7 @@ class Connection(EventEmitter):
 
     def write_control(self,type,data=""):
         data=struct.pack("!B",type)+data
-        frame=Frame(data,0,0,0)
+        frame=Frame(0,0,0,data)
         self.write(frame,True)
 
     def ping(self):

@@ -20,13 +20,16 @@ ALG_KEY_IV_LEN = {
     'seed_cfb': (16, 16),
 }
 
+def rand_string(length):
+    return Rand.rand_bytes(length)
+
 class Crypto(object):
     def __init__(self,key,alg='aes_256_cfb'):
         self._key=key
         self._alg=alg
 
-    def init_encrypt(self):
-        self._ensecret=(self.rand_string(32),self.rand_string(32))
+    def init_encrypt(self,secret=None):
+        self._ensecret=(secret[:32],secret[32:]) if secret  and len(secret)>=64 else (rand_string(32),rand_string(32))
         self._encipher=EVP.Cipher(self._alg,self.bytes_to_key(self._ensecret[0]),self._ensecret[1],1,0)
         return  "".join(self._ensecret)
 
@@ -39,9 +42,6 @@ class Crypto(object):
 
     def decrypt(self,data):
         return self._decipher.update(data)
-
-    def rand_string(self,length):
-        return Rand.rand_bytes(length)
     
     def bytes_to_key(self,salt):
         key_len=ALG_KEY_IV_LEN.get(self._alg)[0]

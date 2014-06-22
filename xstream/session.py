@@ -13,13 +13,15 @@ from ssloop import EventEmitter
 from connection import Connection
 from stream import Stream,StrictStream
 from control import SessionControl
-from crypto import Crypto
+from crypto import Crypto,rand_string
 import error
 
 SYN_SESSION=0x01
-SYN_CONNECTION=0x02
-SYN_OK=0x03
-SYN_ERROR=0x04
+SYN_AUTH=0x02
+SYN_CONFIG=0x03
+SYN_CONNECTION=0x04
+SYN_OK=0x05
+SYN_ERROR=0x06
 
 class BaseSession(EventEmitter):
     _sessions={}
@@ -59,34 +61,79 @@ class Server(BaseSession):
     def on_connection(self,server,connection):
         connection.on("data",self.on_data)
 
+    def on_session(self,connection,data):
+        addr=connection.addr or ('',0)
+        if len(self._sessions)>self._config.get("max_session",50):
+            return self.write_error(connection,error.SS_OUT_MAX_SESSION_ERROR)
+        session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,self._crypto_alg,self._crypto_key)
+        connection.write(struct.pack("!BH",SYN_OK,session.id)+session._token)
+        self._sessions[session.id]=session
+        self.emit("session",self,session)
+        logging.info("xstream server session %s connect",session._session_id)
+
+    def on_auth(self,connection,data):
+        session_id=struct.unpack('!H',data[:2])[0]
+        if session_id not in self._sessions:
+            return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
+        data,session=data[2:],self._sessions[session_id]
+
+        crypto=Crypto(self._crypto_key,self._crypto_alg)
+        crypto.init_decrypt(data[:64])
+        token_secret=crypto.decrypt(data[64:])
+        if token_secret[:16]!=session._token:
+            return self.write_error(connection,error.SS_AUTH_FAIL_ERROR)
+        session._ensecret=rand_string(64)
+        session._desecret=token_secret[80:]
+        crypto.init_encrypt(token_secret[16:80])
+        connection.write(struct.pack("!B",SYN_OK)+crypto.encrypt(session._ensecret))
+        session._status=Session.STATUS.AUTHED
+        logging.info("xstream server session %s auth",session._session_id)
+
+    def on_config(self,connection,data):
+        session_id=struct.unpack('!H',data[:2])[0]
+        if session_id not in self._sessions:
+            return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
+        data,session=data[2:],self._sessions[session_id]
+
+        crypto=session.get_crypto()
+        config=bson.loads(crypto.decrypt(data))
+        session._config.update(config)
+        connection.write(struct.pack("!B",SYN_OK)+crypto.encrypt(bson.dumps(session._config)))
+        session._status=Session.STATUS.CONFIGED
+        logging.info("xstream server session %s config",session._session_id)
+
+    def on_fork_connection(self,connection,data):
+        session_id=struct.unpack('!H',data[:2])[0]
+        if session_id not in self._sessions:
+            return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
+        data,session=data[2:],self._sessions[session_id]
+
+        addr=connection.addr or ('',0)
+        if session._ip!=addr[0]:
+            return self.write_error(connection,error.SS_FORK_ADDR_ERROR)
+        if len(session._connections)>max(session._config.get("connect_count",20),20):
+            return self.write_error(connection,error.SS_OUT_MAX_CONNECT_ERROR)
+        connection.remove_listener("data",self.on_data)
+        session_crypto=session.get_crypto()
+
+        crypto=Crypto(self._crypto_key,self._crypto_alg)
+        secret=crypto.init_encrypt()
+        crypto.init_decrypt(session_crypto.decrypt(data))
+        session.add_connection(connection,crypto)
+        connection.write(struct.pack("!B",SYN_OK)+session_crypto.encrypt(secret))
+        logging.info("xstream server session %s connection %s connected",session._session_id,connection)
+
     def on_data(self,connection,data):
         type=ord(data[0])
-        addr=connection.addr or ('',0)
         if type==SYN_SESSION:
-            if len(self._sessions)>self._config.get("max_session",50):
-                return self.write_error(connection,error.SS_OUT_MAX_SESSION_ERROR)
-            config=bson.loads(data[1:])
-            session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,self._crypto_alg,self._crypto_key,**config)
-            connection.write(struct.pack("!B",SYN_OK)+struct.pack("!H",session.id)+bson.dumps(session._config))
-            self._sessions[session.id]=session
-            self.emit("session",self,session)
-            logging.info("xstream server session %s connect",session._session_id)
+            self.on_session(connection,data[1:])
+        elif type==SYN_AUTH:
+            self.on_auth(connection,data[1:])
+        elif type==SYN_CONFIG:
+            self.on_config(connection,data[1:])
         elif type==SYN_CONNECTION:
-            session_id=struct.unpack("!H",data[1:3])[0]
-            if session_id not in self._sessions:
-                return self.write_error(connection,error.SS_NOT_OPEND_ERROR)
-            session=self._sessions[session_id]
-            if session._ip!=addr[0]:
-                return self.write_error(connection,error.SS_FORK_ADDR_ERROR)
-            if len(session._connections)>max(session._config.get("connect_count",20),20):
-                return self.write_error(connection,error.SS_OUT_MAX_CONNECT_ERROR)
-            connection.remove_listener("data",self.on_data)
-            crypto=Crypto(self._crypto_key,self._crypto_alg)
-            secret=crypto.init_encrypt()
-            crypto.init_decrypt(data[5:5+struct.unpack('!H',data[3:5])[0]])
-            session.add_connection(connection,crypto)
-            connection.write("".join([struct.pack("!B",SYN_OK),struct.pack("!H",len(secret)),secret]))
-            logging.info("xstream server session %s connection %s connected",session._session_id,connection)
+            self.on_fork_connection(connection,data[1:])
+
 
 class Session(BaseSession):
     class SESSION_TYPE:
@@ -97,8 +144,8 @@ class Session(BaseSession):
         INITED=0,
         CONNECTING=1
         CONNECTED=2
-        AUTHING=3
-        AUTHED=4
+        AUTHED=3
+        CONFIGED=4
         SLEEPING=5
         STREAMING=6
         CLOSING=7
@@ -109,12 +156,15 @@ class Session(BaseSession):
         self._type=type
         self._crypto_alg=crypto_alg
         self._crypto_key=crypto_key
+        self._token=rand_string(16)
+        self._ensecret=''
+        self._desecret=''
         self._session_id=0 if type==self.SESSION_TYPE.CLIENT else self.get_next_session_id()
         self._streams={}
         self._connections={}
         self._connections_list=[]
         self._connectings={}
-        self._status=self.STATUS.AUTHED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
+        self._status=self.STATUS.CONNECTED if self._type==self.SESSION_TYPE.SERVER else self.STATUS.INITED
         self._config=kwargs
         self._control=None
         self._stream_current_id=1 if type==self.SESSION_TYPE.CLIENT else 2
@@ -141,6 +191,12 @@ class Session(BaseSession):
         self._stream_current_id+=2
         return sid
 
+    def get_crypto(self):
+        crypto=Crypto(self._crypto_key,self._crypto_alg)
+        crypto.init_encrypt(self._ensecret)
+        crypto.init_decrypt(self._desecret)
+        return crypto
+
     def add_connection(self,connection,crypto):
         connection=Connection(connection,crypto)
         connection.on("frame",self.on_frame)
@@ -148,7 +204,7 @@ class Session(BaseSession):
         self._connections[id(connection)]=connection
         self._connections_list=self._connections.values()
 
-        if self._status==self.STATUS.AUTHED and len(self._connections)>=self._connection_count:
+        if self._status==self.STATUS.CONFIGED and len(self._connections)>=self._connection_count:
             self.connection_ready()
 
     def on_connection_close(self,connection):
@@ -186,23 +242,48 @@ class Session(BaseSession):
 
     def on_connection(self,connection):
         connection.on("data",self.on_data)
-        connection.write(struct.pack("!B",SYN_SESSION)+bson.dumps(self._config))
+        connection.write(struct.pack("!B",SYN_SESSION))
+
+    def on_session_ok(self,connection,data):
+        self._session_id=struct.unpack("!H",data[:2])[0]
+        self._token=data[2:]
+        self._status=self.STATUS.CONNECTED
+        self._ensecret=rand_string(64)
+        self._desecret=rand_string(64)
+        crypto=Crypto(self._crypto_key,self._crypto_alg)
+        secret=crypto.init_encrypt()
+        token_secret=crypto.encrypt(self._token+self._desecret+self._ensecret)
+        connection.write(struct.pack("!BH",SYN_AUTH,self._session_id)+secret+token_secret)
+        logging.info("xstream session %s connected",self._session_id)
+
+    def on_auth_ok(self,connection,data):
+        crypto=self.get_crypto()
+        self._desecret=crypto.decrypt(data)
+        self._status=self.STATUS.AUTHED
+        connection.write(struct.pack("!BH",SYN_CONFIG,self._session_id)+crypto.encrypt(bson.dumps(self._config)))
+        logging.info("xstream session %s auth",self._session_id)
+
+    def on_config_ok(self,connection,data):
+        crypto=self.get_crypto()
+        self._config.update(bson.loads(crypto.decrypt(data)))
+        self._status=self.STATUS.CONFIGED
+        logging.info("xstream session %s config",self._session_id)
+
+        connection.remove_listener("close",self.on_close)
+        connection.remove_listener("data",self.on_data)
+        connection.on("close",self.on_fork_close)
+        self.on_fork_connection(connection)
+        self.fork_connection()
 
     def on_data(self,connection,data):
         type=ord(data[0])
         if type==SYN_OK:
-            self._session_id=struct.unpack("!H",data[1:3])[0]
-            self._status=self.STATUS.CONNECTED
-            logging.info("xstream session %s connected",self._session_id)
-
-            self._status=self.STATUS.AUTHED
-            logging.info("xstream session %s authed",self._session_id)
-
-            connection.remove_listener("close",self.on_close)
-            connection.remove_listener("data",self.on_data)
-            connection.on("close",self.on_fork_close)
-            self.on_fork_connection(connection)
-            self.fork_connection()
+            if self._status==self.STATUS.CONNECTING:
+                self.on_session_ok(connection,data[1:])
+            elif self._status==self.STATUS.CONNECTED:
+                self.on_auth_ok(connection,data[1:])
+            elif self._status==self.STATUS.AUTHED:
+                self.on_config_ok(connection,data[1:])
         elif type==SYN_ERROR:
             self.on_error(data[1:])
 
@@ -221,19 +302,21 @@ class Session(BaseSession):
 
     def on_fork_connection(self,connection):
         connection.on("data",self.on_fork_data)
+        session_crypto=self.get_crypto()
         crypto=Crypto(self._crypto_key,self._crypto_alg)
         secret=crypto.init_encrypt()
         self._connectings[id(connection)]=(connection,crypto)
-        connection.write("".join([struct.pack("!B",SYN_CONNECTION),struct.pack("!H",self._session_id),struct.pack("!H",len(secret)),secret]))
+        connection.write(struct.pack("!BH",SYN_CONNECTION,self._session_id)+session_crypto.encrypt(secret))
 
     def on_fork_data(self,connection,data):
         type=ord(data[0])
         if type==SYN_OK:
+            session_crypto=self.get_crypto()
             crypto=self._connectings[id(connection)][1]
             del self._connectings[id(connection)]
             connection.remove_listener("close",self.on_fork_close)
             connection.remove_listener("data",self.on_fork_data)
-            crypto.init_decrypt(data[3:3+struct.unpack('!H',data[1:3])[0]])
+            crypto.init_decrypt(session_crypto.decrypt(data[1:]))
             self.add_connection(connection,crypto)
 
             logging.info("xstream session %s connection %s connected %s",self._session_id,connection,len(self._connections))
