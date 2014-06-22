@@ -7,6 +7,7 @@ import bson
 import bisect
 import logging
 import struct
+import math
 from ssloop import EventEmitter
 from frame import Frame
 
@@ -136,7 +137,7 @@ class Stream(BaseStream):
                 self._session.write(self,frame,True)
             else:
                 frame.flag |=0x01
-                self._wframes[frame.frame_id]=[frame,time.time(),5+len(self._wframes)]
+                self._wframes[frame.frame_id]=[frame,time.time(),5+math.sqrt(len(self._wframes))]
             self._wlen+=len(frame.data)
 
     def on_data(self,frame):
@@ -193,7 +194,7 @@ class StrictStream(BaseStream):
     def write_frame(self,frame):
         super(StrictStream,self).write_frame(frame)
         if frame.frame_id!=0:
-            self._wframes[frame.frame_id]=[frame,time.time(),5+len(self._wframes)]
+            self._wframes[frame.frame_id]=[frame,time.time(),5+math.sqrt(len(self._wframes))]
 
     def on_data(self,frame):
         self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
