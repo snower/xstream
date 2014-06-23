@@ -10,7 +10,6 @@ class SessionControl(EventEmitter):
         self._session=session
         self._stream=stream
         self._is_open=False
-        self._ping_time=time.time()
 
         self._stream.on("streaming",self.on_stream_streaming)
         self._stream.on("data",self.on_data)
@@ -26,9 +25,7 @@ class SessionControl(EventEmitter):
             self._session.close()
 
     def loop(self):
-        if time.time()-self._ping_time>60:
-            self._stream.write("ping")
-            self._ping_time=time.time()
+        pass
 
     def on_data(self,stream,data):
         pass

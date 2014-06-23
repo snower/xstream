@@ -242,10 +242,8 @@ class StrictStream(BaseStream):
         now=time.time()
         for frame_id,frame in self._wframes.iteritems():
             if now-frame[1]>frame[2]+180:
-                self.do_close()
-                self._wframes={}
-                return
-            if now-frame[1]>frame[2]:
+                del self._wframes[frame_id]
+            elif now-frame[1]>frame[2]:
                 super(StrictStream,self).write_frame(frame[0])
                 frame[2] +=5
         return super(StrictStream,self).loop()

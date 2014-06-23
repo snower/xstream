@@ -336,7 +336,7 @@ class Session(BaseSession):
         self.emit("ready",self)
         self._status=self.STATUS.STREAMING
         if self._type==self.SESSION_TYPE.CLIENT:
-            stream=StrictStream(self,0)
+            stream=StrictStream(self,0,0xffffffff)
             self._control=SessionControl(self,stream)
             stream.open()
         logging.info("xstream session %s ready",self._session_id)
@@ -431,9 +431,9 @@ class Session(BaseSession):
         return False
 
     def stream_fault(self,connection,frame):
-        if frame.stream_id==0 and frame.data and ord(frame.data[0])==0x01:
-            if not self._control:
-                stream=StrictStream(self,0,self._config.get("stream_time_out",300))
+        if frame.stream_id==0:
+            if not self._control and frame.data and ord(frame.data[0])==0x01:
+                stream=StrictStream(self,0,0xffffffff)
                 self._control=SessionControl(self,stream)
                 stream.on_frame(frame)
         else:
