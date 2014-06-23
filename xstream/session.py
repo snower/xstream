@@ -431,13 +431,13 @@ class Session(BaseSession):
         return False
 
     def stream_fault(self,connection,frame):
-        if frame.stream_id==0:
+        if frame.stream_id==0 and frame.data and ord(frame.data[0])==0x01:
             if not self._control:
                 stream=StrictStream(self,0,self._config.get("stream_time_out",300))
                 self._control=SessionControl(self,stream)
                 stream.on_frame(frame)
         else:
-            if frame.frame_id==0:
+            if frame.frame_id==0 and frame.data and ord(frame.data[0])==0x01:
                 stream=StrictStream(self,frame.stream_id,self._config.get("stream_time_out",300))
                 stream.on_frame(frame)
             elif frame.frame_id>=1:
