@@ -146,7 +146,7 @@ class Stream(BaseStream):
 
     def close(self):
         if self._status==self.STATUS.CLOSED:return
-        self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
+        self.write_control(SYN_FIN,struct.pack('!Q',self._frame_id))
         self._status=self.STATUS.CLOSING
 
     def do_close(self):
@@ -156,16 +156,16 @@ class Stream(BaseStream):
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_ACK:
-            data=bson.loads(frame.data[1:])
-            if "rewrite" in data and data["rewrite"]:
-                if data["frame_id"] in self._wframes:
-                    super(Stream,self).write_frame(self._wframes[data["frame_id"]])
+            frame_id,rewrite=struct.unpack("!QB",frame.data[1:])
+            if rewrite:
+                if frame_id in self._wframes:
+                    super(Stream,self).write_frame(self._wframes[frame_id])
             else:
-                for frame_id in self._wframes.keys():
-                    if frame_id <data["frame_id"]:
-                        del self._wframes[frame_id]
+                for fid in self._wframes.keys():
+                    if fid < frame_id:
+                        del self._wframes[fid]
         elif type==SYN_FIN:
-            self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
+            self._fin_frame_id=struct.unpack("!Q",frame.data[1:])[0]
             if self._current_frame_id==self._fin_frame_id:
                 self.write_control(SYN_CLOSE)
                 self.do_close()
@@ -177,10 +177,10 @@ class Stream(BaseStream):
     def loop(self):
         now=time.time()
         if now-self._last_data_time>2 and self._frames and now-self._last_ack_time>2:
-            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._current_frame_id,"rewrite":True}))
+            self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,1))
             self._last_ack_time=now
         elif now-self._last_ack_time>2 and now-self._last_data_time<8:
-            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._current_frame_id,"rewrite":False}))
+            self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,1))
             self._last_ack_time=now
         return super(Stream,self).loop()
 
