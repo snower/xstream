@@ -145,7 +145,7 @@ class Stream(BaseStream):
 
     def close(self):
         if self._status==self.STATUS.CLOSED:return
-        self.write_control(SYN_FIN,struct.pack('!Q',self._frame_id-1))
+        self.write_control(SYN_FIN,struct.pack('!Q',self._frame_id))
         self._status=self.STATUS.CLOSING
 
     def do_close(self):
@@ -165,7 +165,7 @@ class Stream(BaseStream):
                         del self._wframes[fid]
         elif type==SYN_FIN:
             self._fin_frame_id=struct.unpack("!Q",frame.data[1:])[0]
-            if self._fin_frame_id==0 or self._current_frame_id==self._fin_frame_id:
+            if self._current_frame_id==self._fin_frame_id:
                 self.write_control(SYN_CLOSE)
                 self.do_close()
             else:
@@ -208,7 +208,7 @@ class StrictStream(BaseStream):
     def close(self):
         if self._status==self.STATUS.CLOSED:return
         self._status=self.STATUS.CLOSING
-        self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id-1}))
+        self.write_control(SYN_FIN,bson.dumps({"frame_id":self._frame_id}))
 
     def do_close(self):
         self._wframes={}
@@ -230,7 +230,7 @@ class StrictStream(BaseStream):
                 del self._wframes[frame_id]
         elif type==SYN_FIN:
             self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
-            if self._fin_frame_id==0 or self._current_frame_id==self._fin_frame_id:
+            if self._current_frame_id==self._fin_frame_id:
                 self.write_control(SYN_CLOSE)
                 self.do_close()
             else:
