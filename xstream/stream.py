@@ -174,13 +174,14 @@ class Stream(BaseStream):
             self.do_close()
 
     def loop(self):
-        now=time.time()
-        if now-self._last_data_time>=2 and self._frames and now-self._last_ack_time>=2:
-            self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,1))
-            self._last_ack_time=now
-        elif now-self._last_ack_time>1 and now-self._last_data_time<6:
-            self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,0))
-            self._last_ack_time=now
+        if self._current_frame_id!=1:
+            now=time.time()
+            if now-self._last_data_time>=2 and self._frames and now-self._last_ack_time>=2:
+                self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,1))
+                self._last_ack_time=now
+            elif now-self._last_ack_time>1 and now-self._last_data_time<6:
+                self.write_control(SYN_ACK,struct.pack("!QB",self._current_frame_id,0))
+                self._last_ack_time=now
         return super(Stream,self).loop()
 
 class StrictStream(BaseStream):
