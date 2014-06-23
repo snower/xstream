@@ -135,7 +135,7 @@ class Stream(BaseStream):
             if self._wlen<131072:
                 self._session.write(self,frame,True)
             else:
-                self._wframes[frame.frame_id]=[frame,time.time(),5+math.sqrt(len(self._wframes))]
+                self._wframes[frame.frame_id]=frame
             self._wlen+=len(frame.data)
 
     def open(self):
