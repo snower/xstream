@@ -14,7 +14,7 @@ class FrameUnpackVerifyError(FrameException):
         self.data=data
 
 class Frame(object):
-    FRAME_LEN=0xffff
+    FRAME_LEN=65489
     def __init__(self,session_id=None,stream_id=None,frame_id=None,data='',flag=0x00):
         self.version=0x10
         self.session_id=session_id
