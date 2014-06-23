@@ -126,6 +126,7 @@ class Stream(BaseStream):
 
         self._wlen=0
         self._wframes={}
+        self._last_ack_time=0
         self.open()
 
     def write_frame(self,frame):
@@ -134,14 +135,8 @@ class Stream(BaseStream):
             if self._wlen<131072:
                 self._session.write(self,frame,True)
             else:
-                frame.flag |=0x01
                 self._wframes[frame.frame_id]=[frame,time.time(),5+math.sqrt(len(self._wframes))]
             self._wlen+=len(frame.data)
-
-    def on_data(self,frame):
-        if frame.flag & 0x01:
-            self.write_control(SYN_ACK,bson.dumps({"frame_id":frame.frame_id}))
-        return super(Stream,self).on_data(frame)
 
     def open(self):
         if self._status!=self.STATUS.INITED:return
@@ -161,9 +156,14 @@ class Stream(BaseStream):
     def control(self,frame):
         type=ord(frame.data[0])
         if type==SYN_ACK:
-            frame_id=bson.loads(frame.data[1:])["frame_id"]
-            if frame_id in self._wframes:
-                del self._wframes[frame_id]
+            data=bson.loads(frame.data[1:])
+            if "rewrite" in data and data["rewrite"]:
+                if data["frame_id"] in self._wframes:
+                    super(Stream,self).write_frame(self._wframes[data["frame_id"]])
+            else:
+                for frame_id in self._wframes.keys():
+                    if frame_id <data["frame_id"]:
+                        del self._wframes[frame_id]
         elif type==SYN_FIN:
             self._fin_frame_id=bson.loads(frame.data[1:])["frame_id"]
             if self._current_frame_id==self._fin_frame_id:
@@ -176,14 +176,12 @@ class Stream(BaseStream):
 
     def loop(self):
         now=time.time()
-        for frame_id,frame in self._wframes.iteritems():
-            if now-frame[1]>frame[2]+180:
-                self._wframes={}
-                self.do_close()
-                return
-            if now-frame[1]>frame[2]:
-                super(Stream,self).write_frame(frame[0])
-                frame[2] +=5
+        if now-self._last_data_time>2 and self._frames and now-self._last_ack_time>2:
+            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._current_frame_id,"rewrite":True}))
+            self._last_ack_time=now
+        elif now-self._last_ack_time>2 and now-self._last_data_time<8:
+            self.write_control(SYN_ACK,bson.dumps({"frame_id":self._current_frame_id,"rewrite":False}))
+            self._last_ack_time=now
         return super(Stream,self).loop()
 
 class StrictStream(BaseStream):
