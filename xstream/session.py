@@ -113,12 +113,15 @@ class Server(BaseSession):
             return self.write_error(connection,error.SS_FORK_ADDR_ERROR)
         if len(session._connections)>max(session._config.get("connect_count",20),20):
             return self.write_error(connection,error.SS_OUT_MAX_CONNECT_ERROR)
-        connection.remove_listener("data",self.on_data)
         session_crypto=session.get_crypto()
+        data=session_crypto.decrypt(data)
+        if data[:16]!=session._token:
+            return self.write_error(connection,error.SS_AUTH_FAIL_ERROR)
+        connection.remove_listener("data",self.on_data)
 
         crypto=Crypto(self._crypto_key,self._crypto_alg)
         secret=crypto.init_encrypt()
-        crypto.init_decrypt(session_crypto.decrypt(data))
+        crypto.init_decrypt(data[16:])
         session.add_connection(connection,crypto)
         connection.write(struct.pack("!B",SYN_OK)+session_crypto.encrypt(secret))
         logging.info("xstream server session %s connection %s connected",session._session_id,connection)
@@ -306,7 +309,7 @@ class Session(BaseSession):
         crypto=Crypto(self._crypto_key,self._crypto_alg)
         secret=crypto.init_encrypt()
         self._connectings[id(connection)]=(connection,crypto)
-        connection.write(struct.pack("!BH",SYN_CONNECTION,self._session_id)+session_crypto.encrypt(secret))
+        connection.write(struct.pack("!BH",SYN_CONNECTION,self._session_id)+session_crypto.encrypt(self._token+secret))
 
     def on_fork_data(self,connection,data):
         type=ord(data[0])
