@@ -475,7 +475,7 @@ class Session(BaseSession):
 
     def write_frame(self,stream,frame):
         if not self._connections or self._status<self.STATUS.STREAMING:
-            if frame.session_id!=0 and frame.stream_id!=0:
+            if frame.stream_id!=0 and frame.frame_id!=0:
                 self._wbuffers.append((stream,frame))
             return
         if self._status==self.STATUS.STREAMING and frame.session_id==self._session_id and frame.stream_id in self._streams:
