@@ -24,7 +24,6 @@ SYN_OK=0x05
 SYN_ERROR=0x06
 
 class BaseSession(EventEmitter):
-    _sessions={}
     loop=None
 
     def __init__(self,ip,port):
@@ -39,12 +38,31 @@ class BaseSession(EventEmitter):
             BaseSession.loop.start()
 
 class Server(BaseSession):
+    _sessions={}
     def __init__(self,ip,port,crypto_alg='aes_256_cfb',crypto_key='123456789',**kwargs):
         super(Server,self).__init__(ip,port)
         self._server=None
         self._crypto_alg=crypto_alg
         self._crypto_key=crypto_key
         self._config=kwargs
+        self._opening_sessions={}
+
+    def get_next_session_id(self):
+        sid=sorted(self._sessions.keys())[-1]+1 if self._sessions else 1
+        if sid>0xffff:sid=1
+        while sid in self._sessions:sid+=1
+        return sid
+
+    def on_session_close(self, session):
+        if session.id in self._sessions:
+            del self._sessions[session.id]
+
+    def on_session_ready(self, session):
+        self.emit("session",self,session)
+        for id,s in self._opening_sessions.items():
+            if s == session:
+                del self._opening_sessions[id]
+        logging.info("xstream server session %s open",session._session_id)
 
     def write_error(self,connection,error):
         connection.write(struct.pack("!B",SYN_ERROR)+struct.pack("!I",error[0])+error[1])
@@ -59,16 +77,26 @@ class Server(BaseSession):
         BaseSession.loop_forever()
 
     def on_connection(self,server,connection):
-        connection.on("data",self.on_data)
+        connection.on("data", self.on_data)
+        connection.on("close", self.on_close)
+
+    def on_close(self,connection):
+        if id(connection) in self._opening_sessions:
+            if self._opening_sessions[id(connection)].id in self._sessions:
+                del self._sessions[self._opening_sessions[id(connection)].id]
+            del self._opening_sessions[id(connection)]
 
     def on_session(self,connection,data):
         addr=connection.addr or ('',0)
         if len(self._sessions)>self._config.get("max_session",50):
             return self.write_error(connection,error.SS_OUT_MAX_SESSION_ERROR)
-        session=Session(addr[0],addr[1],Session.SESSION_TYPE.SERVER,self._crypto_alg,self._crypto_key)
+
+        session=Session(addr[0],addr[1], self.get_next_session_id(),self._crypto_alg,self._crypto_key)
+        session.on('close', self.on_session_close)
+        session.on('ready', self.on_session_ready)
         connection.write(struct.pack("!BH",SYN_OK,session.id)+session._token)
         self._sessions[session.id]=session
-        self.emit("session",self,session)
+        self._opening_sessions[id(connection)]=session
         logging.info("xstream server session %s connect",session._session_id)
 
     def on_auth(self,connection,data):
@@ -117,13 +145,15 @@ class Server(BaseSession):
         data=session_crypto.decrypt(data)
         if data[:16]!=session._token:
             return self.write_error(connection,error.SS_AUTH_FAIL_ERROR)
-        connection.remove_listener("data",self.on_data)
 
         crypto=Crypto(self._crypto_key,self._crypto_alg)
         secret=crypto.init_encrypt()
         crypto.init_decrypt(data[16:])
         session.add_connection(connection,crypto)
         connection.write(struct.pack("!B",SYN_OK)+session_crypto.encrypt(secret))
+
+        connection.remove_listener("data",self.on_data)
+        connection.remove_listener("close",self.on_data)
         logging.info("xstream server session %s connection %s connected",session._session_id,connection)
 
     def on_data(self,connection,data):
@@ -154,15 +184,15 @@ class Session(BaseSession):
         CLOSING=7
         CLOSED=8
 
-    def __init__(self,ip,port,type=SESSION_TYPE.CLIENT,crypto_alg='aes_256_cfb',crypto_key='123456789',**kwargs):
+    def __init__(self,ip,port,sid=0,crypto_alg='aes_256_cfb',crypto_key='123456789',**kwargs):
         super(Session,self).__init__(ip,port)
-        self._type=type
+        self._type=self.SESSION_TYPE.CLIENT if sid==0 else self.SESSION_TYPE.SERVER
         self._crypto_alg=crypto_alg
         self._crypto_key=crypto_key
         self._token=rand_string(16)
         self._ensecret=''
         self._desecret=''
-        self._session_id=0 if type==self.SESSION_TYPE.CLIENT else self.get_next_session_id()
+        self._session_id=sid
         self._streams={}
         self._connections={}
         self._connections_list=[]
@@ -178,12 +208,6 @@ class Session(BaseSession):
     @property
     def id(self):
         return self._session_id
-
-    def get_next_session_id(self):
-        sid=self._sessions.keys()[-1]+1 if len(self._sessions)>0 else 1
-        if sid>0xffff:sid=1
-        while sid in self._sessions:sid+=1
-        return sid
 
     def get_next_stream_id(self):
         if self._stream_current_id>0xffff:
@@ -214,6 +238,8 @@ class Session(BaseSession):
         if id(connection) in self._connections:
             del self._connections[id(connection)]
             self._connections_list=self._connections.values()
+        if not self._connections:
+            self.close()
         logging.info("xstream session %s connection %s colse %s",self._session_id,connection,len(self._connections))
 
     def open(self):
@@ -236,8 +262,6 @@ class Session(BaseSession):
         for id,connection in self._connectings.items():
             connection.close()
         self.emit("close",self)
-        if self._session_id in self._sessions:
-            del self._sessions[self._session_id]
         logging.info("xstream session %s close",self._session_id)
 
     def __del__(self):
@@ -377,10 +401,10 @@ class Session(BaseSession):
         if self._status==self.STATUS.STREAMING:
             try:
                 self.write_buffer_frame()
-                for connection in self._connections_list:
-                    connection.loop(len(self._connections)>1 and self._type==self.SESSION_TYPE.CLIENT)
                 for stream_id,stream in self._streams.items():
                     stream.loop()
+                for connection in self._connections_list:
+                    connection.loop(len(self._connections)>1 and self._type==self.SESSION_TYPE.CLIENT)
                 self._control.loop()
                 self.check()
             except Exception,e:
@@ -391,25 +415,14 @@ class Session(BaseSession):
                 connection.loop()
             self.loop.timeout(0.5,self.session_loop)
 
-
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT:
             if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",900):
                 self.sleep()
-            elif not self._connections:
-                self.close()
             else:
                 count=int(math.sqrt(len(self._streams))*(math.sqrt(self._config.get("connect_count",20))/10+1.2))
                 self._connection_count=min(self._config.get("connect_count",20),max(count,2))
                 self.fork_connection()
-        if self._type==self.SESSION_TYPE.SERVER:
-            if not self._connections:
-                self._status=self.STATUS.CLOSED
-                for stram_id in self._streams.keys():
-                    self._streams[stram_id].close()
-                del self._sessions[self._session_id]
-                self.emit("close",self)
-                logging.info("xstream session %s close",self._session_id)
 
     def stream(self,strict=False):
         if self._status==self.STATUS.SLEEPING:
