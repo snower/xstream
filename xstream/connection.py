@@ -38,6 +38,7 @@ class Connection(EventEmitter):
     def on_close(self,s):
         self.emit("close",self)
         self._connection=None
+        self.remove_all_listeners()
 
     def read(self,data):
         if not self._frame:

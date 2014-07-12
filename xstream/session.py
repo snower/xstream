@@ -238,7 +238,7 @@ class Session(BaseSession):
         if id(connection) in self._connections:
             del self._connections[id(connection)]
             self._connections_list=self._connections.values()
-        if not self._connections:
+        if self._type == self.SESSION_TYPE.SERVER and not self._connections:
             self.close()
         logging.info("xstream session %s connection %s colse %s",self._session_id,connection,len(self._connections))
 
@@ -262,6 +262,7 @@ class Session(BaseSession):
         for id,connection in self._connectings.items():
             connection.close()
         self.emit("close",self)
+        self.remove_all_listeners()
         logging.info("xstream session %s close",self._session_id)
 
     def __del__(self):
@@ -317,7 +318,7 @@ class Session(BaseSession):
     def on_close(self,connection):
         if id(connection) in self._connectings:
             del self._connectings[id(connection)]
-        self.emit("close",self)
+        self.close()
 
     def fork_connection(self):
         for i in range(self._connection_count-len(self._connections)-len(self._connectings)):
@@ -352,6 +353,8 @@ class Session(BaseSession):
 
     def on_fork_close(self,connection):
         del self._connectings[id(connection)]
+        if not self._connections and not self._connectings:
+            self.close()
 
     def on_error(self,data):
         code,msg=struct.unpack("!I",data[:4])[0],data[4:]
@@ -417,7 +420,7 @@ class Session(BaseSession):
 
     def check(self):
         if self._type==self.SESSION_TYPE.CLIENT:
-            if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",900):
+            if len(self._streams)<=1 and time.time()-self._stream_time>self._config.get("sleep_time_out",300):
                 self.sleep()
             else:
                 count=int(math.sqrt(len(self._streams))*(math.sqrt(self._config.get("connect_count",20))/10+1.2))

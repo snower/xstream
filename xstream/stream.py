@@ -118,6 +118,7 @@ class BaseStream(EventEmitter):
         self._status=self.STATUS.CLOSED
         if self._session.close_stream(self):
             self.emit("close",self)
+            self.remove_all_listeners()
             logging.debug("xstream session %s stream %s close",self._session.id,self._stream_id)
 
 class Stream(BaseStream):
