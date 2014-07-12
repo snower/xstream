@@ -247,7 +247,7 @@ class Session(BaseSession):
         connection=ssloop.Socket(self.loop)
         connection.once("connect",self.on_connection)
         connection.once("close",self.on_close)
-        self._connectings[id(connection)]=connection
+        self._connectings[id(connection)]=(connection,)
         self._status=self.STATUS.CONNECTING
         connection.connect((self._ip,self._port))
         BaseSession.loop_forever()
@@ -260,7 +260,7 @@ class Session(BaseSession):
         for id,connection in self._connections.items():
             connection.close()
         for id,connection in self._connectings.items():
-            connection.close()
+            connection[0].close()
         self.emit("close",self)
         self.remove_all_listeners()
         logging.info("xstream session %s close",self._session_id)
@@ -325,7 +325,7 @@ class Session(BaseSession):
             connection=ssloop.Socket(self.loop)
             connection.once("connect",self.on_fork_connection)
             connection.once("close",self.on_fork_close)
-            self._connectings[id(connection)]=connection
+            self._connectings[id(connection)]=(connection,)
             connection.connect((self._ip,self._port))
 
     def on_fork_connection(self,connection):
