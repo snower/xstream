@@ -239,7 +239,10 @@ class Session(BaseSession):
             del self._connections[id(connection)]
             self._connections_list=self._connections.values()
         if self._type == self.SESSION_TYPE.SERVER and not self._connections:
-            self.close()
+            def close():
+                if not self._connections:
+                    self.close()
+            self.loop.timeout(5, close)
         logging.info("xstream session %s connection %s colse %s",self._session_id,connection,len(self._connections))
 
     def open(self):
