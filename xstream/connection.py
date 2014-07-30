@@ -21,7 +21,7 @@ class Connection(EventEmitter):
         self._connection.on("close",self.on_close)
         self._buffer=''
         self._frame=None
-        self._expired_time=time.time()+random.randint(180,300)
+        self._expired_time=time.time()+random.randint(180,900)
         self._time=time.time()
         self._ping_time=0
         self._closing=False
