@@ -4,9 +4,10 @@
 
 import threading
 import time
-from session import Session
+import ssloop
+from xstream.client import Client
 
-def data(s,data):
+def on_data(s,data):
     print data % s
 
 
@@ -19,15 +20,15 @@ def ready(session):
 
 def input():
     print "input thread start"
+    stream=client.session().stream()
+    stream.on("data", on_data)
     while True:
-        stream=session.stream()
         data=raw_input("input:")
-        if data=="close":
-            session.close()
         stream.write(str(time.time())+" %s client say:"+data)
-        stream.close()
 
-session=Session('127.0.0.1',20000)
+loop = ssloop.instance()
+client = Client('127.0.0.1',20000)
 thread=threading.Thread(target=input)
-session.on("ready",ready)
-session.open()
+thread.start()
+client.open()
+loop.start()

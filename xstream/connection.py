@@ -3,102 +3,69 @@
 # create by: snower
 
 import struct
-import time
-import random
-import logging
+from cStringIO import StringIO
 from ssloop import EventEmitter
-from frame import Frame,FrameUnpackFinish,FrameUnpackVerifyError
 
 SYN_PING=0x01
 SYN_CLOSING=0x02
 
 class Connection(EventEmitter):
-    def __init__(self,connection,crypto):
+    def __init__(self, connection, session):
         super(Connection,self).__init__()
-        self._connection=connection
-        self._crypto=crypto
-        self._connection.on("data",self.on_data)
-        self._connection.on("close",self.on_close)
-        self._buffer=''
-        self._frame=None
-        self._expired_time=time.time()+random.randint(180,900)
-        self._time=time.time()
-        self._ping_time=0
-        self._closing=False
+        self._connection = connection
+        self._session = session
 
-    @property
-    def addr(self):
-        return self._connection.addr
+        self._connection.on("close",self.on_close)
+        self._connection.on("data",self.on_data)
+        self._connection.on("drain",self.on_drain)
+
+        self._buffer_len = 0
+        self._data_len = 2
+        self._buffer = StringIO()
+        self._wait_head = True
+        self._closed = False
 
     def on_data(self, connection, data):
-        self._buffer+=self._crypto.decrypt(data)
-        while self.read(self._buffer):pass
-        self._time=time.time()
+        self._buffer_len += len(data)
+        self._buffer.write(data)
+        self.read()
 
-    def on_close(self,s):
+    def on_drain(self, connection):
+        self.emit("drain", self)
+
+    def on_close(self, connection):
         self.emit("close",self)
         self._connection=None
+        self._closed = True
         self.remove_all_listeners()
 
-    def read(self,data):
-        if not self._frame:
-            self._frame=Frame()
-        try:
-            self._buffer=self._frame.unpack(data)
-            return False
-        except FrameUnpackVerifyError:
-            logging.error("stream connection %s frame verify error",self)
-            self.close()
-            return False
-        except FrameUnpackFinish,e:
-            if self._frame.session_id==0 and self._frame.stream_id==0 and self._frame.frame_id==0:
-                self.control(self._frame)
-            else:
-                self.emit("frame",self,self._frame)
-            self._frame=Frame()
-            self._buffer=e.data
-            return True
+    def read(self):
+        if self._buffer_len >= self._data_len:
+            buffer = StringIO(self._buffer.getvalue())
+            while self._buffer_len >= self._data_len:
+                self._buffer_len -= self._data_len
+                if self._wait_head:
+                    self._wait_head = False
+                    self._data_len = struct.unpack("!H", buffer.read(self._data_len))[0]
+                else:
+                    self._wait_head = True
+                    data = buffer.read(self._data_len)
+                    self._buffer = StringIO()
+                    if self._buffer_len > 0:
+                        self._buffer.write(buffer.next())
+                    self._data_len = 2
+                    if data[-2:] != '\x0f\x0f':
+                        continue
 
-    def write(self,frame,force=False):
-        if self._closing:return False
-        if not force and len(self._connection._buffers)>0:return False
-        self._time=time.time()
-        return self._connection.write(self._crypto.encrypt(frame.pack()))
+                    action = ord(data[0])
+                    if action == 0:
+                        self.emit("frame", self, data[1:-2])
+                    else:
+                        self.control(data[:-2])
 
-    def close(self):
-        self._closing=True
-        if self._connection:
-            self._connection.end()
+    def write(self, data):
+        data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
+        return self._connection.write(data)
 
-    def __del__(self):
-        self.close()
-
-    def control(self,frame):
-        type=ord(frame.data[0])
-        if type==SYN_PING:
-            self.ping()
-        elif type==SYN_CLOSING:
-            self.close()
-
-    def write_control(self,type,data=""):
-        data=struct.pack("!B",type)+data
-        frame=Frame(0,0,0,data)
-        self.write(frame,True)
-
-    def ping(self):
-        if self._ping_time==0:
-            self.write_control(SYN_PING)
-        self._ping_time=0
-        logging.debug("xstream connection %s ping",self)
-
-    def loop(self,expired=True):
-        if self._closing:return
-        if expired and len(self._connection._buffers)==0 and time.time()>self._expired_time:
-            self.write_control(SYN_CLOSING)
-            self._closing=True
-        elif self._ping_time!=0 and time.time()-self._ping_time>=30:
-            self._connection.close()
-            logging.error("xstream connection %s ping timeout close",self)
-        elif time.time()-self._time>=30:
-            self.write_control(SYN_PING)
-            self._ping_time=time.time()
+    def control(self, data):
+        pass

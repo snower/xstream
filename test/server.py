@@ -3,8 +3,8 @@
 # create by: snower
 
 import time
-import logging
-from session import Server
+import ssloop
+from xstream.server import Server
 
 #logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)1.1s %(message)s',datefmt='%Y-%m-%d %H:%M:%S', filemode='a+')
 def s_close(s):
@@ -27,6 +27,8 @@ def session(server,s):
     s.on("stream",stream)
     s.on("close",s_close)
 
-server=Server("0.0.0.0",20000)
+loop = ssloop.instance()
+server=Server(20000)
 server.on('session',session)
-server.listen()
+server.start()
+loop.start()
