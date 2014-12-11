@@ -48,7 +48,7 @@ class Session(EventEmitter):
 
     def get_stream_id(self):
         stream_id = self._current_stream_id
-        self._current_stream_id += 1
+        self._current_stream_id += 2
         if self._current_stream_id > 0xffff:
             self._current_stream_id = 1 if self._is_server else 2
         return stream_id

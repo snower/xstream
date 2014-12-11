@@ -42,16 +42,13 @@ class Connection(EventEmitter):
         if self._buffer_len >= self._data_len:
             buffer = StringIO(self._buffer.getvalue())
             while self._buffer_len >= self._data_len:
+                data = buffer.read(self._data_len)
                 self._buffer_len -= self._data_len
                 if self._wait_head:
                     self._wait_head = False
-                    self._data_len = struct.unpack("!H", buffer.read(self._data_len))[0]
+                    self._data_len, = struct.unpack("!H", data)
                 else:
                     self._wait_head = True
-                    data = buffer.read(self._data_len)
-                    self._buffer = StringIO()
-                    if self._buffer_len > 0:
-                        self._buffer.write(buffer.next())
                     self._data_len = 2
                     if data[-2:] != '\x0f\x0f':
                         continue
@@ -61,6 +58,10 @@ class Connection(EventEmitter):
                         self.emit("frame", self, data[1:-2])
                     else:
                         self.on_action(action, data[1:-2])
+
+            self._buffer = StringIO()
+            if self._buffer_len > 0:
+                self._buffer.write(buffer.next())
 
     def write(self, data):
         data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
