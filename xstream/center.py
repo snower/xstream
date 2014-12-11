@@ -21,8 +21,12 @@ class Center(EventEmitter):
         connection.on("drain", self.on_drain)
         self.drain_connections.append(connection)
 
-    def write(self, session_id, stream_id, data):
-        frame = Frame(session_id, 0, self.send_index, stream_id, data)
+    def remove_connection(self, connection):
+        if connection in self.drain_connections:
+            self.drain_connections.remove(connection)
+
+    def write(self, session_id, data):
+        frame = Frame(1, session_id, 0, self.send_index, None, 0, data)
         self.send_index += 1
         self.frames.append(frame)
 

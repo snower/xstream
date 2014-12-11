@@ -35,7 +35,6 @@ class Connection(EventEmitter):
 
     def on_close(self, connection):
         self.emit("close",self)
-        self._connection=None
         self._closed = True
         self.remove_all_listeners()
 
@@ -61,11 +60,11 @@ class Connection(EventEmitter):
                     if action == 0:
                         self.emit("frame", self, data[1:-2])
                     else:
-                        self.control(data[:-2])
+                        self.on_action(action, data[1:-2])
 
     def write(self, data):
         data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
         return self._connection.write(data)
 
-    def control(self, data):
+    def on_action(self, action, data):
         pass

@@ -14,7 +14,7 @@ def on_close(s):
     print "close stream:",s
 
 def data(s,data):
-    print data % s
+    print data,s
     s.write(str(time.time())+" %s server recv")
 
 def stream(session,s):

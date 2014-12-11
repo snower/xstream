@@ -5,7 +5,7 @@
 from ssloop import EventEmitter
 from connection import Connection
 from center import Center
-from stream import Stream
+from stream import Stream, StreamFrame
 
 class Session(EventEmitter):
     def __init__(self, session_id, is_server=False):
@@ -20,21 +20,37 @@ class Session(EventEmitter):
 
         self._center.on("frame", self.on_frame)
 
+    @property
+    def id(self):
+        return self._session_id
+
     def add_connection(self, conn):
         connection = Connection(conn, self)
         self._connections.append(connection)
         self._center.add_connection(connection)
 
+    def remove_connection(self, conn):
+        for connection in self._connections:
+            if connection._connection == conn:
+                self._center.remove_connection(connection)
+                self._connections.remove(connection)
+        if not self._connections:
+            self.emit("close", self)
+
     def on_frame(self, center, frame):
-        if frame.stream_id not in self._streams:
-            self.create_stream(frame.stream_id)
-        self._streams[frame.stream_id].on_data(frame.data)
+        if frame.action == 0:
+            stream_frame = StreamFrame.loads(frame.data)
+            if stream_frame.stream_id not in self._streams:
+                self.create_stream(stream_frame.stream_id)
+            self._streams[stream_frame.stream_id].on_frame(stream_frame)
+        else:
+            self.on_action(frame.action, frame.data)
 
     def get_stream_id(self):
         stream_id = self._current_stream_id
         self._current_stream_id += 1
         if self._current_stream_id > 0xffff:
-            self._current_stream_id = 1 if self.is_server else 2
+            self._current_stream_id = 1 if self._is_server else 2
         return stream_id
 
     def create_stream(self, stream_id = None):
@@ -48,7 +64,16 @@ class Session(EventEmitter):
     def stream(self):
         return self.create_stream()
 
-    def write(self, stream, data):
-        frame_len = 16 * 1024
-        for i in range(int(len(data) / frame_len) + 1):
-            self._center.write(self._session_id, stream._stream_id, data[i * frame_len: (i+1) * frame_len])
+    def close_stream(self, stream):
+        if stream.id in self._streams:
+            self._streams.pop(stream.id)
+
+    def write(self, frame):
+        data = frame.dumps()
+        self._center.write(self._session_id, data)
+
+    def on_action(self, action, data):
+        pass
+
+    def __str__(self):
+        return "<%s %s>" % (super(Session, self).__str__(), self._session_id)
