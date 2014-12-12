@@ -55,7 +55,7 @@ class Server(EventEmitter):
         if session_id in self._sessions:
             session = self._sessions[session_id]
             session.add_connection(connection)
-            connection.write("")
+            connection.write("a" * 16)
 
             def on_fork_connection_close(connection):
                 session.remove_connection(connection)

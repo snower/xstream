@@ -44,14 +44,18 @@ class Client(EventEmitter):
     def fork_connection(self):
         connection = Socket()
         connection.connect((self._host, self._port))
-        connection.on("connect", self.on_fork_connect)
+        connection.once("connect", self.on_fork_connect)
         self._connections.append(connection)
 
     def on_fork_connect(self, connection):
         connection.write(struct.pack("!BH", 1, self._session.id))
-        self._session.add_connection(connection)
-        connection.on("close", self.on_fork_close)
+        connection.once("data", self.on_fork_data)
+        connection.once("close", self.on_fork_close)
         logging.info("connection connect %s", connection)
+
+    def on_fork_data(self, connection, data):
+        self._session.add_connection(connection)
+        logging.info("connection ready %s", connection)
 
     def on_fork_close(self, connection):
         self._session.remove_connection(connection)

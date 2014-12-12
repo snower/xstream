@@ -45,9 +45,10 @@ class Center(EventEmitter):
         self.write_frame()
 
     def write_frame(self):
-        if self.drain_connections:
+        while self.drain_connections:
             connection = self.drain_connections.popleft()
-            self.write_next(connection)
+            if not connection._closed:
+                return self.write_next(connection)
 
     def write_next(self, connection):
         frame = self.frames.popleft()

@@ -63,7 +63,8 @@ class Connection(EventEmitter):
         self._data_time = time.time()
 
     def on_drain(self, connection):
-        self.emit("drain", self)
+        if not self._closed:
+            self.emit("drain", self)
 
     def on_close(self, connection):
         self.emit("close",self)
