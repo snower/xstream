@@ -4,7 +4,7 @@
 
 import logging
 import struct
-from ssloop import EventEmitter, Server as LoopServer
+from ssloop import EventEmitter, Server as LoopServer, current
 from session import Session
 
 class Server(EventEmitter):
@@ -34,7 +34,7 @@ class Server(EventEmitter):
     def on_open_session(self, connection, data):
         session = self.create_session()
         connection.write(struct.pack("!H", session.id))
-        session.on("close", self.on_session_close)
+        session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
         logging.info("session open %s", session)
 
@@ -64,7 +64,12 @@ class Server(EventEmitter):
             logging.info("connection connect %s %s", session, connection)
         else:
             connection.close()
+            logging.info("connection refuse %s %s", session_id, connection)
+
+    def on_session_suspend(self, session):
+        current().timeout(30, self.on_session_close, session)
 
     def on_session_close(self, session):
-        self._sessions.pop(session.id)
-        logging.info("session close %s", session)
+        if not session._connections:
+            self._sessions.pop(session.id)
+            logging.info("session close %s", session)

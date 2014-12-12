@@ -35,7 +35,7 @@ class Session(EventEmitter):
                 self._center.remove_connection(connection)
                 self._connections.remove(connection)
         if not self._connections:
-            self.emit("close", self)
+            self.emit("suspend", self)
 
     def on_frame(self, center, frame):
         if frame.action == 0:

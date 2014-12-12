@@ -2,12 +2,15 @@
 #14-4-24
 # create by: snower
 
+import time
+import logging
+import random
 import struct
 from collections import deque
-from ssloop import EventEmitter
+from ssloop import EventEmitter, current
 
-SYN_PING=0x01
-SYN_CLOSING=0x02
+ACTION_PING = 0x01
+ACTION_PINGACK = 0x02
 
 class Buffer(object):
     def __init__(self):
@@ -47,10 +50,17 @@ class Connection(EventEmitter):
         self._buffer = Buffer()
         self._wait_head = True
         self._closed = False
+        self._data_time = time.time()
+        self._ping_time = 0
+
+        if not self._session._is_server:
+            current().timeout(random.randint(300, 900), self.on_expried)
+            current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
         self._buffer.write(data)
         self.read()
+        self._data_time = time.time()
 
     def on_drain(self, connection):
         self.emit("drain", self)
@@ -83,5 +93,31 @@ class Connection(EventEmitter):
         data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
         return self._connection.write(data)
 
+    def write_action(self, action, data=''):
+        data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
+        return self._connection.write(data)
+
     def on_action(self, action, data):
-        pass
+        if action == ACTION_PING:
+            self.write_action(ACTION_PINGACK)
+        elif action == ACTION_PINGACK:
+            self._ping_time = time.time()
+
+    def on_expried(self):
+        self._connection.close()
+        logging.info("connection %s expried timeout", self)
+
+    def on_ping_loop(self):
+        if time.time() - self._data_time >= 30:
+            self.write_action(ACTION_PING)
+            self._ping_time = 0
+            current().timeout(30, self.on_ping_timeout)
+        else:
+            current().timeout(30, self.on_ping_loop)
+
+    def on_ping_timeout(self):
+        if self._ping_time == 0:
+            self._connection.close()
+            logging.info("connection %s ping timeout", self)
+        else:
+            current().timeout(30, self.on_ping_loop)
