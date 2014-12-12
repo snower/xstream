@@ -68,6 +68,7 @@ class Connection(EventEmitter):
     def on_close(self, connection):
         self.emit("close",self)
         self._closed = True
+        self._session = None
         self.remove_all_listeners()
 
     def read(self):
@@ -90,6 +91,8 @@ class Connection(EventEmitter):
                     self.on_action(action, data[1:-2])
 
     def write(self, data):
+        if self._closed:
+            return
         data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
         return self._connection.write(data)
 
@@ -104,10 +107,14 @@ class Connection(EventEmitter):
             self._ping_time = time.time()
 
     def on_expried(self):
+        if self._closed:
+            return
         self._connection.close()
         logging.info("connection %s expried timeout", self)
 
     def on_ping_loop(self):
+        if self._closed:
+            return
         if time.time() - self._data_time >= 30:
             self.write_action(ACTION_PING)
             self._ping_time = 0
@@ -116,6 +123,8 @@ class Connection(EventEmitter):
             current().timeout(30, self.on_ping_loop)
 
     def on_ping_timeout(self):
+        if self._closed:
+            return
         if self._ping_time == 0:
             self._connection.close()
             logging.info("connection %s ping timeout", self)
