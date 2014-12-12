@@ -80,8 +80,10 @@ class Center(EventEmitter):
                     self.ack_time = now_ts
 
         if self.recv_frames and not self.ack_timeout_loop:
-            ttl = sum(self.ttls)
-            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            ttl = sum(self.ttls) / len(self.ttls)
+            if ttl > 5:
+                current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+                self.ack_timeout_loop = True
 
     def on_drain(self, connection):
         if self.frames:
@@ -124,5 +126,8 @@ class Center(EventEmitter):
             data = struct.pack("!Q", recv_index)
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
-            ttl = sum(self.ttls)
-            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            ttl = sum(self.ttls) / len(self.ttls)
+            if ttl > 5:
+                current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+        else:
+            self.ack_timeout_loop = False
