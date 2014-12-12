@@ -28,6 +28,7 @@ class Center(EventEmitter):
         self.ack_time = 0
         self.ack_timeout_loop = False
         self.ttls = deque()
+        self.wait_reset = False
 
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
@@ -41,6 +42,9 @@ class Center(EventEmitter):
     def write(self, data):
         frame = Frame(1, self.session.id, 0, self.send_index, None, 0, data)
         self.send_index += 1
+        if self.send_index >= 0x7fffffffffffffff:
+            self.write_action(ACTION_INDEX_RESET)
+            self.send_index = 1
         self.frames.append(frame)
         self.write_frame()
 
@@ -111,6 +115,11 @@ class Center(EventEmitter):
                     self.write_frame()
                     break
                 self.send_frames.pop(send_index)
+        elif action == ACTION_INDEX_RESET:
+            self.write_action(ACTION_INDEX_RESET)
+            self.recv_index = 1
+        elif action == ACTION_INDEX_RESET_ACK:
+            self.wait_reset = False
 
     def write_action(self, action, data):
         frame = Frame(1, self.session.id, 0, self.send_index, None, action, data)
