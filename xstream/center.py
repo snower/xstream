@@ -117,7 +117,7 @@ class Center(EventEmitter):
                 self.send_frames.pop(send_index)
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET)
-            self.recv_index = 1
+            self.recv_index = 0
         elif action == ACTION_INDEX_RESET_ACK:
             self.wait_reset = False
 
