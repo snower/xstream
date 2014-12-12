@@ -73,7 +73,8 @@ class Session(EventEmitter):
         self._center.write(self._session_id, data)
 
     def on_action(self, action, data):
-        pass
+        if action & 0x8000 == 0:
+            self._center.on_action(action, data)
 
     def __str__(self):
         return "<%s %s>" % (super(Session, self).__str__(), self._session_id)

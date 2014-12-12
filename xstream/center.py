@@ -41,6 +41,9 @@ class Center(EventEmitter):
     def on_frame(self, connection, data):
         frame = Frame.loads(data)
 
+        if frame.index < self.recv_index:
+            return
+
         if frame.index != self.recv_index:
             bisect.insort(self.recv_frames, frame)
         else:
@@ -49,7 +52,7 @@ class Center(EventEmitter):
                 self.recv_index += 1
 
             while self.recv_frames:
-                if self.recv_frames[0].index < self.recv_index:
+                if self.recv_frames[0].index != self.recv_index:
                     break
                 frame = self.recv_frames.pop(0)
                 self.emit("frame", self, frame)
@@ -60,3 +63,6 @@ class Center(EventEmitter):
             self.write_next(connection)
         else:
             self.drain_connections.append(connection)
+
+    def on_action(self, action, data):
+        pass

@@ -22,6 +22,9 @@ class Frame(object):
     def loads(cls, data):
         return Frame(*struct.unpack("!BHBQHB", data[:15]), data=data[15:])
 
+    def __cmp__(self, other):
+        return cmp(self.index, other.index)
+
 class StreamFrame(object):
     FRAME_LEN = 16 * 1024
 
