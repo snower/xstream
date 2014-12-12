@@ -25,6 +25,9 @@ class Frame(object):
     def __cmp__(self, other):
         return cmp(self.index, other.index)
 
+    def ttl(self):
+        return (int(time.time() * 1000) & 0xffff) - self.timestamp
+
 class StreamFrame(object):
     FRAME_LEN = 16 * 1024
 

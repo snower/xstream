@@ -16,7 +16,7 @@ class Session(EventEmitter):
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
-        self._center = Center()
+        self._center = Center(self)
 
         self._center.on("frame", self.on_frame)
 
@@ -70,7 +70,7 @@ class Session(EventEmitter):
 
     def write(self, frame):
         data = frame.dumps()
-        self._center.write(self._session_id, data)
+        self._center.write(data)
 
     def on_action(self, action, data):
         if action & 0x8000 == 0:
