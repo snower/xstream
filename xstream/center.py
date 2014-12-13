@@ -94,7 +94,7 @@ class Center(EventEmitter):
 
         if self.recv_frames and not self.ack_timeout_loop:
             ttl = max(sum(self.ttls) / len(self.ttls), 50)
-            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -143,6 +143,6 @@ class Center(EventEmitter):
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
             ttl = max(sum(self.ttls) / len(self.ttls), 50)
-            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
