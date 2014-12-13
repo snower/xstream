@@ -70,7 +70,6 @@ class Stream(EventEmitter):
         self.emit("close", self)
         self._session.close_stream(self)
         self.remove_all_listeners()
-        self._session = None
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
