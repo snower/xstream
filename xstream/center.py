@@ -32,6 +32,8 @@ class Center(EventEmitter):
         self.ttls = [0]
         self.wait_reset_frames = None
 
+        self.write_ttl()
+
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
         connection.on("drain", self.on_drain)
@@ -122,6 +124,13 @@ class Center(EventEmitter):
             self.wait_reset_frames = None
             if self.frames:
                 self.write_frame()
+        elif action == ACTION_TTL:
+            self.write_action(ACTION_TTL, data)
+        elif action == ACTION_INDEX_RESET_ACK:
+            start_time, = struct.unpack("!I", data)
+            if len(self.ttls) >=5:
+                self.ttls.pop(0)
+            self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
 
     def write_action(self, action, data):
         frame = self.create_frame(data, action = action)
@@ -144,3 +153,9 @@ class Center(EventEmitter):
             current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
+
+    def write_ttl(self):
+        for i in range(5):
+            data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
+            self.write_action(ACTION_TTL, data)
+        current().timeout(60, self.write_ttl)
