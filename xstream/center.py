@@ -111,7 +111,7 @@ class Center(EventEmitter):
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data)
-            recv_index = index + int((recv_index - index) / 2) + 1
+            recv_index = index + int((recv_index - index) * 0.8) + 1
             while self.send_frames and self.send_frames[0].index < recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
