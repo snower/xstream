@@ -105,11 +105,11 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            index = struct.unpack("!I", data)
+            index, = struct.unpack("!I", data)
             while self.send_frames and self.send_frames[0].index <= index:
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
-            index = struct.unpack("!I", data)
+            index, = struct.unpack("!I", data)
             while self.send_frames and self.send_frames[0].index <= index:
                 frame = self.send_frames.pop(0)
                 if frame.index == index:
