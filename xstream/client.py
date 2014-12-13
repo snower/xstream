@@ -8,7 +8,7 @@ from ssloop import EventEmitter, Socket, current
 from session import Session
 
 class Client(EventEmitter):
-    def __init__(self, host, port, max_connections=3):
+    def __init__(self, host, port, max_connections=4):
         super(Client, self).__init__()
 
         self._host = host

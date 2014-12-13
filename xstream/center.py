@@ -22,7 +22,7 @@ class Center(EventEmitter):
         self.frames = deque()
         self.recv_frames = []
         self.recv_index = 1
-        self.send_frames = {}
+        self.send_frames = []
         self.send_index = 1
         self.drain_connections = deque()
         self.ack_time = 0
@@ -65,7 +65,7 @@ class Center(EventEmitter):
     def write_next(self, connection):
         frame = self.frames.popleft()
         connection.write(frame.dumps())
-        self.send_frames[frame.index] = frame
+        bisect.insort(self.send_frames, frame)
 
     def on_frame(self, connection, data):
         frame = Frame.loads(data)
@@ -106,26 +106,20 @@ class Center(EventEmitter):
     def on_action(self, action, data):
         if action == ACTION_ACK:
             index = struct.unpack("!I", data)
-            send_indexs = sorted(self.send_frames.keys())
-            for send_index in send_indexs:
-                if send_index > index:
-                    break
-                self.send_frames.pop(send_index)
+            while self.send_frames and self.send_frames[0].index <= index:
+                self.send_frames.pop(0)
         elif action == ACTION_RESEND:
             index = struct.unpack("!I", data)
-            send_indexs = sorted(self.send_frames.keys())
-            for send_index in send_indexs:
-                if send_index > index:
-                    break
-                if send_index == index:
-                    self.frames.appendleft(self.send_frames[send_index])
-                    self.write_frame()
-                    break
-                self.send_frames.pop(send_index)
+            while self.send_frames and self.send_frames[0].index <= index:
+                frame = self.send_frames.pop(0)
+                if self.send_frames[0].index == index:
+                    self.frames.appendleft(frame)
+                    return self.write_frame()
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET)
             self.recv_index = 0
         elif action == ACTION_INDEX_RESET_ACK:
+            self.send_frames = []
             self.frames.extend(self.wait_reset_frames)
             self.wait_reset_frames = None
             if self.frames:
