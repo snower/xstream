@@ -94,7 +94,7 @@ class Center(EventEmitter):
 
         if self.recv_frames and not self.ack_timeout_loop:
             ttl = max(sum(self.ttls) / len(self.ttls), 1000)
-            current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout((ttl * 3) / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -112,7 +112,7 @@ class Center(EventEmitter):
             index = struct.unpack("!I", data)
             while self.send_frames and self.send_frames[0].index <= index:
                 frame = self.send_frames.pop(0)
-                if self.send_frames[0].index == index:
+                if frame.index == index:
                     self.frames.appendleft(frame)
                     return self.write_frame()
         elif action == ACTION_INDEX_RESET:
@@ -150,7 +150,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
             ttl = max(sum(self.ttls) / len(self.ttls), 50)
-            current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout((ttl * 3) / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
