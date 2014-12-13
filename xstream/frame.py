@@ -16,11 +16,11 @@ class Frame(object):
         self.data = data
 
     def dumps(self):
-        return "".join([struct.pack("!BHBQHB", self.version, self.session_id, self.flag, self.index, self.timestamp, self.action), self.data])
+        return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp, self.action), self.data])
 
     @classmethod
     def loads(cls, data):
-        return Frame(*struct.unpack("!BHBQHB", data[:15]), data=data[15:])
+        return Frame(*struct.unpack("!BHBIHB", data[:11]), data=data[11:])
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)

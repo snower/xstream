@@ -28,7 +28,7 @@ class Center(EventEmitter):
         self.ack_time = 0
         self.ack_timeout_loop = False
         self.ttls = deque()
-        self.wait_reset = False
+        self.wait_reset_frames = None
 
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
@@ -39,14 +39,22 @@ class Center(EventEmitter):
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
 
-    def write(self, data):
-        frame = Frame(1, self.session.id, 0, self.send_index, None, 0, data)
-        self.send_index += 1
-        if self.send_index >= 0x7fffffffffffffff:
+    def create_frame(self, data, action=0, flag=0):
+        if self.send_index >= 0xffffffff:
             self.write_action(ACTION_INDEX_RESET)
+            self.wait_reset_frames = deque()
             self.send_index = 1
-        self.frames.append(frame)
-        self.write_frame()
+        frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
+        self.send_index += 1
+        return frame
+
+    def write(self, data):
+        frame = self.create_frame(data)
+        if self.wait_reset_frames is None:
+            self.frames.append(frame)
+            self.write_frame()
+        else:
+            self.wait_reset_frames.append(frame)
 
     def write_frame(self):
         while self.drain_connections:
@@ -85,10 +93,9 @@ class Center(EventEmitter):
                     self.ack_time = now_ts
 
         if self.recv_frames and not self.ack_timeout_loop:
-            ttl = sum(self.ttls) / len(self.ttls)
-            if ttl > 5:
-                current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
-                self.ack_timeout_loop = True
+            ttl = max(sum(self.ttls) / len(self.ttls), 50)
+            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            self.ack_timeout_loop = True
 
     def on_drain(self, connection):
         if self.frames:
@@ -98,14 +105,14 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            index = struct.unpack("!Q", data)
+            index = struct.unpack("!I", data)
             send_indexs = sorted(self.send_frames.keys())
             for send_index in send_indexs:
                 if send_index > index:
                     break
                 self.send_frames.pop(send_index)
         elif action == ACTION_RESEND:
-            index = struct.unpack("!Q", data)
+            index = struct.unpack("!I", data)
             send_indexs = sorted(self.send_frames.keys())
             for send_index in send_indexs:
                 if send_index > index:
@@ -119,25 +126,29 @@ class Center(EventEmitter):
             self.write_action(ACTION_INDEX_RESET)
             self.recv_index = 0
         elif action == ACTION_INDEX_RESET_ACK:
-            self.wait_reset = False
+            self.frames.extend(self.wait_reset_frames)
+            self.wait_reset_frames = None
+            if self.frames:
+                self.write_frame()
 
     def write_action(self, action, data):
-        frame = Frame(1, self.session.id, 0, self.send_index, None, action, data)
-        self.send_index += 1
-        self.frames.append(frame)
-        self.write_frame()
+        frame = self.create_frame(data, action = action)
+        if self.wait_reset_frames is None:
+            self.frames.append(frame)
+            self.write_frame()
+        else:
+            self.wait_reset_frames.append(frame)
 
     def write_ack(self):
-        data = struct.pack("!Q", self.recv_index - 1)
+        data = struct.pack("!I", self.recv_index - 1)
         self.write_action(ACTION_ACK, data)
 
     def on_ack_timeout_loop(self, recv_index):
         if recv_index == self.recv_index:
-            data = struct.pack("!Q", recv_index)
+            data = struct.pack("!I", recv_index)
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
-            ttl = sum(self.ttls) / len(self.ttls)
-            if ttl > 5:
-                current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
+            ttl = max(sum(self.ttls) / len(self.ttls), 50)
+            current().timeout(ttl * 1.5, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False

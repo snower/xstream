@@ -11,6 +11,8 @@ from ssloop import EventEmitter, current
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
+ACTION_CLOSE  = 0x03
+ACTION_CLOSE_ACK = 0x04
 
 class Buffer(object):
     def __init__(self):
@@ -83,7 +85,8 @@ class Connection(EventEmitter):
                 self._data_len = 2
 
                 if data[-2:] != '\x0f\x0f':
-                    continue
+                    logging.info("connection %s verify error", self)
+                    return self._connection.close()
 
                 action = ord(data[0])
                 if action == 0:
@@ -92,10 +95,9 @@ class Connection(EventEmitter):
                     self.on_action(action, data[1:-2])
 
     def write(self, data):
-        if self._closed:
-            return
-        data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
-        return self._connection.write(data)
+        if not self._closed:
+            data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
+            return self._connection.write(data)
 
     def write_action(self, action, data=''):
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
@@ -106,28 +108,35 @@ class Connection(EventEmitter):
             self.write_action(ACTION_PINGACK)
         elif action == ACTION_PINGACK:
             self._ping_time = time.time()
+        elif action == ACTION_CLOSE:
+            self._closed = True
+            self.write_action(ACTION_CLOSE_ACK)
+        elif action == ACTION_CLOSE_ACK:
+            self._closed = True
+            self._connection.close()
 
     def on_expried(self):
-        if self._closed:
-            return
-        self._connection.close()
-        logging.info("connection %s expried timeout", self)
+        if not self._closed:
+            self.close()
+            logging.info("connection %s expried timeout", self)
 
     def on_ping_loop(self):
-        if self._closed:
-            return
-        if time.time() - self._data_time >= 30:
-            self.write_action(ACTION_PING)
-            self._ping_time = 0
-            current().timeout(30, self.on_ping_timeout)
-        else:
-            current().timeout(30, self.on_ping_loop)
+        if not self._closed:
+            if time.time() - self._data_time >= 30:
+                self.write_action(ACTION_PING)
+                self._ping_time = 0
+                current().timeout(30, self.on_ping_timeout)
+            else:
+                current().timeout(30, self.on_ping_loop)
 
     def on_ping_timeout(self):
-        if self._closed:
-            return
-        if self._ping_time == 0:
-            self._connection.close()
-            logging.info("connection %s ping timeout", self)
-        else:
-            current().timeout(30, self.on_ping_loop)
+        if not self._closed:
+            if self._ping_time == 0:
+                self.close()
+                logging.info("connection %s ping timeout", self)
+            else:
+                current().timeout(30, self.on_ping_loop)
+
+    def close(self):
+        self._closed = True
+        self.write_action(ACTION_CLOSE)
