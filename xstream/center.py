@@ -13,6 +13,8 @@ ACTION_ACK = 0x01
 ACTION_RESEND = 0x02
 ACTION_INDEX_RESET = 0x03
 ACTION_INDEX_RESET_ACK = 0x04
+ACTION_TTL = 0x05
+ACTION_TTL_ACK = 0x06
 
 class Center(EventEmitter):
     def __init__(self, session):
@@ -27,7 +29,7 @@ class Center(EventEmitter):
         self.drain_connections = deque()
         self.ack_time = 0
         self.ack_timeout_loop = False
-        self.ttls = deque()
+        self.ttls = [0]
         self.wait_reset_frames = None
 
     def add_connection(self, connection):
@@ -73,10 +75,6 @@ class Center(EventEmitter):
         if frame.index < self.recv_index:
             return
 
-        if len(self.ttls) >= 5:
-            self.ttls.popleft()
-        self.ttls.append(frame.ttl())
-
         if frame.index != self.recv_index:
             bisect.insort(self.recv_frames, frame)
         else:
@@ -93,7 +91,7 @@ class Center(EventEmitter):
                     self.ack_time = now_ts
 
         if self.recv_frames and not self.ack_timeout_loop:
-            ttl = max(sum(self.ttls) / len(self.ttls), 50)
+            ttl = max(sum(self.ttls) / len(self.ttls), 1000)
             current().timeout((ttl * 1.5) / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
