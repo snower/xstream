@@ -30,6 +30,7 @@ class Center(EventEmitter):
         self.ack_time = 0
         self.ack_timeout_loop = False
         self.ttls = [0]
+        self.ttl = 1000
         self.wait_reset_frames = None
 
         self.write_ttl()
@@ -93,8 +94,7 @@ class Center(EventEmitter):
                     self.ack_time = now_ts
 
         if self.recv_frames and not self.ack_timeout_loop:
-            ttl = max(sum(self.ttls) / len(self.ttls), 1000)
-            current().timeout((ttl * 3) / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -125,12 +125,13 @@ class Center(EventEmitter):
             if self.frames:
                 self.write_frame()
         elif action == ACTION_TTL:
-            self.write_action(ACTION_TTL, data)
-        elif action == ACTION_INDEX_RESET_ACK:
+            self.write_action(ACTION_TTL_ACK, data)
+        elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
             if len(self.ttls) >=5:
                 self.ttls.pop(0)
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
+            self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 100)
 
     def write_action(self, action, data):
         frame = self.create_frame(data, action = action)
@@ -149,8 +150,7 @@ class Center(EventEmitter):
             data = struct.pack("!I", recv_index)
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
-            ttl = max(sum(self.ttls) / len(self.ttls), 50)
-            current().timeout((ttl * 3) / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
