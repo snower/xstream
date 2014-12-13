@@ -2,7 +2,7 @@
 #14-4-22
 # create by: snower
 
-from cStringIO import StringIO
+from collections import deque
 from ssloop import EventEmitter, current
 from frame import StreamFrame
 
@@ -17,30 +17,38 @@ class Stream(EventEmitter):
         self._stream_id = stream_id
         self._session = session
         self._closed = False
-        self._buffer = None
+        self._recv_buffer = None
+        self._send_buffer = None
 
     @property
     def id(self):
         return self._stream_id
 
     def on_data(self):
-        self.emit("data", self, self._buffer.getvalue())
-        self._buffer = None
+        self.emit("data", self, "".join(self._recv_buffer))
+        self._recv_buffer = None
 
     def on_frame(self, frame):
         if frame.action == 0:
-            if self._buffer is None:
-                self._buffer = StringIO()
+            if self._recv_buffer is None:
+                self._recv_buffer = deque()
                 self.loop.sync(self.on_data)
-            self._buffer.write(frame.data)
+            self._recv_buffer.append(frame.data)
         else:
             self.on_action(frame.action, frame.data)
 
+    def on_write(self):
+        data = "".join(self._send_buffer)
+        for i in range(int(len(data) / StreamFrame.FRAME_LEN) + 1):
+            frame = StreamFrame(self._stream_id, 0, 0, data[i * StreamFrame.FRAME_LEN: (i+1) * StreamFrame.FRAME_LEN])
+            self._session.write(frame)
+
     def write(self, data):
         if not self._closed:
-            for i in range(int(len(data) / StreamFrame.FRAME_LEN) + 1):
-                frame = StreamFrame(self._stream_id, 0, 0, data[i * StreamFrame.FRAME_LEN: (i+1) * StreamFrame.FRAME_LEN])
-                self._session.write(frame)
+            if self._send_buffer is None:
+                self._send_buffer = deque()
+                self.loop.sync(self.on_write)
+            self._send_buffer.append(data)
 
     def write_action(self, action, data=''):
         frame = StreamFrame(self._stream_id, 0, action, data)
@@ -62,6 +70,7 @@ class Stream(EventEmitter):
         self.emit("close", self)
         self._session.close_stream(self)
         self.remove_all_listeners()
+        self._session = None
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
