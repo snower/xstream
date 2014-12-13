@@ -78,20 +78,21 @@ class Center(EventEmitter):
         if frame.index < self.recv_index:
             return
 
-        if frame.index != self.recv_index:
-            bisect.insort(self.recv_frames, frame)
-        else:
-            now_ts = time.time()
-            while frame and frame.index == self.recv_index:
-                if self.recv_frames and frame == self.recv_frames[0]:
-                    frame = self.recv_frames.pop(0)
-                self.emit("frame", self, frame)
-                self.recv_index += 1
-                frame = self.recv_frames[0] if self.recv_frames else None
+        if frame.index == self.recv_index:
+            while frame and frame.index <= self.recv_index:
+                if frame.index == self.recv_index:
+                    self.emit("frame", self, frame)
+                    self.recv_index += 1
 
-                if now_ts - self.ack_time > 2:
-                    current().sync(self.write_ack)
-                    self.ack_time = now_ts
+                frame = self.recv_frames.pop(0) if self.recv_frames else None
+
+            now_ts = time.time()
+            if now_ts - self.ack_time > 2:
+                current().sync(self.write_ack)
+                self.ack_time = now_ts
+
+        if frame:
+            bisect.insort(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
             current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
