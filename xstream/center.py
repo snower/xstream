@@ -110,12 +110,13 @@ class Center(EventEmitter):
             while self.send_frames and self.send_frames[0].index <= index:
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
-            index, = struct.unpack("!I", data)
-            while self.send_frames and self.send_frames[0].index <= index:
+            index, recv_index = struct.unpack("!II", data)
+            recv_index = index + int((recv_index - index) / 2) + 1
+            while self.send_frames and self.send_frames[0].index < recv_index:
                 frame = self.send_frames.pop(0)
-                if frame.index == index:
+                if frame.index >= index:
                     self.frames.appendleft(frame)
-                    return self.write_frame()
+                    self.write_frame()
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET)
             self.recv_index = 0
@@ -147,8 +148,8 @@ class Center(EventEmitter):
         self.write_action(ACTION_ACK, data)
 
     def on_ack_timeout_loop(self, recv_index):
-        if recv_index == self.recv_index:
-            data = struct.pack("!I", recv_index)
+        if self.recv_frames and recv_index == self.recv_index:
+            data = struct.pack("!II", recv_index, self.recv_frames[0].index)
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
             current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
