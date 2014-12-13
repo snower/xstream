@@ -63,7 +63,7 @@ class Center(EventEmitter):
 
     def write_frame(self):
         while self.drain_connections:
-            connection = self.drain_connections.popleft()
+            connection = self.drain_connections.pop()
             if not connection._closed:
                 return self.write_next(connection)
 
@@ -95,7 +95,7 @@ class Center(EventEmitter):
             bisect.insort(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -151,7 +151,7 @@ class Center(EventEmitter):
             data = struct.pack("!I", recv_index)
             self.write_action(ACTION_RESEND, data)
         if self.recv_frames:
-            current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
