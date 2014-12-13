@@ -42,6 +42,7 @@ class Stream(EventEmitter):
         for i in range(int(len(data) / StreamFrame.FRAME_LEN) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * StreamFrame.FRAME_LEN: (i+1) * StreamFrame.FRAME_LEN])
             self._session.write(frame)
+        self._send_buffer = None
 
     def write(self, data):
         if not self._closed:
