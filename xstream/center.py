@@ -44,13 +44,16 @@ class Center(EventEmitter):
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
 
-    def create_frame(self, data, action=0, flag=0):
-        if self.send_index >= 0xffffffff:
-            self.write_action(ACTION_INDEX_RESET)
-            self.wait_reset_frames = deque()
-            self.send_index = 1
-        frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
-        self.send_index += 1
+    def create_frame(self, data, action=0, flag=0, index=None):
+        if index is None:
+            if self.send_index >= 0xffffffff:
+                self.write_action(ACTION_INDEX_RESET)
+                self.wait_reset_frames = deque()
+                self.send_index = 1
+            frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
+            self.send_index += 1
+        else:
+            frame = Frame(1, self.session.id, flag, index, None, action, data)
         return frame
 
     def write(self, data):
@@ -75,7 +78,10 @@ class Center(EventEmitter):
     def on_frame(self, connection, data):
         frame = Frame.loads(data)
 
-        if frame.index < self.recv_index:
+        if frame.index == 0:
+            return self.emit("frame", self, frame)
+
+        if frame.index < self.recv_index or abs(frame.index - self.recv_index) > 0x7fffffff:
             return
 
         if frame.index == self.recv_index:
@@ -92,7 +98,7 @@ class Center(EventEmitter):
                 self.ack_time = now_ts
 
         if frame:
-            bisect.insort(self.recv_frames, frame)
+            bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
             current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
@@ -127,7 +133,7 @@ class Center(EventEmitter):
             if self.frames:
                 self.write_frame()
         elif action == ACTION_TTL:
-            self.write_action(ACTION_TTL_ACK, data)
+            self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
             if len(self.ttls) >=5:
@@ -135,8 +141,8 @@ class Center(EventEmitter):
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 100)
 
-    def write_action(self, action, data):
-        frame = self.create_frame(data, action = action)
+    def write_action(self, action, data, index=None):
+        frame = self.create_frame(data, action = action, index = index)
         if self.wait_reset_frames is None:
             self.frames.append(frame)
             self.write_frame()
@@ -145,12 +151,12 @@ class Center(EventEmitter):
 
     def write_ack(self):
         data = struct.pack("!I", self.recv_index - 1)
-        self.write_action(ACTION_ACK, data)
+        self.write_action(ACTION_ACK, data, index=0)
 
     def on_ack_timeout_loop(self, recv_index):
         if self.recv_frames and recv_index == self.recv_index:
             data = struct.pack("!II", recv_index, self.recv_frames[0].index)
-            self.write_action(ACTION_RESEND, data)
+            self.write_action(ACTION_RESEND, data, index=0)
         if self.recv_frames:
             current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
@@ -159,5 +165,5 @@ class Center(EventEmitter):
     def write_ttl(self):
         for i in range(5):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
-            self.write_action(ACTION_TTL, data)
+            self.write_action(ACTION_TTL, data, index=0)
         current().timeout(60, self.write_ttl)
