@@ -101,7 +101,7 @@ class Center(EventEmitter):
             bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 0.8 / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
