@@ -16,9 +16,10 @@ class Client(EventEmitter):
         self._max_connections = max_connections
         self._connections = []
         self._session = None
+        self.running = False
 
     def init_connection(self):
-        for i in range(self._max_connections):
+        for i in range(self._max_connections - len(self._connections)):
             self.fork_connection()
 
     def open(self):
@@ -38,7 +39,10 @@ class Client(EventEmitter):
         session_id, = struct.unpack("!H", data)
         self._session = Session(session_id)
         connection.close()
+        self.running = True
         self.emit("session", self, self._session)
+        self._session.on("sleeping", self.on_session_sleeping)
+        self._session.on("wakeup", self.on_session_wakeup)
         self.init_connection()
 
     def fork_connection(self):
@@ -61,8 +65,16 @@ class Client(EventEmitter):
         self._session.remove_connection(connection)
         if connection in self._connections:
             self._connections.remove(connection)
-        current().timeout(2, self.fork_connection)
+        if self.running:
+            current().timeout(2, self.fork_connection)
         logging.info("connection close %s", connection)
 
     def session(self):
         return self._session
+
+    def on_session_sleeping(self, session):
+        self.running = False
+
+    def on_session_wakeup(self, session):
+        self.running = True
+        self.init_connection()

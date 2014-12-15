@@ -2,7 +2,8 @@
 #14-4-22
 # create by: snower
 
-from ssloop import EventEmitter
+import time
+from ssloop import EventEmitter, current
 from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame
@@ -17,8 +18,10 @@ class Session(EventEmitter):
         self._connections = []
         self._streams = {}
         self._center = Center(self)
+        self._data_time = time.time()
 
         self._center.on("frame", self.on_frame)
+        current().timeout(60, self.on_sleep_loop)
 
     @property
     def id(self):
@@ -38,6 +41,7 @@ class Session(EventEmitter):
             self.emit("suspend", self)
 
     def on_frame(self, center, frame):
+        self._data_time = time.time()
         if frame.action == 0:
             stream_frame = StreamFrame.loads(frame.data)
             if stream_frame.stream_id not in self._streams:
@@ -69,12 +73,36 @@ class Session(EventEmitter):
             self._streams.pop(stream.id)
 
     def write(self, frame):
+        self._data_time = time.time()
         data = frame.dumps()
         self._center.write(data)
 
     def on_action(self, action, data):
         if action & 0x8000 == 0:
             self._center.on_action(action, data)
+
+    def on_sleep_loop(self):
+        if time.time() - self._data_time > 900:
+            old_write = self.write
+            old_on_frame = self.on_frame
+            def wakeup():
+                self.emit("wakeup", self)
+                current().timeout(60, self.on_sleep_loop)
+
+            def write(*args, **kwargs):
+                wakeup()
+                self.write = old_write
+                return self.write(*args, **kwargs)
+
+            def on_frame(*args, **kwargs):
+                wakeup()
+                self.on_frame = old_on_frame
+                return self.on_frame(*args, **kwargs)
+            self.write = write
+            self.on_frame = on_frame
+            self.emit("sleeping", self)
+        else:
+            current().timeout(60, self.on_sleep_loop)
 
     def __str__(self):
         return "<%s %s>" % (super(Session, self).__str__(), self._session_id)
