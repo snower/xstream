@@ -65,8 +65,11 @@ class Session(EventEmitter):
         self.emit("stream", self, stream)
         return stream
 
-    def stream(self):
-        return self.create_stream()
+    def stream(self, callback=None):
+        stream = self.create_stream()
+        if callable(callback):
+            callback(self, stream)
+        return stream
 
     def close_stream(self, stream):
         if stream.id in self._streams:
