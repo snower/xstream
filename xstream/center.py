@@ -85,8 +85,9 @@ class Center(EventEmitter):
 
         if frame:
             connection.write(frame.dumps())
-            frame.connection = connection
-            bisect.insort(self.send_frames, frame)
+            if frame.index != 0:
+                frame.connection = connection
+                bisect.insort(self.send_frames, frame)
 
     def on_frame(self, connection, data):
         frame = Frame.loads(data, connection)
