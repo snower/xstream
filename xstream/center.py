@@ -74,15 +74,17 @@ class Center(EventEmitter):
         frame = self.frames.popleft()
         if connection == frame.connection:
             frames = deque()
-            while connection == frame.connection:
+            while frame and connection == frame.connection:
                 if frame.ttl() < 5 * self.ttl:
                     frames.append(frame)
-                frame = self.frames.popleft()
+                frame = self.frames.popleft() if self.frames else None
             if frames:
                 self.frames.extendleft(frames)
-        connection.write(frame.dumps())
-        frame.connection = connection
-        bisect.insort(self.send_frames, frame)
+
+        if frame:
+            connection.write(frame.dumps())
+            frame.connection = connection
+            bisect.insort(self.send_frames, frame)
 
     def on_frame(self, connection, data):
         frame = Frame.loads(data, connection)
