@@ -2,6 +2,7 @@
 #14-4-22
 # create by: snower
 
+import time
 from collections import deque
 from ssloop import EventEmitter, current
 from frame import StreamFrame
@@ -19,6 +20,9 @@ class Stream(EventEmitter):
         self._closed = False
         self._recv_buffer = None
         self._send_buffer = None
+        self._data_time = time.time()
+
+        self.loop.timeout(300, self.on_time_out_loop)
 
     @property
     def id(self):
@@ -29,6 +33,7 @@ class Stream(EventEmitter):
         self._recv_buffer = None
 
     def on_frame(self, frame):
+        self._data_time = time.time()
         if frame.action == 0:
             if self._recv_buffer is None:
                 self._recv_buffer = deque()
@@ -45,6 +50,7 @@ class Stream(EventEmitter):
         self._send_buffer = None
 
     def write(self, data):
+        self._data_time = time.time()
         if not self._closed:
             if self._send_buffer is None:
                 self._send_buffer = deque()
@@ -71,6 +77,13 @@ class Stream(EventEmitter):
         self.emit("close", self)
         self._session.close_stream(self)
         self.remove_all_listeners()
+
+    def on_time_out_loop(self):
+        if not self._closed:
+            if time.time() - self._data_time > 1800:
+                self.close()
+            else:
+                self.loop.timeout(300, self.on_time_out_loop)
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)

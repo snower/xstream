@@ -6,27 +6,28 @@ import time
 import struct
 
 class Frame(object):
-    def __init__(self, version, session_id, flag, index, timestamp, action, data):
+    def __init__(self, version, session_id, flag, index, timestamp, action, data, connection=None):
         self.version = version
         self.session_id = session_id
         self.flag = flag
         self.index = index
-        self.timestamp = timestamp if timestamp is not None else (int(time.time() * 1000) & 0xffff)
+        self.timestamp = ((int(time.time() * 1000) & 0xffffffff0000) | (timestamp & 0xffff)) if timestamp is not None else int(time.time() * 1000)
         self.action = action
         self.data = data
+        self.connection = connection
 
     def dumps(self):
-        return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp, self.action), self.data])
+        return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
 
     @classmethod
-    def loads(cls, data):
-        return Frame(*struct.unpack("!BHBIHB", data[:11]), data=data[11:])
+    def loads(cls, data, connection=None):
+        return Frame(*struct.unpack("!BHBIHB", data[:11]), data=data[11:], connection=connection)
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)
 
     def ttl(self):
-        return (int(time.time() * 1000) & 0xffff) - self.timestamp
+        return int(time.time() * 1000) - self.timestamp
 
 class StreamFrame(object):
     FRAME_LEN = 16 * 1024
