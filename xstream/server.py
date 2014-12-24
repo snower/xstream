@@ -19,7 +19,6 @@ class Server(EventEmitter):
         self._current_session_id = 1
         self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
-        self._crypto = Crypto(self._crypto_key, self._crypto_alg)
 
     def start(self):
         self._server.on("connection", self.on_connection)
@@ -36,16 +35,17 @@ class Server(EventEmitter):
             self.on_fork_connection(connection, data[1:])
 
     def on_open_session(self, connection, data):
-        self._crypto.init_decrypt(data)
-        key = self._crypto.init_encrypt()
-        session = self.create_session()
+        crypto = Crypto(self._crypto_key, self._crypto_alg)
+        crypto.init_decrypt(data)
+        key = crypto.init_encrypt()
+        session = self.create_session(crypto)
         connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
         logging.info("session open %s", session)
 
-    def create_session(self):
-        session = Session(self.get_session_id(), True)
+    def create_session(self, crypto):
+        session = Session(self.get_session_id(), True, crypto)
         self._sessions[session.id] = session
         return session
 
@@ -57,16 +57,15 @@ class Server(EventEmitter):
         return session_id
 
     def on_fork_connection(self, connection, data):
-        data = self._crypto.decrypt(data)
         session_id, = struct.unpack("!H", data[:2])
         if session_id in self._sessions:
-            key = data[2:]
+            session = self._sessions[session_id]
+            key = session.crypto.decrypt(data[2:])
             setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
             connection.crypto.init_decrypt(key)
             key = connection.crypto.init_encrypt()
-            session = self._sessions[session_id]
             session.add_connection(connection)
-            data = self._crypto.encrypt(key)
+            data = session.crypto.encrypt(key)
             connection.write(data)
 
             def on_fork_connection_close(connection):

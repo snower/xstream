@@ -9,11 +9,12 @@ from center import Center
 from stream import Stream, StreamFrame
 
 class Session(EventEmitter):
-    def __init__(self, session_id, is_server=False):
+    def __init__(self, session_id, is_server=False, crypto=None):
         super(Session, self).__init__()
 
         self._is_server = is_server
         self._session_id = session_id
+        self._crypto = crypto
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}

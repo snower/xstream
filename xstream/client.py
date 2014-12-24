@@ -19,7 +19,6 @@ class Client(EventEmitter):
         self._session = None
         self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
-        self._crypto = Crypto(self._crypto_key, self._crypto_alg)
         self._connecting = None
         self.opening= False
         self.running = False
@@ -31,6 +30,7 @@ class Client(EventEmitter):
     def open(self):
         self.opening = True
         connection = Socket()
+        setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)
 
@@ -45,15 +45,16 @@ class Client(EventEmitter):
             connection.close()
 
     def on_connect(self, connection):
-        key = self._crypto.init_encrypt()
+        key = connection.crypto.init_encrypt()
         connection.write('\x00'+key)
         connection.on("data", self.on_data)
 
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data[:2])
-        self._crypto.init_decrypt(data[2:])
-        self._session = Session(session_id)
+        connection.crypto.init_decrypt(data[2:])
+        self._session = Session(session_id, False, connection.crypto)
         connection.close()
+
         self.opening = False
         self.running = True
         self.emit("session", self, self._session)
@@ -72,14 +73,14 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         key = connection.crypto.init_encrypt()
-        data = self._crypto.encrypt(struct.pack("!H", self._session.id) + key)
-        connection.write('\x01' + data)
+        data = self._session.crypto.encrypt(key)
+        connection.write('\x01'+ struct.pack("!H", self._session.id) + data)
         connection.once("data", self.on_fork_data)
         connection.once("close", self.on_fork_close)
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        key = self._crypto.decrypt(data)
+        key = self._session.crypto.decrypt(data)
         connection.crypto.init_decrypt(key)
         self._session.add_connection(connection)
         self._connecting = None
