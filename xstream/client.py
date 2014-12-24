@@ -90,11 +90,10 @@ class Client(EventEmitter):
         self._session.remove_connection(connection)
         if connection in self._connections:
             self._connections.remove(connection)
-        if self.running:
-            current().timeout(2, self.fork_connection)
         if self._connecting == connection:
             self._connecting = None
-            self.init_connection()
+        if self.running:
+            current().timeout(2, self.init_connection)
         logging.info("connection close %s", connection)
 
     def session(self, callback=None):
