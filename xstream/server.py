@@ -6,9 +6,10 @@ import logging
 import struct
 from ssloop import EventEmitter, Server as LoopServer, current
 from session import Session
+from crypto import Crypto
 
 class Server(EventEmitter):
-    def __init__(self, port, host='0.0.0.0'):
+    def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
         super(Server, self).__init__()
 
         self._host = host
@@ -16,6 +17,9 @@ class Server(EventEmitter):
         self._server = LoopServer((self._host, self._port))
         self._sessions = {}
         self._current_session_id = 1
+        self.crypto_key = crypto_key
+        self.crypto_alg = crypto_alg
+        self.crypto = Crypto(self.crypto_key, self.crypto_alg)
 
     def start(self):
         self._server.on("connection", self.on_connection)
@@ -32,8 +36,10 @@ class Server(EventEmitter):
             self.on_fork_connection(connection, data[1:])
 
     def on_open_session(self, connection, data):
+        self.crypto.init_decrypt(data)
+        key = self.crypto.init_encrypt()
         session = self.create_session()
-        connection.write(struct.pack("!H", session.id))
+        connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
         logging.info("session open %s", session)
@@ -51,11 +57,16 @@ class Server(EventEmitter):
         return session_id
 
     def on_fork_connection(self, connection, data):
+        data = self.crypto.decrypt(data)
         session_id, = struct.unpack("!H", data)
         if session_id in self._sessions:
+            key = data[2:]
+            setattr(connection, "crypto", Crypto(self.crypto_key, self.crypto_alg))
+            connection.crypto.init_decrypt(key)
+            key = connection.crypto.init_encrypt()
             session = self._sessions[session_id]
             session.add_connection(connection)
-            connection.write("a" * 16)
+            connection.write(key)
 
             def on_fork_connection_close(connection):
                 session.remove_connection(connection)

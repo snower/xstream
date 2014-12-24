@@ -28,22 +28,22 @@ class Crypto(object):
         self._key=key
         self._alg=alg
 
-    def init_encrypt(self,secret=None):
-        self._ensecret=(secret[:32],secret[32:]) if secret  and len(secret)>=64 else (rand_string(32),rand_string(32))
-        self._encipher=EVP.Cipher(self._alg,self.bytes_to_key(self._ensecret[0]),self._ensecret[1],1,0)
+    def init_encrypt(self, secret=None):
+        self._ensecret = (secret[:32], secret[32:]) if secret  and len(secret)>=64 else (rand_string(32), rand_string(32))
+        self._encipher = EVP.Cipher(self._alg, self.bytes_to_key(self._ensecret[0]), self._ensecret[1], 1, 0)
         return  "".join(self._ensecret)
 
-    def init_decrypt(self,secret):
-        self._desecret=(secret[:32],secret[32:])
-        self._decipher=EVP.Cipher(self._alg,self.bytes_to_key(self._desecret[0]),self._desecret[1],0,0)
+    def init_decrypt(self, secret):
+        self._desecret=(secret[:32], secret[32:])
+        self._decipher=EVP.Cipher(self._alg, self.bytes_to_key(self._desecret[0]), self._desecret[1], 0, 0)
 
-    def encrypt(self,data):
+    def encrypt(self, data):
         return self._encipher.update(data)
 
-    def decrypt(self,data):
+    def decrypt(self, data):
         return self._decipher.update(data)
     
-    def bytes_to_key(self,salt):
+    def bytes_to_key(self, salt):
         key_len=ALG_KEY_IV_LEN.get(self._alg)[0]
         d1,d2=self._key.encode('utf-8') if isinstance(self._key,unicode) else self._key,''
         for i in range(5):

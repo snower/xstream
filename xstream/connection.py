@@ -43,6 +43,7 @@ class Connection(EventEmitter):
         super(Connection,self).__init__()
         self._connection = connection
         self._session = session
+        self._crypto = connection.crypto
 
         self._connection.on("close",self.on_close)
         self._connection.on("data",self.on_data)
@@ -60,6 +61,7 @@ class Connection(EventEmitter):
             current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
+        data = self._crypto.decrypt(data)
         self._buffer.write(data)
         self.read()
         self._data_time = time.time()
@@ -97,10 +99,12 @@ class Connection(EventEmitter):
     def write(self, data):
         if not self._closed:
             data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
+            data = self._crypto.encrypt(data)
             return self._connection.write(data)
 
     def write_action(self, action, data=''):
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
+        data = self._crypto.encrypt(data)
         return self._connection.write(data)
 
     def on_action(self, action, data):

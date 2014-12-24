@@ -6,9 +6,10 @@ import logging
 import struct
 from ssloop import EventEmitter, Socket, current
 from session import Session
+from crypto import Crypto
 
 class Client(EventEmitter):
-    def __init__(self, host, port, max_connections=4):
+    def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
         super(Client, self).__init__()
 
         self._host = host
@@ -18,6 +19,9 @@ class Client(EventEmitter):
         self._session = None
         self.opening= False
         self.running = False
+        self.crypto_key = crypto_key
+        self.crypto_alg = crypto_alg
+        self.crypto = Crypto(self.crypto_key, self.crypto_alg)
 
     def init_connection(self):
         for i in range(self._max_connections - len(self._connections)):
@@ -40,11 +44,13 @@ class Client(EventEmitter):
             connection.close()
 
     def on_connect(self, connection):
-        connection.write('\x00')
+        key = self.crypto.init_encrypt()
+        connection.write('\x00'+key)
         connection.on("data", self.on_data)
 
     def on_data(self, connection, data):
-        session_id, = struct.unpack("!H", data)
+        session_id, = struct.unpack("!H", data[:2])
+        self.crypto.init_decrypt(data[2:])
         self._session = Session(session_id)
         connection.close()
         self.opening = False
@@ -57,17 +63,22 @@ class Client(EventEmitter):
 
     def fork_connection(self):
         connection = Socket()
+        setattr(connection, "crypto", Crypto(self.crypto_key, self.crypto_alg))
         connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
         self._connections.append(connection)
 
     def on_fork_connect(self, connection):
-        connection.write(struct.pack("!BH", 1, self._session.id))
+        key = connection.crypto.init_encrypt()
+        data = self.crypto.encrypt(struct.pack("!H", self._session.id) + key)
+        connection.write('\x01' + data)
         connection.once("data", self.on_fork_data)
         connection.once("close", self.on_fork_close)
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
+        key = self.crypto.decrypt(data)
+        connection.crypto.init_decrypt(key)
         self._session.add_connection(connection)
         logging.info("connection ready %s", connection)
 
