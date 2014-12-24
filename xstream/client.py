@@ -73,14 +73,14 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         key = connection.crypto.init_encrypt()
-        data = self._session.crypto.encrypt(key)
+        data = self._session._crypto.encrypt(key)
         connection.write('\x01'+ struct.pack("!H", self._session.id) + data)
         connection.once("data", self.on_fork_data)
         connection.once("close", self.on_fork_close)
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        key = self._session.crypto.decrypt(data)
+        key = self._session._crypto.decrypt(data)
         connection.crypto.init_decrypt(key)
         self._session.add_connection(connection)
         self._connecting = None

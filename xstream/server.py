@@ -60,12 +60,12 @@ class Server(EventEmitter):
         session_id, = struct.unpack("!H", data[:2])
         if session_id in self._sessions:
             session = self._sessions[session_id]
-            key = session.crypto.decrypt(data[2:])
+            key = session._crypto.decrypt(data[2:])
             setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
             connection.crypto.init_decrypt(key)
             key = connection.crypto.init_encrypt()
             session.add_connection(connection)
-            data = session.crypto.encrypt(key)
+            data = session._crypto.encrypt(key)
             connection.write(data)
 
             def on_fork_connection_close(connection):
