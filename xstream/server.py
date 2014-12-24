@@ -58,7 +58,7 @@ class Server(EventEmitter):
 
     def on_fork_connection(self, connection, data):
         data = self.crypto.decrypt(data)
-        session_id, = struct.unpack("!H", data)
+        session_id, = struct.unpack("!H", data[:2])
         if session_id in self._sessions:
             key = data[2:]
             setattr(connection, "crypto", Crypto(self.crypto_key, self.crypto_alg))
