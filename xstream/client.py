@@ -19,7 +19,7 @@ class Client(EventEmitter):
         self._session = None
         self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
-        self._crypto = Crypto(self.crypto_key, self.crypto_alg)
+        self._crypto = Crypto(self._crypto_key, self._crypto_alg)
         self._connecting = None
         self.opening= False
         self.running = False
@@ -64,7 +64,7 @@ class Client(EventEmitter):
 
     def fork_connection(self):
         connection = Socket()
-        setattr(connection, "crypto", Crypto(self.crypto_key, self.crypto_alg))
+        setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
         self._connections.append(connection)

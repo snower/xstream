@@ -17,9 +17,9 @@ class Server(EventEmitter):
         self._server = LoopServer((self._host, self._port))
         self._sessions = {}
         self._current_session_id = 1
-        self.crypto_key = crypto_key
-        self.crypto_alg = crypto_alg
-        self.crypto = Crypto(self.crypto_key, self.crypto_alg)
+        self._crypto_key = crypto_key
+        self._crypto_alg = crypto_alg
+        self._crypto = Crypto(self._crypto_key, self._crypto_alg)
 
     def start(self):
         self._server.on("connection", self.on_connection)
@@ -36,8 +36,8 @@ class Server(EventEmitter):
             self.on_fork_connection(connection, data[1:])
 
     def on_open_session(self, connection, data):
-        self.crypto.init_decrypt(data)
-        key = self.crypto.init_encrypt()
+        self._crypto.init_decrypt(data)
+        key = self._crypto.init_encrypt()
         session = self.create_session()
         connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
@@ -57,16 +57,17 @@ class Server(EventEmitter):
         return session_id
 
     def on_fork_connection(self, connection, data):
-        data = self.crypto.decrypt(data)
+        data = self._crypto.decrypt(data)
         session_id, = struct.unpack("!H", data[:2])
         if session_id in self._sessions:
             key = data[2:]
-            setattr(connection, "crypto", Crypto(self.crypto_key, self.crypto_alg))
+            setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
             connection.crypto.init_decrypt(key)
             key = connection.crypto.init_encrypt()
             session = self._sessions[session_id]
             session.add_connection(connection)
-            connection.write(key)
+            data = self._crypto.encrypt(key)
+            connection.write(data)
 
             def on_fork_connection_close(connection):
                 session.remove_connection(connection)
