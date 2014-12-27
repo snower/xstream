@@ -33,6 +33,7 @@ class Client(EventEmitter):
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)
+        connection.on("data", self.on_data)
 
     def reopen(self, callback=None):
         if callable(callback):
@@ -47,7 +48,6 @@ class Client(EventEmitter):
     def on_connect(self, connection):
         key = connection.crypto.init_encrypt()
         connection.write('\x00'+key)
-        connection.on("data", self.on_data)
 
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data[:2])
@@ -68,6 +68,8 @@ class Client(EventEmitter):
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
+        connection.once("close", self.on_fork_close)
+        connection.once("data", self.on_fork_data)
         self._connections.append(connection)
         return connection
 
@@ -75,8 +77,6 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         data = self._session._crypto.encrypt(key)
         connection.write('\x01'+ struct.pack("!H", self._session.id) + data)
-        connection.once("data", self.on_fork_data)
-        connection.once("close", self.on_fork_close)
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
@@ -106,11 +106,11 @@ class Client(EventEmitter):
 
     def on_session_suspend(self, session):
         def on_suspend():
-            self._session = None
-            self.opening = False
-            self.running = False
+            if not self._connections:
+                self._session = None
+                self.opening = False
+                self.running = False
         current().sync(on_suspend)
-
 
     def on_session_sleeping(self, session):
         self.running = False

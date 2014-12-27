@@ -38,6 +38,7 @@ class Session(EventEmitter):
             if connection._connection == conn:
                 self._center.remove_connection(connection)
                 self._connections.remove(connection)
+                break
         if not self._connections:
             self.emit("suspend", self)
 
