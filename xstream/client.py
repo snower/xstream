@@ -105,8 +105,12 @@ class Client(EventEmitter):
         return self._session
 
     def on_session_suspend(self, session):
-        self._session = None
-        self.running = False
+        def on_suspend():
+            self._session = None
+            self.opening = False
+            self.running = False
+        current().sync(on_suspend)
+
 
     def on_session_sleeping(self, session):
         self.running = False
