@@ -106,7 +106,7 @@ class Client(EventEmitter):
 
     def on_session_suspend(self, session):
         def on_suspend():
-            if not self._connections:
+            if not self._connections and not self._connecting:
                 self._session = None
                 self.opening = False
                 self.running = False
