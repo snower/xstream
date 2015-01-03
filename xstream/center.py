@@ -181,3 +181,6 @@ class Center(EventEmitter):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
         current().timeout(60, self.write_ttl)
+
+    def __del__(self):
+        self.remove_all_listeners()

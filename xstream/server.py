@@ -82,5 +82,6 @@ class Server(EventEmitter):
 
     def on_session_close(self, session):
         if not session._connections:
-            self._sessions.pop(session.id)
+            session = self._sessions.pop(session.id)
+            session.close()
             logging.info("session close %s", session)

@@ -142,5 +142,11 @@ class Connection(EventEmitter):
             current().timeout(30, self.on_ping_loop)
 
     def close(self):
-        self._closed = True
-        self.write_action(ACTION_CLOSE)
+        if self._closed:
+            self._connection.close()
+        else:
+            self._closed = True
+            self.write_action(ACTION_CLOSE)
+
+    def __del__(self):
+        self.close()

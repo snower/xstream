@@ -8,6 +8,12 @@ from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame
 
+STATUS_INITED = 0x01
+STATUS_OPENING = 0x02
+STATUS_SUSPEND = 0x03
+STATUS_SLEEPING = 0x04
+STATUS_CLOSED = 0x05
+
 class Session(EventEmitter):
     def __init__(self, session_id, is_server=False, crypto=None):
         super(Session, self).__init__()
@@ -20,6 +26,7 @@ class Session(EventEmitter):
         self._streams = {}
         self._center = Center(self)
         self._data_time = time.time()
+        self._status = STATUS_INITED
 
         self._center.on("frame", self.on_frame)
         current().timeout(60, self.on_sleep_loop)
@@ -39,8 +46,11 @@ class Session(EventEmitter):
                 self._center.remove_connection(connection)
                 self._connections.remove(connection)
                 break
-        if not self._connections:
+        if not self._connections and self._status == STATUS_OPENING:
+            self._status = STATUS_SUSPEND
             self.emit("suspend", self)
+        elif self._status == STATUS_CLOSED:
+            self._center = None
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
@@ -76,6 +86,8 @@ class Session(EventEmitter):
     def close_stream(self, stream):
         if stream.id in self._streams:
             self._streams.pop(stream.id)
+        if self._status == STATUS_CLOSED and not self._streams:
+            self.do_close()
 
     def write(self, frame):
         self._data_time = time.time()
@@ -91,6 +103,7 @@ class Session(EventEmitter):
             old_write = self.write
             old_on_frame = self.on_frame
             def wakeup():
+                self._status = STATUS_OPENING
                 self.emit("wakeup", self)
                 current().timeout(60, self.on_sleep_loop)
 
@@ -105,9 +118,32 @@ class Session(EventEmitter):
                 return self.on_frame(*args, **kwargs)
             self.write = write
             self.on_frame = on_frame
+            self._status = STATUS_SLEEPING
             self.emit("sleeping", self)
         else:
             current().timeout(60, self.on_sleep_loop)
+
+    def close(self):
+        if self._status == STATUS_CLOSED:
+            return
+        for stream_id, stream in self._streams.items():
+            if self._connections:
+                stream.close()
+            else:
+                stream.do_close()
+        self._status = STATUS_CLOSED
+
+    def do_close(self):
+        if self._connections:
+            for connection in self._connections:
+                connection.close()
+        else:
+            self._center = None
+        self.emit("close")
+        self.remove_all_listeners()
+
+    def __del__(self):
+        self.close()
 
     def __str__(self):
         return "<%s %s>" % (super(Session, self).__str__(), self._session_id)

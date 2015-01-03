@@ -69,14 +69,18 @@ class Stream(EventEmitter):
             self.do_close()
 
     def close(self):
+        if self._closed:
+            return
         self._closed = True
         self.write_action(ACTION_CLIOSE)
 
     def do_close(self):
         self._closed = True
         self.emit("close", self)
-        self._session.close_stream(self)
-        self.remove_all_listeners()
+        if self._session:
+            self._session.close_stream(self)
+            self.remove_all_listeners()
+            self._session = None
 
     def on_time_out_loop(self):
         if not self._closed:
@@ -84,6 +88,9 @@ class Stream(EventEmitter):
                 self.close()
             else:
                 self.loop.timeout(300, self.on_time_out_loop)
+
+    def __del__(self):
+        self.close()
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
