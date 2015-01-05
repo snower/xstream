@@ -4,7 +4,7 @@
 
 import time
 from collections import deque
-from ssloop import EventEmitter, current
+from sevent import EventEmitter, current
 from frame import StreamFrame
 
 ACTION_CLIOSE = 1

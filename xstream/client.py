@@ -4,7 +4,7 @@
 
 import logging
 import struct
-from ssloop import EventEmitter, Socket, current
+from sevent import EventEmitter, current, tcp
 from session import Session
 from crypto import Crypto
 
@@ -29,7 +29,7 @@ class Client(EventEmitter):
 
     def open(self):
         self.opening = True
-        connection = Socket()
+        connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)

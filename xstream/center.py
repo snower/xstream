@@ -6,7 +6,7 @@ import time
 import struct
 from collections import deque
 import bisect
-from ssloop import EventEmitter, current
+from sevent import EventEmitter, current
 from frame import Frame
 
 ACTION_ACK = 0x01

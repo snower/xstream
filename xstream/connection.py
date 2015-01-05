@@ -7,7 +7,7 @@ import logging
 import random
 import struct
 from collections import deque
-from ssloop import EventEmitter, current
+from sevent import EventEmitter, current
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02

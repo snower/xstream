@@ -3,7 +3,7 @@
 # create by: snower
 
 import time
-from ssloop import EventEmitter, current
+from sevent import EventEmitter, current
 from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame

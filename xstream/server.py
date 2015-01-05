@@ -4,7 +4,7 @@
 
 import logging
 import struct
-from ssloop import EventEmitter, Server as LoopServer, current
+from sevent import EventEmitter, tcp, current
 from session import Session
 from crypto import Crypto
 
@@ -14,7 +14,7 @@ class Server(EventEmitter):
 
         self._host = host
         self._port = port
-        self._server = LoopServer((self._host, self._port))
+        self._server = tcp.Server()
         self._sessions = {}
         self._current_session_id = 1
         self._crypto_key = crypto_key
@@ -22,7 +22,7 @@ class Server(EventEmitter):
 
     def start(self):
         self._server.on("connection", self.on_connection)
-        self._server.listen()
+        self._server.listen((self._host, self._port))
 
     def on_connection(self, server, connection):
         connection.once("data", self.on_data)
