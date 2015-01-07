@@ -64,7 +64,7 @@ class Client(EventEmitter):
         self.init_connection()
 
     def fork_connection(self):
-        connection = Socket()
+        connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
