@@ -35,17 +35,18 @@ class Server(EventEmitter):
             self.on_fork_connection(connection, data[1:])
 
     def on_open_session(self, connection, data):
+        auth_key = data[:16]
         crypto = Crypto(self._crypto_key, self._crypto_alg)
-        crypto.init_decrypt(data)
+        crypto.init_decrypt(data[16:])
         key = crypto.init_encrypt()
-        session = self.create_session(crypto)
+        session = self.create_session(auth_key, crypto)
         connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
         logging.info("session open %s", session)
 
-    def create_session(self, crypto):
-        session = Session(self.get_session_id(), True, crypto)
+    def create_session(self, auth_key, crypto):
+        session = Session(self.get_session_id(), auth_key, True, crypto)
         self._sessions[session.id] = session
         return session
 
@@ -60,22 +61,25 @@ class Server(EventEmitter):
         session_id, = struct.unpack("!H", data[:2])
         if session_id in self._sessions:
             session = self._sessions[session_id]
-            key = session._crypto.decrypt(data[2:])
-            setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
-            connection.crypto.init_decrypt(key)
-            key = connection.crypto.init_encrypt()
-            session.add_connection(connection)
-            data = session._crypto.encrypt(key)
-            connection.write(data)
+            data = session._crypto.decrypt(data[2:])
+            auth_key = data[:16]
+            if auth_key == session.auth_key:
+                key = data[16:]
+                setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
+                connection.crypto.init_decrypt(key)
+                key = connection.crypto.init_encrypt()
+                session.add_connection(connection)
+                data = session._crypto.encrypt(key)
+                connection.write(data)
 
-            def on_fork_connection_close(connection):
-                session.remove_connection(connection)
-                logging.info("connection close %s %s", session, connection)
-            connection.on("close", on_fork_connection_close)
-            logging.info("connection connect %s %s", session, connection)
-        else:
-            connection.close()
-            logging.info("connection refuse %s %s", session_id, connection)
+                def on_fork_connection_close(connection):
+                    session.remove_connection(connection)
+                    logging.info("connection close %s %s", session, connection)
+                connection.on("close", on_fork_connection_close)
+                logging.info("connection connect %s %s", session, connection)
+                return
+        connection.close()
+        logging.info("connection refuse %s %s", session_id, connection)
 
     def on_session_suspend(self, session):
         current().timeout(30, self.on_session_close, session)

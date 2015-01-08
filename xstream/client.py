@@ -2,11 +2,12 @@
 # 14/12/10
 # create by: snower
 
+import time
 import logging
 import struct
 from sevent import EventEmitter, current, tcp
 from session import Session
-from crypto import Crypto
+from crypto import Crypto, rand_string
 
 class Client(EventEmitter):
     def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
@@ -17,11 +18,15 @@ class Client(EventEmitter):
         self._max_connections = max_connections
         self._connections = []
         self._session = None
+        self._auth_key = None
         self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
         self._connecting = None
         self.opening= False
         self.running = False
+
+    def get_auth_key(self):
+        return struct.pack("!I", int(time.time())) + rand_string(12)
 
     def init_connection(self):
         if self._connecting is None and len(self._connections) < self._max_connections:
@@ -29,6 +34,7 @@ class Client(EventEmitter):
 
     def open(self):
         self.opening = True
+        self._auth_key = self.get_auth_key()
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
@@ -47,12 +53,12 @@ class Client(EventEmitter):
 
     def on_connect(self, connection):
         key = connection.crypto.init_encrypt()
-        connection.write('\x00'+key)
+        connection.write('\x00' + self._auth_key + key)
 
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data[:2])
         connection.crypto.init_decrypt(data[2:])
-        self._session = Session(session_id, False, connection.crypto)
+        self._session = Session(session_id, self._auth_key, False, connection.crypto)
         connection.close()
 
         self.opening = False
@@ -66,6 +72,7 @@ class Client(EventEmitter):
     def fork_connection(self):
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
+        setattr(connection, "is_connected_session", False),
         connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
         connection.once("close", self.on_fork_close)
@@ -75,8 +82,8 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         key = connection.crypto.init_encrypt()
-        data = self._session._crypto.encrypt(key)
-        connection.write('\x01'+ struct.pack("!H", self._session.id) + data)
+        data = self._session._crypto.encrypt(self._session.auth_key + key)
+        connection.write('\x01' + struct.pack("!H", self._session.id) + data)
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
@@ -85,6 +92,7 @@ class Client(EventEmitter):
         self._session.add_connection(connection)
         self._connecting = None
         self.init_connection()
+        connection.is_connected_session = True
         logging.info("connection ready %s", connection)
 
     def on_fork_close(self, connection):
@@ -93,8 +101,8 @@ class Client(EventEmitter):
             self._connections.remove(connection)
         if self._connecting == connection:
             self._connecting = None
-        if self.running:
-            current().timeout(2, self.init_connection)
+        if connection.is_connected_session and self.running:
+            current().timeout(1, self.init_connection)
         logging.info("connection close %s", connection)
 
     def session(self, callback=None):
@@ -111,7 +119,7 @@ class Client(EventEmitter):
                 self._session = None
                 self.opening = False
                 self.running = False
-        current().sync(on_suspend)
+        current().timeout(2, on_suspend)
 
     def on_session_sleeping(self, session):
         self.running = False

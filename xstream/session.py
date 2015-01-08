@@ -15,11 +15,12 @@ STATUS_SLEEPING = 0x04
 STATUS_CLOSED = 0x05
 
 class Session(EventEmitter):
-    def __init__(self, session_id, is_server=False, crypto=None):
+    def __init__(self, session_id, auth_key, is_server=False, crypto=None):
         super(Session, self).__init__()
 
         self._is_server = is_server
         self._session_id = session_id
+        self._auth_key = auth_key
         self._crypto = crypto
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
@@ -34,6 +35,10 @@ class Session(EventEmitter):
     @property
     def id(self):
         return self._session_id
+
+    @property
+    def auth_key(self):
+        return self._auth_key
 
     def add_connection(self, conn):
         connection = Connection(conn, self)
