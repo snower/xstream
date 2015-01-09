@@ -76,11 +76,13 @@ class Stream(EventEmitter):
 
     def do_close(self):
         self._closed = True
-        self.emit("close", self)
-        if self._session:
-            self._session.close_stream(self)
-            self.remove_all_listeners()
-            self._session = None
+        def do_close():
+            self.emit("close", self)
+            if self._session:
+                self._session.close_stream(self)
+                self.remove_all_listeners()
+                self._session = None
+        self.loop.sync(do_close)
 
     def on_time_out_loop(self):
         if not self._closed:
