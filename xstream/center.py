@@ -150,7 +150,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
-            if len(self.ttls) >=5:
+            if len(self.ttls) >=3:
                 self.ttls.pop(0)
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 100)
@@ -177,7 +177,7 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
 
     def write_ttl(self):
-        for i in range(5):
+        for i in range(3):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
         current().timeout(60, self.write_ttl)
