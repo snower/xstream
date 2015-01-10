@@ -21,7 +21,7 @@ class Center(EventEmitter):
         super(Center, self).__init__()
 
         self.session = session
-        self.frames = deque()
+        self.frames = []
         self.recv_frames = []
         self.recv_index = 1
         self.send_frames = []
@@ -59,7 +59,7 @@ class Center(EventEmitter):
     def write(self, data):
         frame = self.create_frame(data)
         if self.wait_reset_frames is None:
-            self.frames.append(frame)
+            bisect.insort(self.frames, frame)
             self.write_frame()
         else:
             self.wait_reset_frames.append(frame)
@@ -71,17 +71,17 @@ class Center(EventEmitter):
                 return self.write_next(connection)
 
     def write_next(self, connection):
-        frame = self.frames.popleft()
+        frame = self.frames.pop(0)
         if connection == frame.connection:
-            frames = deque()
+            frames = []
             while frame and connection == frame.connection:
                 if frame.ttl() < 4 * self.ttl:
-                    frames.append(frame)
+                    bisect.insort(frames, frame)
                 else:
                     bisect.insort(self.send_frames, frame)
-                frame = self.frames.popleft() if self.frames else None
+                frame = self.frames.pop(0) if self.frames else None
             if frames:
-                self.frames.extendleft(frames)
+                self.frames = frames + self.frames
 
         if frame:
             connection.write(frame.dumps())
@@ -135,14 +135,14 @@ class Center(EventEmitter):
             while self.send_frames and self.send_frames[0].index < recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
-                    self.frames.appendleft(frame)
+                    bisect.insort(self.frames, frame)
                     self.write_frame()
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET)
             self.recv_index = 0
         elif action == ACTION_INDEX_RESET_ACK:
             self.send_frames = []
-            self.frames.extend(self.wait_reset_frames)
+            self.frames += self.wait_reset_frames
             self.wait_reset_frames = None
             if self.frames:
                 self.write_frame()
@@ -158,7 +158,7 @@ class Center(EventEmitter):
     def write_action(self, action, data, index=None):
         frame = self.create_frame(data, action = action, index = index)
         if self.wait_reset_frames is None:
-            self.frames.append(frame)
+            bisect.insort(self.frames, frame)
             self.write_frame()
         else:
             self.wait_reset_frames.append(frame)
