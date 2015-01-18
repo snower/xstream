@@ -75,10 +75,7 @@ class Center(EventEmitter):
         if connection == frame.connection:
             frames = []
             while frame and connection == frame.connection:
-                if frame.ttl() < 4 * self.ttl:
-                    bisect.insort(frames, frame)
-                else:
-                    bisect.insort(self.send_frames, frame)
+                bisect.insort(frames, frame)
                 frame = self.frames.pop(0) if self.frames else None
             if frames:
                 self.frames = frames + self.frames
@@ -153,7 +150,7 @@ class Center(EventEmitter):
             if len(self.ttls) >=3:
                 self.ttls.pop(0)
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
-            self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 100)
+            self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 3000)
 
     def write_action(self, action, data, index=None):
         frame = self.create_frame(data, action = action, index = index)
