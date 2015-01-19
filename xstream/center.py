@@ -128,8 +128,8 @@ class Center(EventEmitter):
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data)
-            recv_index = index + int((recv_index - index) * 0.8) + 1
-            while self.send_frames and self.send_frames[0].index < recv_index:
+            recv_index = index + int((recv_index - index) * 0.8)
+            while self.send_frames and self.send_frames[0].index <= recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
                     bisect.insort(self.frames, frame)
@@ -150,7 +150,7 @@ class Center(EventEmitter):
             if len(self.ttls) >=3:
                 self.ttls.pop(0)
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
-            self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 3000)
+            self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 4000)
 
     def write_action(self, action, data, index=None):
         frame = self.create_frame(data, action = action, index = index)
