@@ -71,13 +71,13 @@ class Center(EventEmitter):
         while True:
             if not connection._closed:
                 if self.write_next(connection):
-                    break
+                    return
             if not self.drain_connections:
-                break
+                return
             connection = self.drain_connections.pop()
             if first_connection == connection:
                 self.drain_connections.appendleft(connection)
-                break
+                return
 
     def write_next(self, connection):
         frame = self.frames.pop(0)
