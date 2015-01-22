@@ -65,19 +65,11 @@ class Center(EventEmitter):
             self.wait_reset_frames.append(frame)
 
     def write_frame(self):
-        if not self.drain_connections:
-            return
-        first_connection = connection = self.drain_connections.pop()
-        while True:
+        for _ in range(len(self.drain_connections)):
+            connection = self.drain_connections.pop()
             if not connection._closed:
                 if self.write_next(connection):
                     return
-            if not self.drain_connections:
-                return
-            connection = self.drain_connections.pop()
-            if first_connection == connection:
-                self.drain_connections.appendleft(connection)
-                return
 
     def write_next(self, connection):
         frame = self.frames.pop(0)
