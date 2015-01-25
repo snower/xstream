@@ -68,7 +68,9 @@ class Server(EventEmitter):
                 setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                 connection.crypto.init_decrypt(key)
                 key = connection.crypto.init_encrypt()
-                session.add_connection(connection)
+                def add_connection():
+                    session.add_connection(connection)
+                current().sync(add_connection)
                 data = session._crypto.encrypt(key)
                 connection.write(data)
 
