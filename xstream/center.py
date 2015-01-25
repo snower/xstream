@@ -38,7 +38,10 @@ class Center(EventEmitter):
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
         connection.on("drain", self.on_drain)
-        self.drain_connections.append(connection)
+        if self.frames:
+            self.write_next(connection)
+        else:
+            self.drain_connections.append(connection)
 
     def remove_connection(self, connection):
         if connection in self.drain_connections:
