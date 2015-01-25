@@ -89,7 +89,9 @@ class Client(EventEmitter):
     def on_fork_data(self, connection, data):
         key = self._session._crypto.decrypt(data)
         connection.crypto.init_decrypt(key)
-        self._session.add_connection(connection)
+        def add_connection():
+            self._session.add_connection(connection)
+        current().sync(add_connection)
         self._connecting = None
         self.init_connection()
         connection.is_connected_session = True
