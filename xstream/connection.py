@@ -6,6 +6,7 @@ import time
 import logging
 import random
 import struct
+import socket
 from collections import deque
 from sevent import EventEmitter, current
 
@@ -44,6 +45,9 @@ class Connection(EventEmitter):
         self._connection = connection
         self._session = session
         self._crypto = connection.crypto
+
+        connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
 
         self._connection.on("close",self.on_close)
         self._connection.on("data",self.on_data)

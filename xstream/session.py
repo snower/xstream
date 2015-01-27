@@ -3,7 +3,6 @@
 # create by: snower
 
 import time
-import socket
 from sevent import EventEmitter, current
 from connection import Connection
 from center import Center
@@ -45,8 +44,6 @@ class Session(EventEmitter):
         connection = Connection(conn, self)
         self._connections.append(connection)
         self._center.add_connection(connection)
-        conn.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        conn.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
 
     def remove_connection(self, conn):
         for connection in self._connections:
