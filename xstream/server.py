@@ -28,16 +28,16 @@ class Server(EventEmitter):
         connection.once("data", self.on_data)
 
     def on_data(self, connection, data):
-        action = ord(data[0])
+        action = ord(data.read(1))
         if action == 0:
-            self.on_open_session(connection, data[1:])
+            self.on_open_session(connection, data)
         else:
-            self.on_fork_connection(connection, data[1:])
+            self.on_fork_connection(connection, data)
 
     def on_open_session(self, connection, data):
-        auth_key = data[:16]
+        auth_key = data.read(16)
         crypto = Crypto(self._crypto_key, self._crypto_alg)
-        crypto.init_decrypt(data[16:])
+        crypto.init_decrypt(data.read(64))
         key = crypto.init_encrypt()
         session = self.create_session(auth_key, crypto)
         connection.write(struct.pack("!H", session.id) + key)
@@ -58,10 +58,10 @@ class Server(EventEmitter):
         return session_id
 
     def on_fork_connection(self, connection, data):
-        session_id, = struct.unpack("!H", data[:2])
+        session_id, = struct.unpack("!H", data.read(2))
         if session_id in self._sessions:
             session = self._sessions[session_id]
-            data = session._crypto.decrypt(data[2:])
+            data = session._crypto.decrypt(data.read(80))
             auth_key = data[:16]
             if auth_key == session.auth_key:
                 key = data[16:]

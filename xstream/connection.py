@@ -7,37 +7,12 @@ import logging
 import random
 import struct
 import socket
-from collections import deque
-from sevent import EventEmitter, current
+from sevent import EventEmitter, current, Buffer
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
 ACTION_CLOSE  = 0x03
 ACTION_CLOSE_ACK = 0x04
-
-class Buffer(object):
-    def __init__(self):
-        self._buffer = ''
-        self._buffers = deque()
-        self._len = 0
-        self._index = 0
-
-    def write(self, data):
-        self._buffers.append(data)
-        self._len += len(data)
-
-    def read(self, size):
-        if len(self._buffer) - self._index < size:
-            self._buffer = self._buffer[self._index:] + "".join(self._buffers)
-            self._index = 0
-            self._buffers = deque()
-        data = self._buffer[self._index: self._index + size]
-        self._index += size
-        self._len -= size
-        return data
-
-    def __len__(self):
-        return self._len
 
 class Connection(EventEmitter):
     def __init__(self, connection, session):
@@ -65,7 +40,7 @@ class Connection(EventEmitter):
             current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
-        data = self._crypto.decrypt(data)
+        data = self._crypto.decrypt(data.read(-1))
         self._buffer.write(data)
         self.read()
         self._data_time = time.time()

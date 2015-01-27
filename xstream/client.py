@@ -56,8 +56,8 @@ class Client(EventEmitter):
         connection.write('\x00' + self._auth_key + key)
 
     def on_data(self, connection, data):
-        session_id, = struct.unpack("!H", data[:2])
-        connection.crypto.init_decrypt(data[2:])
+        session_id, = struct.unpack("!H", data.read(2))
+        connection.crypto.init_decrypt(data.read(64))
         self._session = Session(session_id, self._auth_key, False, connection.crypto)
         connection.close()
 
@@ -87,7 +87,7 @@ class Client(EventEmitter):
         logging.info("connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        key = self._session._crypto.decrypt(data)
+        key = self._session._crypto.decrypt(data.read(64))
         connection.crypto.init_decrypt(key)
         def add_connection():
             self._session.add_connection(connection)
