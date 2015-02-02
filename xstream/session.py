@@ -55,6 +55,7 @@ class Session(EventEmitter):
             self._status = STATUS_SUSPEND
             self.emit("suspend", self)
         elif self._status == STATUS_CLOSED:
+            self._center.close()
             self._center = None
 
     def on_frame(self, center, frame):
@@ -143,6 +144,7 @@ class Session(EventEmitter):
             for connection in self._connections:
                 connection.close()
         else:
+            self._center.close()
             self._center = None
         self.emit("close")
         self.remove_all_listeners()

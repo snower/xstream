@@ -32,6 +32,7 @@ class Center(EventEmitter):
         self.ttls = [0]
         self.ttl = 1000
         self.wait_reset_frames = None
+        self.closed = False
 
         self.write_ttl()
 
@@ -176,7 +177,7 @@ class Center(EventEmitter):
         if self.recv_frames and recv_index == self.recv_index:
             data = struct.pack("!II", recv_index, self.recv_frames[0].index)
             self.write_action(ACTION_RESEND, data, index=0)
-        if self.recv_frames:
+        if self.recv_frames and not self.closed:
             current().timeout(self.ttl / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
@@ -187,5 +188,10 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL, data, index=0)
         current().timeout(60, self.write_ttl)
 
+    def close(self):
+        if not self.closed:
+            self.closed = True
+            self.remove_all_listeners()
+
     def __del__(self):
-        self.remove_all_listeners()
+        self.close()

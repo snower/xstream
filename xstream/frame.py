@@ -30,7 +30,7 @@ class Frame(object):
         return int(time.time() * 1000) - self.timestamp
 
 class StreamFrame(object):
-    FRAME_LEN = 16 * 1024
+    FRAME_LEN = 4 * 1024
 
     def __init__(self, stream_id, flag, action, data):
         self.stream_id = stream_id
