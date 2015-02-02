@@ -3,6 +3,7 @@
 # create by: snower
 
 import time
+import logging
 import struct
 from collections import deque
 import bisect
@@ -160,6 +161,7 @@ class Center(EventEmitter):
                 self.ttls.pop(0)
             self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
             self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 4000)
+            logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
 
     def write_action(self, action, data, index=None):
         frame = self.create_frame(data, action = action, index = index)
