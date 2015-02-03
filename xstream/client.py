@@ -34,12 +34,15 @@ class Client(EventEmitter):
 
     def open(self):
         self.opening = True
+        self._connections = []
+        self._connecting = None
         self._auth_key = self.get_auth_key()
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)
         connection.on("data", self.on_data)
+        connection.on("close", self.on_close)
 
     def reopen(self, callback=None):
         if callable(callback):
@@ -71,6 +74,12 @@ class Client(EventEmitter):
         self.init_connection()
         logging.info("xstream client %s session open", self)
 
+    def on_close(self, connection):
+        self._session = None
+        self.opening = False
+        self.running = False
+        logging.info("xstream connection close %s %s", connection, len(self._connections))
+
     def fork_connection(self):
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
@@ -86,7 +95,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         data = self._session._crypto.encrypt(self._session.auth_key + key)
         connection.write('\x01' + struct.pack("!H", self._session.id) + data)
-        logging.info("connection connect %s", connection)
+        logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
         key = self._session._crypto.decrypt(data.read(64))
@@ -97,7 +106,7 @@ class Client(EventEmitter):
         self._connecting = None
         self.init_connection()
         connection.is_connected_session = True
-        logging.info("connection ready %s", connection)
+        logging.info("xstream connection ready %s", connection)
 
     def on_fork_close(self, connection):
         self._session.remove_connection(connection)
@@ -107,7 +116,7 @@ class Client(EventEmitter):
             self._connecting = None
         if connection.is_connected_session and self.running:
             current().timeout(1, self.init_connection)
-        logging.info("connection close %s %s", connection, len(self._connections))
+        logging.info("xstream connection close %s %s", connection, len(self._connections))
 
     def session(self, callback=None):
         if self._session is None:
