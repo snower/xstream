@@ -38,6 +38,7 @@ class Client(EventEmitter):
         self._connecting = None
         self._auth_key = self.get_auth_key()
         connection = tcp.Socket()
+        setattr(connection, "is_connected", False)
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)
@@ -56,6 +57,7 @@ class Client(EventEmitter):
             connection.close()
 
     def on_connect(self, connection):
+        connection.is_connected = True
         key = connection.crypto.init_encrypt()
         connection.write('\x00' + self._auth_key + key)
 
@@ -75,10 +77,11 @@ class Client(EventEmitter):
         logging.info("xstream client %s session open", self)
 
     def on_close(self, connection):
-        self._session = None
-        self.opening = False
-        self.running = False
-        logging.info("xstream connection close %s %s", connection, len(self._connections))
+        if not connection.is_connected:
+            self._session = None
+            self.opening = False
+            self.running = False
+            logging.info("xstream connection close %s %s", connection, len(self._connections))
 
     def fork_connection(self):
         connection = tcp.Socket()
