@@ -111,6 +111,8 @@ class Client(EventEmitter):
         if self._session is None:
             self.reopen(callback)
         elif callable(callback):
+            if not self._connections:
+                self.init_connection()
             callback(self, self._session)
         return self._session
 
