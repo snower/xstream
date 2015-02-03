@@ -159,7 +159,7 @@ class Center(EventEmitter):
             start_time, = struct.unpack("!I", data)
             if len(self.ttls) >=3:
                 self.ttls.pop(0)
-            self.ttls.append(int(time.time() * 1000) & 0xffffffff - start_time)
+            self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 4000)
             logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
 
