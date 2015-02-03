@@ -43,7 +43,7 @@ class Server(EventEmitter):
         connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
-        logging.info("session open %s", session)
+        logging.info("xstream session open %s", session)
 
     def create_session(self, auth_key, crypto):
         session = Session(self.get_session_id(), auth_key, True, crypto)
@@ -76,12 +76,12 @@ class Server(EventEmitter):
 
                 def on_fork_connection_close(connection):
                     session.remove_connection(connection)
-                    logging.info("connection close %s %s", session, connection)
+                    logging.info("xstream connection close %s %s", session, connection)
                 connection.on("close", on_fork_connection_close)
-                logging.info("connection connect %s %s", session, connection)
+                logging.info("xstream connection connect %s %s", session, connection)
                 return
         connection.close()
-        logging.info("connection refuse %s %s", session_id, connection)
+        logging.info("xstream connection refuse %s %s", session_id, connection)
 
     def on_session_suspend(self, session):
         current().timeout(30, self.on_session_close, session)
@@ -90,4 +90,4 @@ class Server(EventEmitter):
         if not session._connections:
             session = self._sessions.pop(session.id)
             session.close()
-            logging.info("session close %s", session)
+            logging.info("xstream session close %s", session)

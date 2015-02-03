@@ -3,6 +3,7 @@
 # create by: snower
 
 import time
+import logging
 from sevent import EventEmitter, current
 from connection import Connection
 from center import Center
@@ -54,6 +55,7 @@ class Session(EventEmitter):
         if not self._connections and self._status == STATUS_OPENING:
             self._status = STATUS_SUSPEND
             self.emit("suspend", self)
+            logging.info("xstream session %s suspend", self)
         elif self._status == STATUS_CLOSED:
             self._center.close()
             self._center = None
@@ -147,6 +149,7 @@ class Session(EventEmitter):
             self._center.close()
             self._center = None
         self.emit("close")
+        logging.info("xstream session %s close", self)
         self.remove_all_listeners()
 
     def __del__(self):

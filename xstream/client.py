@@ -46,6 +46,7 @@ class Client(EventEmitter):
             self.once("session", callback)
         if not self.opening:
             self.open()
+        logging.info("xstream client %s session reopen", self)
 
     def close(self):
         for connection in self._connections:
@@ -68,6 +69,7 @@ class Client(EventEmitter):
         self._session.on("wakeup", self.on_session_wakeup)
         self._session.on("suspend", self.on_session_suspend)
         self.init_connection()
+        logging.info("xstream client %s session open", self)
 
     def fork_connection(self):
         connection = tcp.Socket()
@@ -105,7 +107,7 @@ class Client(EventEmitter):
             self._connecting = None
         if connection.is_connected_session and self.running:
             current().timeout(1, self.init_connection)
-        logging.info("connection close %s", connection)
+        logging.info("connection close %s %s", connection, len(self._connections))
 
     def session(self, callback=None):
         if self._session is None:
@@ -123,11 +125,14 @@ class Client(EventEmitter):
                 self._session = None
                 self.opening = False
                 self.running = False
+                logging.info("xstream client %s session close", self)
         current().timeout(2, on_suspend)
 
     def on_session_sleeping(self, session):
         self.running = False
+        logging.info("xstream client %s session sleeping", self)
 
     def on_session_wakeup(self, session):
         self.running = True
         self.init_connection()
+        logging.info("xstream client %s session wakeup", self)

@@ -194,6 +194,7 @@ class Center(EventEmitter):
         if not self.closed:
             self.closed = True
             self.remove_all_listeners()
+            logging.info("xstream session %s center %s close", self.session, self)
 
     def __del__(self):
         self.close()
