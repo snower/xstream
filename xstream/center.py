@@ -122,7 +122,7 @@ class Center(EventEmitter):
             bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().timeout(self.ttl * 0.5 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 0.7 / 1000, self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -160,7 +160,7 @@ class Center(EventEmitter):
             if len(self.ttls) >=3:
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
-            self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 100), 4000)
+            self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 50), 4000)
             logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
 
     def write_action(self, action, data, index=None):
@@ -180,7 +180,7 @@ class Center(EventEmitter):
             data = struct.pack("!II", recv_index, self.recv_frames[0].index)
             self.write_action(ACTION_RESEND, data, index=0)
         if self.recv_frames and not self.closed:
-            current().timeout(self.ttl / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * 1.2 / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
