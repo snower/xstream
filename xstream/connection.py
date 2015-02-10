@@ -111,7 +111,7 @@ class Connection(EventEmitter):
             if time.time() - self._data_time >= 30:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
-                current().timeout(30, self.on_ping_timeout)
+                current().timeout(5, self.on_ping_timeout)
             else:
                 current().timeout(30, self.on_ping_loop)
 
