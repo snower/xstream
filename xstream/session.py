@@ -64,9 +64,10 @@ class Session(EventEmitter):
         self._data_time = time.time()
         if frame.action == 0:
             stream_frame = StreamFrame.loads(frame.data)
-            if stream_frame.stream_id not in self._streams:
+            if stream_frame.action == 0x01:
                 self.create_stream(stream_frame.stream_id)
-            self._streams[stream_frame.stream_id].on_frame(stream_frame)
+            if stream_frame.stream_id in self._streams:
+                self._streams[stream_frame.stream_id].on_frame(stream_frame)
         else:
             self.on_action(frame.action, frame.data)
 
@@ -89,6 +90,8 @@ class Session(EventEmitter):
         stream = self.create_stream()
         if callable(callback):
             callback(self, stream)
+        frame = StreamFrame(stream.id, 0x00, 0x01, '')
+        self.write(frame)
         return stream
 
     def close_stream(self, stream):

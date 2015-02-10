@@ -7,8 +7,10 @@ from collections import deque
 from sevent import EventEmitter, current
 from frame import StreamFrame
 
-ACTION_CLIOSE = 1
-ACTION_CLIOSED = 2
+ACTION_OPEN  = 1
+ACTION_OPENED = 2
+ACTION_CLIOSE = 3
+ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
     def __init__(self, stream_id, session):
@@ -62,7 +64,11 @@ class Stream(EventEmitter):
         self._session.write(frame)
 
     def on_action(self, action, data):
-        if action == ACTION_CLIOSE:
+        if action == ACTION_OPEN:
+            self.write_action(ACTION_OPENED)
+        elif action == ACTION_OPENED:
+            pass
+        elif action == ACTION_CLIOSE:
             self.write_action(ACTION_CLIOSED)
             self.do_close()
         elif action == ACTION_CLIOSED:
