@@ -53,7 +53,7 @@ class Center(EventEmitter):
         if index is None:
             if self.send_index >= 0xffffffff:
                 self.write_action(ACTION_INDEX_RESET, index=self.send_index)
-                self.wait_reset_frames = deque()
+                self.wait_reset_frames = []
                 self.send_index = 1
             frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
             self.send_index += 1
@@ -67,7 +67,7 @@ class Center(EventEmitter):
             bisect.insort(self.frames, frame)
             self.write_frame()
         else:
-            self.wait_reset_frames.append(frame)
+            bisect.insort(self.wait_reset_frames, frame)
 
     def write_frame(self):
         for _ in range(len(self.drain_connections)):
@@ -169,7 +169,7 @@ class Center(EventEmitter):
             bisect.insort(self.frames, frame)
             self.write_frame()
         else:
-            self.wait_reset_frames.append(frame)
+            bisect.insort(self.wait_reset_frames, frame)
 
     def write_ack(self):
         data = struct.pack("!I", self.recv_index - 1)
