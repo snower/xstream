@@ -52,7 +52,7 @@ class Center(EventEmitter):
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
             if self.send_index >= 0xffffffff:
-                self.write_action(ACTION_INDEX_RESET)
+                self.write_action(ACTION_INDEX_RESET, index=self.send_index)
                 self.wait_reset_frames = deque()
                 self.send_index = 1
             frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
@@ -145,7 +145,7 @@ class Center(EventEmitter):
                     bisect.insort(self.frames, frame)
                     self.write_frame()
         elif action == ACTION_INDEX_RESET:
-            self.write_action(ACTION_INDEX_RESET)
+            self.write_action(ACTION_INDEX_RESET_ACK)
             self.recv_index = 0
         elif action == ACTION_INDEX_RESET_ACK:
             self.send_frames = []
