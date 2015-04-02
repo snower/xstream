@@ -110,7 +110,7 @@ class Session(EventEmitter):
             self._center.on_action(action, data)
 
     def on_sleep_loop(self):
-        if time.time() - self._data_time > 900:
+        if time.time() - self._data_time > 300:
             old_write = self.write
             old_on_frame = self.on_frame
             def wakeup():

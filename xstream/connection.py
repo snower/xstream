@@ -36,7 +36,7 @@ class Connection(EventEmitter):
         self._ping_time = 0
 
         if not self._session._is_server:
-            current().timeout(random.randint(300, 900), self.on_expried)
+            current().timeout(random.randint(180, 900), self.on_expried)
             current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
