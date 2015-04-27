@@ -3,6 +3,7 @@
 # create by: snower
 
 import time
+import weakref
 from collections import deque
 from sevent import EventEmitter, current
 from frame import StreamFrame
@@ -23,6 +24,7 @@ class Stream(EventEmitter):
         self._recv_buffer = None
         self._send_buffer = None
         self._data_time = time.time()
+        self._send_frames = deque()
 
         self.loop.timeout(300, self.on_time_out_loop)
 
@@ -44,11 +46,24 @@ class Stream(EventEmitter):
         else:
             self.on_action(frame.action, frame.data)
 
+    def remove_send_frame(self, frame):
+        try:
+            self._send_frames.remove(frame)
+        except:pass
+
+    def remove_all_send_frames(self):
+        for frame in self._send_frames:
+            try:
+                frame.close()
+            except weakref.ReferenceError:
+                pass
+
     def on_write(self):
         data = "".join(self._send_buffer)
         for i in range(int(len(data) / StreamFrame.FRAME_LEN) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * StreamFrame.FRAME_LEN: (i+1) * StreamFrame.FRAME_LEN])
-            self._session.write(frame)
+            frame = self._session.write(frame)
+            self._send_frames.append(weakref.proxy(frame, self.remove_send_frame))
         self._send_buffer = None
 
     def write(self, data):
@@ -70,6 +85,7 @@ class Stream(EventEmitter):
             pass
         elif action == ACTION_CLIOSE:
             self.write_action(ACTION_CLIOSED)
+            self.remove_all_send_frames()
             self.do_close()
         elif action == ACTION_CLIOSED:
             self.do_close()
@@ -77,6 +93,7 @@ class Stream(EventEmitter):
     def close(self):
         if self._closed:
             return
+        self.remove_all_send_frames()
         self._closed = True
         self.write_action(ACTION_CLIOSE)
 

@@ -68,6 +68,7 @@ class Center(EventEmitter):
             self.write_frame()
         else:
             bisect.insort(self.wait_reset_frames, frame)
+        return frame
 
     def write_frame(self):
         for _ in range(len(self.drain_connections)):

@@ -29,6 +29,9 @@ class Frame(object):
     def ttl(self):
         return int(time.time() * 1000) - self.timestamp
 
+    def close(self):
+        self.data = ''
+
 class StreamFrame(object):
     FRAME_LEN = 4 * 1024
 

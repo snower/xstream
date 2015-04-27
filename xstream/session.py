@@ -63,6 +63,8 @@ class Session(EventEmitter):
     def on_frame(self, center, frame):
         self._data_time = time.time()
         if frame.action == 0:
+            if not frame.data:
+                return
             stream_frame = StreamFrame.loads(frame.data)
             if stream_frame.action == 0x01:
                 self.create_stream(stream_frame.stream_id)
@@ -103,7 +105,7 @@ class Session(EventEmitter):
     def write(self, frame):
         self._data_time = time.time()
         data = frame.dumps()
-        self._center.write(data)
+        return self._center.write(data)
 
     def on_action(self, action, data):
         if action & 0x8000 == 0:
