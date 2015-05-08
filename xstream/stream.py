@@ -76,7 +76,7 @@ class Stream(EventEmitter):
 
     def write_action(self, action, data=''):
         frame = StreamFrame(self._stream_id, 0, action, data)
-        self._session.write(frame)
+        self.loop.sync(lambda :self._session.write(frame))
 
     def on_action(self, action, data):
         if action == ACTION_OPEN:
