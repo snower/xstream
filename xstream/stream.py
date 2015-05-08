@@ -93,7 +93,6 @@ class Stream(EventEmitter):
     def close(self):
         if self._closed:
             return
-        self.remove_all_send_frames()
         self._closed = True
         self.write_action(ACTION_CLIOSE)
 
