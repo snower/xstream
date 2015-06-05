@@ -33,7 +33,7 @@ class Frame(object):
         self.data = ''
 
 class StreamFrame(object):
-    FRAME_LEN = 4 * 1024
+    FRAME_LEN = 4 * 1024 - 20
 
     def __init__(self, stream_id, flag, action, data):
         self.stream_id = stream_id
