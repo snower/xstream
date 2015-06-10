@@ -8,6 +8,7 @@ import random
 import struct
 import socket
 from sevent import EventEmitter, current, Buffer
+from frame import StreamFrame
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
@@ -61,7 +62,7 @@ class Connection(EventEmitter):
             if self._wait_head:
                 self._wait_head = False
                 self._data_len, = struct.unpack("!H", data)
-                if self._data_len > 4116:
+                if self._data_len > StreamFrame.FRAME_LEN + 20:
                     logging.info("connection %s  data len error", self)
                     return self._connection.close()
             else:
