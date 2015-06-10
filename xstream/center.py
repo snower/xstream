@@ -55,6 +55,7 @@ class Center(EventEmitter):
                 self.write_action(ACTION_INDEX_RESET, index=self.send_index)
                 self.wait_reset_frames = []
                 self.send_index = 1
+                logging.info("stream session %s center %s index reset", self.session, self)
             frame = Frame(1, self.session.id, flag, self.send_index, None, action, data)
             self.send_index += 1
         else:
@@ -148,12 +149,14 @@ class Center(EventEmitter):
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET_ACK)
             self.recv_index = 0
+            logging.info("stream session %s center %s index reset action", self.session, self)
         elif action == ACTION_INDEX_RESET_ACK:
             self.send_frames = []
             self.frames += self.wait_reset_frames
             self.wait_reset_frames = None
             if self.frames:
                 self.write_frame()
+            logging.info("stream session %s center %s index reset ack action", self.session, self)
         elif action == ACTION_TTL:
             self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
@@ -166,7 +169,7 @@ class Center(EventEmitter):
 
     def write_action(self, action, data, index=None):
         frame = self.create_frame(data, action = action, index = index)
-        if self.wait_reset_frames is None:
+        if frame.index == 0 or self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
             self.write_frame()
         else:
