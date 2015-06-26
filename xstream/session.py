@@ -16,13 +16,14 @@ STATUS_SLEEPING = 0x04
 STATUS_CLOSED = 0x05
 
 class Session(EventEmitter):
-    def __init__(self, session_id, auth_key, is_server=False, crypto=None):
+    def __init__(self, session_id, auth_key, is_server=False, crypto=None, mss=None):
         super(Session, self).__init__()
 
         self._is_server = is_server
         self._session_id = session_id
         self._auth_key = auth_key
         self._crypto = crypto
+        self._mss = mss
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -83,7 +84,7 @@ class Session(EventEmitter):
     def create_stream(self, stream_id = None):
         if stream_id is None:
             stream_id = self.get_stream_id()
-        stream = Stream(stream_id, self)
+        stream = Stream(stream_id, self, self._mss)
         self._streams[stream_id] = stream
         self.emit("stream", self, stream)
         return stream

@@ -14,12 +14,13 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session):
+    def __init__(self, stream_id, session, mss=None):
         super(Stream, self).__init__()
 
         self.loop = current()
         self._stream_id = stream_id
         self._session = session
+        self._mss = mss or StreamFrame.FRAME_LEN
         self._closed = False
         self._recv_buffer = None
         self._send_buffer = None
@@ -60,8 +61,8 @@ class Stream(EventEmitter):
 
     def on_write(self):
         data = "".join(self._send_buffer)
-        for i in range(int(len(data) / StreamFrame.FRAME_LEN) + 1):
-            frame = StreamFrame(self._stream_id, 0, 0, data[i * StreamFrame.FRAME_LEN: (i+1) * StreamFrame.FRAME_LEN])
+        for i in range(int(len(data) / self._mss) + 1):
+            frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
             frame = self._session.write(frame)
             self._send_frames.append(weakref.proxy(frame, self.remove_send_frame))
         self._send_buffer = None

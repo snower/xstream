@@ -4,6 +4,7 @@
 
 import logging
 import struct
+import socket
 from sevent import EventEmitter, tcp, current
 from session import Session
 from crypto import Crypto
@@ -39,14 +40,15 @@ class Server(EventEmitter):
         crypto = Crypto(self._crypto_key, self._crypto_alg)
         crypto.init_decrypt(data.read(64))
         key = crypto.init_encrypt()
-        session = self.create_session(auth_key, crypto)
+        session = self.create_session(connection, auth_key, crypto)
         connection.write(struct.pack("!H", session.id) + key)
         session.on("suspend", self.on_session_suspend)
         self.emit("session", self, session)
         logging.info("xstream session open %s", session)
 
-    def create_session(self, auth_key, crypto):
-        session = Session(self.get_session_id(), auth_key, True, crypto)
+    def create_session(self, connection, auth_key, crypto):
+        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 4 - 32
+        session = Session(self.get_session_id(), auth_key, True, crypto, mss)
         self._sessions[session.id] = session
         return session
 

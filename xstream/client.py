@@ -5,6 +5,7 @@
 import time
 import logging
 import struct
+import socket
 from sevent import EventEmitter, current, tcp
 from session import Session
 from crypto import Crypto, rand_string
@@ -64,7 +65,8 @@ class Client(EventEmitter):
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data.read(2))
         connection.crypto.init_decrypt(data.read(64))
-        self._session = Session(session_id, self._auth_key, False, connection.crypto)
+        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 4 - 32
+        self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
         connection.close()
 
         self.opening = False
