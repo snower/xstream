@@ -161,7 +161,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
-            if len(self.ttls) >=3:
+            if len(self.ttls) >=7:
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 50), 4000)
