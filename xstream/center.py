@@ -22,6 +22,7 @@ class Center(EventEmitter):
         super(Center, self).__init__()
 
         self.session = session
+        self.ready_streams = []
         self.frames = []
         self.recv_frames = []
         self.recv_index = 1
@@ -36,6 +37,7 @@ class Center(EventEmitter):
         self.closed = False
 
         self.write_ttl()
+        current().timeout(2, self.on_ready_streams_lookup)
 
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
@@ -61,6 +63,20 @@ class Center(EventEmitter):
         else:
             frame = Frame(1, self.session.id, flag, index, None, action, data)
         return frame
+
+    def ready_write(self, stream, is_ready=True):
+        if not is_ready:
+            if stream in self.ready_streams:
+                self.ready_streams.remove(stream)
+            return
+
+        if stream not in self.ready_streams:
+            bisect.insort(self.ready_streams, stream)
+
+        if self.drain_connections:
+            stream = self.ready_streams[0]
+            if not stream.do_write():
+                self.ready_streams.pop(0)
 
     def write(self, data):
         frame = self.create_frame(data)
@@ -128,6 +144,11 @@ class Center(EventEmitter):
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
+        if not self.frames and self.ready_streams:
+            stream = self.ready_streams[0]
+            if not stream.do_write():
+                self.ready_streams.pop(0)
+
         if self.frames:
             self.write_next(connection)
         else:
@@ -161,7 +182,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
-            if len(self.ttls) >=7:
+            if len(self.ttls) >= 7:
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 50), 4000)
@@ -192,7 +213,13 @@ class Center(EventEmitter):
         for i in range(3):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
-        current().timeout(60, self.write_ttl)
+        if not self.closed:
+            current().timeout(60, self.write_ttl)
+
+    def on_ready_streams_lookup(self):
+        self.ready_streams = sorted(self.ready_streams)
+        if not self.closed:
+            current().timeout(2, self.on_ready_streams_lookup)
 
     def close(self):
         if not self.closed:

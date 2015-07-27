@@ -3,7 +3,6 @@
 # create by: snower
 
 import time
-import weakref
 from collections import deque
 from sevent import EventEmitter, current
 from frame import StreamFrame
@@ -22,10 +21,18 @@ class Stream(EventEmitter):
         self._session = session
         self._mss = mss or StreamFrame.FRAME_LEN
         self._closed = False
-        self._recv_buffer = None
-        self._send_buffer = None
         self._data_time = time.time()
+
+        self._send_buffer = None
         self._send_frames = deque()
+        self._send_frame_count = 0
+        self._send_data_len = 0
+        self._send_time = time.time()
+
+        self._recv_buffer = None
+        self._recv_frame_count = 0
+        self._recv_data_len = 0
+        self._recv_time = time.time()
 
         self.loop.timeout(300, self.on_time_out_loop)
 
@@ -33,17 +40,25 @@ class Stream(EventEmitter):
     def id(self):
         return self._stream_id
 
+    @property
+    def priority(self):
+        return self._send_frame_count * 2.0 / (1 + time.time() - self._send_time)
+
     def on_data(self):
         self.emit("data", self, "".join(self._recv_buffer))
         self._recv_buffer = None
 
     def on_frame(self, frame):
         self._data_time = time.time()
+
         if frame.action == 0:
             if self._recv_buffer is None:
                 self._recv_buffer = deque()
                 self.loop.sync(self.on_data)
             self._recv_buffer.append(frame.data)
+            self._recv_frame_count += 1
+            self._recv_data_len += len(frame)
+            self._recv_time = time.time()
         else:
             self.on_action(frame.action, frame.data)
 
@@ -53,22 +68,37 @@ class Stream(EventEmitter):
         except:pass
 
     def remove_all_send_frames(self):
-        for frame in self._send_frames:
-            try:
-                frame.close()
-            except weakref.ReferenceError:
-                pass
+        self._send_frames = deque()
+
+    def do_write(self):
+        if self._closed:
+            return False
+
+        if not self._send_frames:
+            return False
+
+        frame = self._send_frames.popleft()
+        self._session.write(frame)
+        self._send_frame_count += 1
+        self._send_data_len += len(frame)
+        self._send_time = time.time()
+        return bool(self._send_frames)
 
     def on_write(self):
+        is_ready = bool(self._send_frames)
+
         data = "".join(self._send_buffer)
         for i in range(int(len(data) / self._mss) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
-            frame = self._session.write(frame)
-            self._send_frames.append(weakref.proxy(frame, self.remove_send_frame))
+            self._send_frames.append(frame)
         self._send_buffer = None
+
+        if not is_ready:
+            self._session.ready_write(self)
 
     def write(self, data):
         self._data_time = time.time()
+
         if not self._closed:
             if self._send_buffer is None:
                 self._send_buffer = deque()
@@ -100,6 +130,9 @@ class Stream(EventEmitter):
     def do_close(self):
         self._closed = True
         def do_close():
+            if self._send_frames:
+                self._session.ready_write(self, False)
+
             self.emit("close", self)
             if self._session:
                 self._session.close_stream(self)
@@ -119,3 +152,6 @@ class Stream(EventEmitter):
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
+
+    def __cmp__(self, other):
+        return cmp(self.priority, other.priority)

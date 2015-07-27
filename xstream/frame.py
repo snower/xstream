@@ -47,3 +47,6 @@ class StreamFrame(object):
     @classmethod
     def loads(cls, data):
         return StreamFrame(*struct.unpack("!HBB", data[:4]), data=data[4:])
+
+    def __len__(self):
+        return len(self.data)
