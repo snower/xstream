@@ -82,8 +82,7 @@ class Stream(EventEmitter):
                 self._send_frame_count += 1
                 self._send_data_len += len(frame)
                 self._send_time = time.time()
-            if not self._send_frames:
-                self._send_is_set_ready = False
+            self._send_is_set_ready = bool(self._send_frames)
             return self._send_is_set_ready
         self._send_is_set_ready = False
         return False
