@@ -28,6 +28,7 @@ class Stream(EventEmitter):
         self._send_frame_count = 0
         self._send_data_len = 0
         self._send_time = time.time()
+        self._send_is_set_ready = False
 
         self._recv_buffer = None
         self._recv_frame_count = 0
@@ -42,7 +43,10 @@ class Stream(EventEmitter):
 
     @property
     def priority(self):
-        return self._send_frame_count * 2.0 / (1 + time.time() - self._send_time)
+        if self._send_is_set_ready:
+            return self._send_frame_count * 2.0 / (1 + time.time() - self._send_time)
+        else:
+            return self._send_frame_count * 2.0
 
     def on_data(self):
         self.emit("data", self, "".join(self._recv_buffer))
@@ -71,30 +75,29 @@ class Stream(EventEmitter):
         self._send_frames = deque()
 
     def do_write(self):
-        if self._closed:
-            return False
-
-        if not self._send_frames:
-            return False
-
-        frame = self._send_frames.popleft()
-        self._session.write(frame)
-        self._send_frame_count += 1
-        self._send_data_len += len(frame)
-        self._send_time = time.time()
-        return bool(self._send_frames)
+        if not self._closed:
+            if self._send_frames:
+                frame = self._send_frames.popleft()
+                self._session.write(frame)
+                self._send_frame_count += 1
+                self._send_data_len += len(frame)
+                self._send_time = time.time()
+            if not self._send_frames:
+                self._send_is_set_ready = False
+            return self._send_is_set_ready
+        self._send_is_set_ready = False
+        return False
 
     def on_write(self):
-        is_ready = bool(self._send_frames)
-
         data = "".join(self._send_buffer)
         for i in range(int(len(data) / self._mss) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
             self._send_frames.append(frame)
         self._send_buffer = None
 
-        if not is_ready:
+        if not self._send_is_set_ready and self._send_frames:
             self._session.ready_write(self)
+            self._send_is_set_ready = True
 
     def write(self, data):
         self._data_time = time.time()
@@ -132,6 +135,7 @@ class Stream(EventEmitter):
         def do_close():
             if self._send_frames:
                 self._session.ready_write(self, False)
+                self._send_is_set_ready = False
 
             self.emit("close", self)
             if self._session:
