@@ -95,8 +95,9 @@ class Stream(EventEmitter):
         self._send_buffer = None
 
         if not self._send_is_set_ready and self._send_frames:
-            self._session.ready_write(self)
+            self._send_time = time.time()
             self._send_is_set_ready = True
+            self._session.ready_write(self)
 
     def write(self, data):
         self._data_time = time.time()
