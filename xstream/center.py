@@ -73,7 +73,7 @@ class Center(EventEmitter):
         if stream not in self.ready_streams:
             bisect.insort(self.ready_streams, stream)
 
-        if self.drain_connections:
+        if self.drain_connections and self.wait_reset_frames is None:
             stream = self.ready_streams[0]
             if not stream.do_write():
                 self.ready_streams.pop(0)
@@ -144,7 +144,7 @@ class Center(EventEmitter):
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
-        while not self.frames and self.ready_streams:
+        while not self.frames and self.wait_reset_frames is None and self.ready_streams:
             stream = self.ready_streams[0]
             if not stream.do_write():
                 self.ready_streams.pop(0)
@@ -175,6 +175,12 @@ class Center(EventEmitter):
             self.send_frames = []
             self.frames += self.wait_reset_frames
             self.wait_reset_frames = None
+            
+            if self.ready_streams:
+                stream = self.ready_streams[0]
+                if not stream.do_write():
+                    self.ready_streams.pop(0)
+                    
             if self.frames:
                 self.write_frame()
             logging.info("stream session %s center %s index reset ack action", self.session, self)
