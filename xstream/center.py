@@ -226,7 +226,7 @@ class Center(EventEmitter):
     def on_ready_streams_lookup(self):
         self.ready_streams = sorted(self.ready_streams)
         if not self.closed:
-            current().timeout(2, self.on_ready_streams_lookup)
+            current().timeout(1, self.on_ready_streams_lookup)
 
     def close(self):
         if not self.closed:
