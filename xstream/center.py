@@ -71,7 +71,8 @@ class Center(EventEmitter):
             return
 
         if stream not in self.ready_streams:
-            bisect.insort(self.ready_streams, stream)
+            self.ready_streams.append(stream)
+            self.ready_streams = sorted(self.ready_streams)
 
         if self.drain_connections and self.wait_reset_frames is None:
             stream = self.ready_streams[0]
