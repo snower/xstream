@@ -21,6 +21,7 @@ class Stream(EventEmitter):
         self._session = session
         self._mss = mss or StreamFrame.FRAME_LEN
         self._closed = False
+        self._start_time = time.time()
         self._data_time = time.time()
 
         self._send_buffer = None
@@ -158,4 +159,7 @@ class Stream(EventEmitter):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
 
     def __cmp__(self, other):
-        return cmp(self.priority, other.priority)
+        c = cmp(self.priority, other.priority)
+        if c == 0:
+            c = cmp(self._start_time, other._start_time)
+        return c
