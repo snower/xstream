@@ -45,7 +45,15 @@ class Center(EventEmitter):
         if self.frames:
             self.write_next(connection)
         else:
-            self.drain_connections.append(connection)
+            while not self.frames and self.wait_reset_frames is None and self.ready_streams:
+                stream = self.ready_streams[0]
+                if not stream.do_write():
+                    self.ready_streams.pop(0)
+
+            if self.frames:
+                self.write_next(connection)
+            else:
+                self.drain_connections.append(connection)
 
     def remove_connection(self, connection):
         if connection in self.drain_connections:
