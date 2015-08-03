@@ -37,7 +37,7 @@ class Connection(EventEmitter):
         self._ping_time = 0
 
         if not self._session._is_server:
-            current().timeout(random.randint(180, 900), self.on_expried)
+            current().timeout(random.randint(900, 7200), self.on_expried)
             current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
@@ -112,17 +112,18 @@ class Connection(EventEmitter):
             if time.time() - self._data_time >= 30:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
-                current().timeout(5, self.on_ping_timeout)
+                current().timeout(8, self.on_ping_timeout)
             else:
                 current().timeout(30, self.on_ping_loop)
 
     def on_ping_timeout(self):
-        if self._ping_time == 0:
-            self._closed = True
-            self._connection.close()
-            logging.info("connection %s ping timeout", self)
-        elif not self._closed:
-            current().timeout(30, self.on_ping_loop)
+        if not self._closed:
+            if self._ping_time == 0:
+                self._closed = True
+                self._connection.close()
+                logging.info("connection %s ping timeout", self)
+            else:
+                current().timeout(30, self.on_ping_loop)
 
     def close(self):
         if self._closed:

@@ -71,10 +71,8 @@ class Client(EventEmitter):
 
         self.opening = False
         self.running = True
+        self._session.on("close", self.on_session_close)
         self.emit("session", self, self._session)
-        self._session.on("sleeping", self.on_session_sleeping)
-        self._session.on("wakeup", self.on_session_wakeup)
-        self._session.on("suspend", self.on_session_suspend)
         self.init_connection()
         logging.info("xstream client %s session open", self)
 
@@ -132,21 +130,11 @@ class Client(EventEmitter):
             callback(self, self._session)
         return self._session
 
-    def on_session_suspend(self, session):
-        def on_suspend():
-            if not self._connections and not self._connecting:
-                self._session.close()
+    def on_session_close(self, session):
+        def on_close():
+            if self._session == session:
                 self._session = None
                 self.opening = False
                 self.running = False
-                logging.info("xstream client %s session close", self)
-        current().timeout(2, on_suspend)
-
-    def on_session_sleeping(self, session):
-        self.running = False
-        logging.info("xstream client %s session sleeping", self)
-
-    def on_session_wakeup(self, session):
-        self.running = True
-        self.init_connection()
-        logging.info("xstream client %s session wakeup", self)
+            logging.info("xstream client %s session close", self)
+        current().sync(on_close)

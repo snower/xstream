@@ -11,9 +11,7 @@ from stream import Stream, StreamFrame
 
 STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
-STATUS_SUSPEND = 0x03
-STATUS_SLEEPING = 0x04
-STATUS_CLOSED = 0x05
+STATUS_CLOSED = 0x03
 
 class Session(EventEmitter):
     def __init__(self, session_id, auth_key, is_server=False, crypto=None, mss=None):
@@ -32,7 +30,7 @@ class Session(EventEmitter):
         self._status = STATUS_INITED
 
         self._center.on("frame", self.on_frame)
-        current().timeout(60, self.on_sleep_loop)
+        current().timeout(60, self.on_check_loop)
 
     @property
     def id(self):
@@ -43,9 +41,12 @@ class Session(EventEmitter):
         return self._auth_key
 
     def add_connection(self, conn):
-        connection = Connection(conn, self)
-        self._connections.append(connection)
-        self._center.add_connection(connection)
+        if self._status == STATUS_CLOSED:
+            conn.close()
+        else:
+            connection = Connection(conn, self)
+            self._connections.append(connection)
+            self._center.add_connection(connection)
 
     def remove_connection(self, conn):
         for connection in self._connections:
@@ -53,13 +54,17 @@ class Session(EventEmitter):
                 self._center.remove_connection(connection)
                 self._connections.remove(connection)
                 break
-        if not self._connections and self._status == STATUS_OPENING:
-            self._status = STATUS_SUSPEND
-            self.emit("suspend", self)
-            logging.info("xstream session %s suspend", self)
-        elif self._status == STATUS_CLOSED:
+
+        def on_exit():
+            if not self._connections:
+                self.do_close()
+        if not self._connections:
+            current().timeout(8, on_exit)
+
+        if self._status == STATUS_CLOSED:
             self._center.close()
             self._center = None
+            self.emit("close", self)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
@@ -115,30 +120,11 @@ class Session(EventEmitter):
         if action & 0x8000 == 0:
             self._center.on_action(action, data)
 
-    def on_sleep_loop(self):
-        if time.time() - self._data_time > 300:
-            old_write = self.write
-            old_on_frame = self.on_frame
-            def wakeup():
-                self._status = STATUS_OPENING
-                self.emit("wakeup", self)
-                current().timeout(60, self.on_sleep_loop)
-
-            def write(*args, **kwargs):
-                wakeup()
-                self.write = old_write
-                return self.write(*args, **kwargs)
-
-            def on_frame(*args, **kwargs):
-                wakeup()
-                self.on_frame = old_on_frame
-                return self.on_frame(*args, **kwargs)
-            self.write = write
-            self.on_frame = on_frame
-            self._status = STATUS_SLEEPING
-            self.emit("sleeping", self)
+    def on_check_loop(self):
+        if time.time() - self._data_time > 300 and not self._streams:
+            self.do_close()
         else:
-            current().timeout(60, self.on_sleep_loop)
+            current().timeout(60, self.on_check_loop)
 
     def close(self):
         if self._status == STATUS_CLOSED:
@@ -151,13 +137,16 @@ class Session(EventEmitter):
         self._status = STATUS_CLOSED
 
     def do_close(self):
+        if self._center is None:
+            return
+
         if self._connections:
             for connection in self._connections:
                 connection.close()
         else:
             self._center.close()
             self._center = None
-        self.emit("close")
+            self.emit("close", self)
         logging.info("xstream session %s close", self)
         self.remove_all_listeners()
 

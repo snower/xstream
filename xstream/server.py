@@ -42,7 +42,7 @@ class Server(EventEmitter):
         key = crypto.init_encrypt()
         session = self.create_session(connection, auth_key, crypto)
         connection.write(struct.pack("!H", session.id) + key)
-        session.on("suspend", self.on_session_suspend)
+        session.on("close", self.on_session_close)
         self.emit("session", self, session)
         logging.info("xstream session open %s", session)
 
@@ -85,11 +85,6 @@ class Server(EventEmitter):
         connection.close()
         logging.info("xstream connection refuse %s %s", session_id, connection)
 
-    def on_session_suspend(self, session):
-        current().timeout(30, self.on_session_close, session)
-
     def on_session_close(self, session):
-        if not session._connections:
-            session = self._sessions.pop(session.id)
-            session.close()
-            logging.info("xstream session close %s", session)
+        session = self._sessions.pop(session.id)
+        logging.info("xstream session close %s", session)

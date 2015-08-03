@@ -184,12 +184,12 @@ class Center(EventEmitter):
             self.send_frames = []
             self.frames += self.wait_reset_frames
             self.wait_reset_frames = None
-            
+
             if self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
                     self.ready_streams.pop(0)
-                    
+
             if self.frames:
                 self.write_frame()
             logging.info("stream session %s center %s index reset ack action", self.session, self)
@@ -197,7 +197,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL_ACK, data, index=0)
         elif action == ACTION_TTL_ACK:
             start_time, = struct.unpack("!I", data)
-            if len(self.ttls) >= 7:
+            if len(self.ttls) >= 3:
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = min(max(float(sum(self.ttls)) / float(len(self.ttls)), 50), 4000)
@@ -225,7 +225,7 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
 
     def write_ttl(self):
-        for i in range(3):
+        for i in range(2):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
         if not self.closed:
