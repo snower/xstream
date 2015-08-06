@@ -118,7 +118,7 @@ class Client(EventEmitter):
         if self._connecting == connection:
             self._connecting = None
         if connection.is_connected_session and self.running:
-            current().timeout(1, self.init_connection)
+            self.init_connection()
         logging.info("xstream connection close %s %s", connection, len(self._connections))
 
     def session(self, callback=None):

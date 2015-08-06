@@ -55,16 +55,16 @@ class Session(EventEmitter):
                 self._connections.remove(connection)
                 break
 
-        def on_exit():
-            if not self._connections:
-                self.do_close()
         if not self._connections:
-            current().timeout(8, on_exit)
-
-        if self._status == STATUS_CLOSED:
-            self._center.close()
-            self._center = None
-            self.emit("close", self)
+            if self._status == STATUS_CLOSED:
+                self._center.close()
+                self._center = None
+                self.emit("close", self)
+            else:
+                def on_exit():
+                    if not self._connections:
+                        self.do_close()
+                current().timeout(8, on_exit)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
@@ -140,6 +140,7 @@ class Session(EventEmitter):
         if self._center is None:
             return
 
+        self._status = STATUS_CLOSED
         if self._connections:
             for connection in self._connections:
                 connection.close()

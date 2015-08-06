@@ -101,6 +101,7 @@ class Connection(EventEmitter):
         elif action == ACTION_CLOSE_ACK:
             self._closed = True
             self._connection.close()
+            self.remove_all_listeners()
 
     def on_expried(self):
         if not self._closed:
@@ -128,6 +129,7 @@ class Connection(EventEmitter):
     def close(self):
         if self._closed:
             self._connection.close()
+            self.remove_all_listeners()
         else:
             self._closed = True
             self.write_action(ACTION_CLOSE)
