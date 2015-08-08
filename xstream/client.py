@@ -65,7 +65,7 @@ class Client(EventEmitter):
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data.read(2))
         connection.crypto.init_decrypt(data.read(64))
-        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 4 - 32
+        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32
         self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
         connection.close()
 
