@@ -47,7 +47,7 @@ class Server(EventEmitter):
         logging.info("xstream session open %s", session)
 
     def create_session(self, connection, auth_key, crypto):
-        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 4 - 32
+        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32
         session = Session(self.get_session_id(), auth_key, True, crypto, mss)
         self._sessions[session.id] = session
         return session
