@@ -83,12 +83,19 @@ class Stream(EventEmitter):
                 self._send_frame_count += 1
                 self._send_data_len += len(frame)
                 self._send_time = time.time()
+                
+            if not self._send_frames and self._send_buffer:
+                self.on_write()
+                
             self._send_is_set_ready = bool(self._send_frames)
             return self._send_is_set_ready
         self._send_is_set_ready = False
         return False
 
     def on_write(self):
+        if self._send_is_set_ready and self._send_frames:
+            return 
+        
         data = "".join(self._send_buffer)
         for i in range(int(len(data) / self._mss) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
