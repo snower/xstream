@@ -93,6 +93,9 @@ class Stream(EventEmitter):
         return False
 
     def on_write(self):
+        if not self._send_buffer:
+            return 
+        
         if self._send_is_set_ready and self._send_frames:
             return 
         
