@@ -131,10 +131,8 @@ class Client(EventEmitter):
         return self._session
 
     def on_session_close(self, session):
-        def on_close():
-            if self._session == session:
-                self._session = None
-                self.opening = False
-                self.running = False
-            logging.info("xstream client %s session close", self)
-        current().sync(on_close)
+        if self._session == session:
+            self._session = None
+            self.opening = False
+            self.running = False
+        logging.info("xstream client %s session close", self)
