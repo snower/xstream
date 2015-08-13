@@ -60,6 +60,7 @@ class Session(EventEmitter):
                 self._center.close()
                 self._center = None
                 self.emit("close", self)
+                self.remove_all_listeners()
             else:
                 def on_exit():
                     if not self._connections:
@@ -148,8 +149,8 @@ class Session(EventEmitter):
             self._center.close()
             self._center = None
             self.emit("close", self)
+            self.remove_all_listeners()
         logging.info("xstream session %s close", self)
-        self.remove_all_listeners()
 
     def __del__(self):
         self.close()
