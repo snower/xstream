@@ -35,9 +35,12 @@ class Connection(EventEmitter):
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
+        self._data_count = 0
+        self._data_expried = random.randint(1 * 1024 * 1024, 4 * 1024 * 1024)
 
         if not self._session._is_server:
-            current().timeout(random.randint(900, 7200), self.on_expried)
+            current().timeout(random.randint(300, 1800), self.on_expried)
+            current().timeout(5, self.on_data_expried)
             current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
@@ -88,6 +91,7 @@ class Connection(EventEmitter):
     def write_action(self, action, data=''):
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
+        self._data_count += len(data)
         return self._connection.write(data)
 
     def on_action(self, action, data):
@@ -125,6 +129,13 @@ class Connection(EventEmitter):
                 logging.info("connection %s ping timeout", self)
             else:
                 current().timeout(30, self.on_ping_loop)
+
+    def on_data_expried(self):
+        if not self._closed:
+            if self._data_count > self._data_expried:
+                self.close()
+            else:
+                current().timeout(5, self.on_data_expried)
 
     def close(self):
         if self._closed:

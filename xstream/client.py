@@ -6,6 +6,7 @@ import time
 import logging
 import struct
 import socket
+import random
 from sevent import EventEmitter, current, tcp
 from session import Session
 from crypto import Crypto, rand_string
@@ -96,13 +97,18 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         key = connection.crypto.init_encrypt()
-        data = self._session._crypto.encrypt(self._session.auth_key + key)
-        connection.write('\x01' + struct.pack("!H", self._session.id) + data)
+        obstruction_len = random.randint(1, 1200)
+        obstruction = rand_string(obstruction_len)
+        data = self._session._crypto.encrypt(self._session.auth_key + key + struct.pack("!H", obstruction_len))
+        connection.write('\x01' + struct.pack("!H", self._session.id) + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        key = self._session._crypto.decrypt(data.read(64))
-        connection.crypto.init_decrypt(key)
+        key = self._session._crypto.decrypt(data.read(66))
+        connection.crypto.init_decrypt(key[:64])
+        obstruction_len, = struct.unpack("!H", key[64:66])
+        data.read(obstruction_len)
+
         def add_connection():
             self._session.add_connection(connection)
         current().sync(add_connection)

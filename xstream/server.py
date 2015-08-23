@@ -5,9 +5,10 @@
 import logging
 import struct
 import socket
+import random
 from sevent import EventEmitter, tcp, current
 from session import Session
-from crypto import Crypto
+from crypto import Crypto, rand_string
 
 class Server(EventEmitter):
     def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
@@ -63,18 +64,24 @@ class Server(EventEmitter):
         session_id, = struct.unpack("!H", data.read(2))
         if session_id in self._sessions:
             session = self._sessions[session_id]
-            data = session._crypto.decrypt(data.read(80))
-            auth_key = data[:16]
+            decrypt_data = session._crypto.decrypt(data.read(82))
+            auth_key = decrypt_data[:16]
             if auth_key == session.auth_key:
-                key = data[16:]
+                key = decrypt_data[16:80]
                 setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                 connection.crypto.init_decrypt(key)
                 key = connection.crypto.init_encrypt()
+
+                obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
+                data.read(obstruction_len)
+
+                obstruction_len = random.randint(1, 1200)
+                obstruction = rand_string(obstruction_len)
+                data = session._crypto.encrypt(key + struct.pack("!H", obstruction_len))
+                connection.write(data + obstruction)
                 def add_connection():
                     session.add_connection(connection)
                 current().sync(add_connection)
-                data = session._crypto.encrypt(key)
-                connection.write(data)
 
                 def on_fork_connection_close(connection):
                     session.remove_connection(connection)
