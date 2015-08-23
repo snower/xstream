@@ -40,8 +40,8 @@ class Connection(EventEmitter):
 
         if not self._session._is_server:
             current().timeout(random.randint(300, 1800), self.on_expried)
-            current().timeout(5, self.on_data_expried)
             current().timeout(30, self.on_ping_loop)
+        current().timeout(5, self.on_data_expried)
 
     def on_data(self, connection, data):
         data = self._crypto.decrypt(data.read(-1))
