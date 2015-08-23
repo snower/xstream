@@ -134,6 +134,7 @@ class Connection(EventEmitter):
         if not self._closed:
             if self._data_count > self._data_expried:
                 self.close()
+                logging.info("connection %s data expried", self)
             else:
                 current().timeout(5, self.on_data_expried)
 
