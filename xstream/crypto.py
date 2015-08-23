@@ -23,6 +23,16 @@ ALG_KEY_IV_LEN = {
 def rand_string(length):
     return Rand.rand_bytes(length)
 
+def xor_string(key, data, encrypt=True):
+    if isinstance(key, basestring):
+        key = ord(key[0])
+    result = []
+    for c in data:
+        r = ord(c) ^ key
+        result.append(chr(r))
+        key = ord(c) if encrypt else r
+    return "".join(result)
+
 class Crypto(object):
     def __init__(self,key,alg='aes_256_cfb'):
         self._key=key

@@ -9,7 +9,7 @@ import socket
 import random
 from sevent import EventEmitter, current, tcp
 from session import Session
-from crypto import Crypto, rand_string
+from crypto import Crypto, rand_string, xor_string
 
 class Client(EventEmitter):
     def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
@@ -61,7 +61,8 @@ class Client(EventEmitter):
     def on_connect(self, connection):
         connection.is_connected = True
         key = connection.crypto.init_encrypt()
-        connection.write('\x00' + self._auth_key + key)
+        protecol_code = random.randint(0x0000, 0xffff) & 0xff7f
+        connection.write(struct.pack("!H", protecol_code) + self._auth_key + key + rand_string(random.randint(16, 512)))
 
     def on_data(self, connection, data):
         session_id, = struct.unpack("!H", data.read(2))
@@ -97,10 +98,11 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         key = connection.crypto.init_encrypt()
+        protecol_code = random.randint(0x0000, 0xffff) | 0x0080
         obstruction_len = random.randint(1, 1200)
         obstruction = rand_string(obstruction_len)
         data = self._session._crypto.encrypt(self._session.auth_key + key + struct.pack("!H", obstruction_len))
-        connection.write('\x01' + struct.pack("!H", self._session.id) + data + obstruction)
+        connection.write(struct.pack("!H", protecol_code) + xor_string(self._crypto_key[protecol_code % len(self._crypto_key)], struct.pack("!H", self._session.id)) + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):

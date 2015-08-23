@@ -8,7 +8,7 @@ import socket
 import random
 from sevent import EventEmitter, tcp, current
 from session import Session
-from crypto import Crypto, rand_string
+from crypto import Crypto, rand_string, xor_string
 
 class Server(EventEmitter):
     def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
@@ -30,11 +30,11 @@ class Server(EventEmitter):
         connection.once("data", self.on_data)
 
     def on_data(self, connection, data):
-        action = ord(data.read(1))
-        if action == 0:
+        action, = struct.unpack("!H", data.read(2))
+        if action & 0x0080 == 0:
             self.on_open_session(connection, data)
         else:
-            self.on_fork_connection(connection, data)
+            self.on_fork_connection(connection, data, action)
 
     def on_open_session(self, connection, data):
         auth_key = data.read(16)
@@ -42,7 +42,7 @@ class Server(EventEmitter):
         crypto.init_decrypt(data.read(64))
         key = crypto.init_encrypt()
         session = self.create_session(connection, auth_key, crypto)
-        connection.write(struct.pack("!H", session.id) + key)
+        connection.write(struct.pack("!H", session.id) + key + rand_string(random.randint(1024, 4096)))
         session.on("close", self.on_session_close)
         self.emit("session", self, session)
         logging.info("xstream session open %s", session)
@@ -60,8 +60,8 @@ class Server(EventEmitter):
         self._current_session_id += 1
         return session_id
 
-    def on_fork_connection(self, connection, data):
-        session_id, = struct.unpack("!H", data.read(2))
+    def on_fork_connection(self, connection, data, action):
+        session_id, = struct.unpack("!H", xor_string(self._crypto_key[action % len(self._crypto_key)], data.read(2), False))
         if session_id in self._sessions:
             session = self._sessions[session_id]
             decrypt_data = session._crypto.decrypt(data.read(82))
