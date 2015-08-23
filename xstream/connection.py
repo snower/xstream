@@ -88,7 +88,6 @@ class Connection(EventEmitter):
     def write_action(self, action, data=''):
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
-        self._data_count += len(data)
         return self._connection.write(data)
 
     def on_action(self, action, data):
