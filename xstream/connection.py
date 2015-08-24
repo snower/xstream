@@ -38,7 +38,7 @@ class Connection(EventEmitter):
 
         if not self._session._is_server:
             current().timeout(random.randint(300, 1800), self.on_expried)
-            current().timeout(30, self.on_ping_loop)
+            current().timeout(15, self.on_ping_loop)
 
     def on_data(self, connection, data):
         data = self._crypto.decrypt(data.read(-1))
@@ -110,12 +110,12 @@ class Connection(EventEmitter):
 
     def on_ping_loop(self):
         if not self._closed:
-            if time.time() - self._data_time >= 30:
+            if time.time() - self._data_time >= 15:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
-                current().timeout(8, self.on_ping_timeout)
+                current().timeout(4, self.on_ping_timeout)
             else:
-                current().timeout(30, self.on_ping_loop)
+                current().timeout(15, self.on_ping_loop)
 
     def on_ping_timeout(self):
         if not self._closed:
@@ -124,7 +124,7 @@ class Connection(EventEmitter):
                 self._connection.close()
                 logging.info("connection %s ping timeout", self)
             else:
-                current().timeout(30, self.on_ping_loop)
+                current().timeout(15, self.on_ping_loop)
 
     def close(self):
         if self._closed:
