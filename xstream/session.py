@@ -30,7 +30,8 @@ class Session(EventEmitter):
         self._status = STATUS_INITED
 
         self._center.on("frame", self.on_frame)
-        current().timeout(60, self.on_check_loop)
+        if not self._is_server:
+            current().timeout(60, self.on_check_loop)
 
     @property
     def id(self):
@@ -39,6 +40,10 @@ class Session(EventEmitter):
     @property
     def auth_key(self):
         return self._auth_key
+
+    @property
+    def closed(self):
+        return self._status == STATUS_CLOSED
 
     def add_connection(self, conn):
         if self._status == STATUS_CLOSED:
