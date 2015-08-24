@@ -30,7 +30,7 @@ def xor_string(key, data, encrypt=True):
     for c in data:
         r = ord(c) ^ key
         result.append(chr(r))
-        key = ord(c) if encrypt else r
+        key = r if encrypt else ord(c)
     return "".join(result)
 
 class Crypto(object):
