@@ -85,18 +85,15 @@ class Stream(EventEmitter):
                 self._send_time = time.time()
                 
             if not self._send_frames and self._send_buffer:
-                self.on_write()
+                self.flush()
                 
             self._send_is_set_ready = bool(self._send_frames)
             return self._send_is_set_ready
         self._send_is_set_ready = False
         return False
-
-    def on_write(self):
-        if not self._send_buffer:
-            return 
         
-        if self._send_is_set_ready and self._send_frames:
+    def flush():
+        if not self._send_buffer:
             return 
         
         data = "".join(self._send_buffer)
@@ -109,6 +106,12 @@ class Stream(EventEmitter):
             self._send_time = time.time()
             self._send_is_set_ready = True
             self._session.ready_write(self)
+            
+    def on_write(self):
+        if self._send_is_set_ready and self._send_frames:
+            return
+        
+        self.flush()
 
     def write(self, data):
         self._data_time = time.time()
@@ -119,9 +122,20 @@ class Stream(EventEmitter):
                 self.loop.sync(self.on_write)
             self._send_buffer.append(data)
 
-    def write_action(self, action, data=''):
+    def write_action(self, action, data='', wait = False):
         frame = StreamFrame(self._stream_id, 0, action, data)
-        self.loop.sync(lambda :self._session.write(frame))
+        def on_write():
+            if wait:
+                self.flush()
+                self._send_frames.append(frame)
+                
+                if not self._send_is_set_ready and self._send_frames:
+                    self._send_time = time.time()
+                    self._send_is_set_ready = True
+                    self._session.ready_write(self)
+            else:
+                self._session.write(frame)
+        self.loop.sync(on_write)
 
     def on_action(self, action, data):
         if action == ACTION_OPEN:
@@ -139,7 +153,7 @@ class Stream(EventEmitter):
         if self._closed:
             return
         self._closed = True
-        self.write_action(ACTION_CLIOSE)
+        self.write_action(ACTION_CLIOSE, '', True)
 
     def do_close(self):
         self._closed = True
