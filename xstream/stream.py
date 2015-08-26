@@ -92,7 +92,7 @@ class Stream(EventEmitter):
         self._send_is_set_ready = False
         return False
         
-    def flush():
+    def flush(self):
         if not self._send_buffer:
             return 
         
@@ -129,7 +129,7 @@ class Stream(EventEmitter):
                 self.flush()
                 self._send_frames.append(frame)
                 
-                if not self._send_is_set_ready and self._send_frames:
+                if not self._send_is_set_ready:
                     self._send_time = time.time()
                     self._send_is_set_ready = True
                     self._session.ready_write(self)
