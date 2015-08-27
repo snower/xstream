@@ -76,21 +76,18 @@ class Stream(EventEmitter):
         self._send_frames = deque()
 
     def do_write(self):
-        if not self._closed:
-            if self._send_frames:
-                frame = self._send_frames.popleft()
-                self._session.write(frame)
-                self._send_frame_count += 1
-                self._send_data_len += len(frame)
-                self._send_time = time.time()
-                
-            if not self._send_frames and self._send_buffer:
-                self.flush()
-                
-            self._send_is_set_ready = bool(self._send_frames)
-            return self._send_is_set_ready
-        self._send_is_set_ready = False
-        return False
+        if self._send_frames:
+            frame = self._send_frames.popleft()
+            self._session.write(frame)
+            self._send_frame_count += 1
+            self._send_data_len += len(frame)
+            self._send_time = time.time()
+
+        if not self._send_frames and self._send_buffer:
+            self.flush()
+
+        self._send_is_set_ready = bool(self._send_frames)
+        return self._send_is_set_ready
         
     def flush(self):
         if not self._send_buffer:
@@ -114,9 +111,9 @@ class Stream(EventEmitter):
         self.flush()
 
     def write(self, data):
-        self._data_time = time.time()
-
         if not self._closed:
+            self._data_time = time.time()
+
             if self._send_buffer is None:
                 self._send_buffer = deque()
                 self.loop.sync(self.on_write)
