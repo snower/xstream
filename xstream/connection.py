@@ -45,8 +45,8 @@ class Connection(EventEmitter):
     def on_data(self, connection, data):
         data = self._crypto.decrypt(data.read(-1))
         self._buffer.write(data)
-        self.read()
         self._data_time = time.time()
+        self.read()
 
     def on_drain(self, connection):
         if not self._closed:
@@ -88,7 +88,7 @@ class Connection(EventEmitter):
             return self._connection.write(data)
 
     def write_action(self, action, data=''):
-        data += rand_string(random.randint(1, 1024 - len(data)))
+        data += rand_string(random.randint(1, 128 - len(data)))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
         return self._connection.write(data)
@@ -116,7 +116,7 @@ class Connection(EventEmitter):
             if time.time() - self._data_time >= 15:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
-                current().timeout(4, self.on_ping_timeout)
+                current().timeout(2, self.on_ping_timeout)
             else:
                 current().timeout(15, self.on_ping_loop)
 
