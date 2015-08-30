@@ -3,11 +3,13 @@
 # create by: snower
 
 import time
+import random
 import logging
 from sevent import EventEmitter, current
 from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame
+from crypto import rand_string
 
 STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
@@ -124,6 +126,7 @@ class Session(EventEmitter):
 
     def on_action(self, action, data):
         if action & 0x8000 == 0:
+            data += rand_string(random.randint(1, 1024 - len(data)))
             self._center.on_action(action, data)
 
     def on_check_loop(self):

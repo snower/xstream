@@ -9,6 +9,7 @@ import struct
 import socket
 from sevent import EventEmitter, current, Buffer
 from frame import StreamFrame
+from crypto import rand_string
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
@@ -23,7 +24,8 @@ class Connection(EventEmitter):
         self._crypto = connection.crypto
 
         connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
+        if hasattr(socket, "TCP_KEEPINTVL"):
+            connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
 
         self._connection.on("close",self.on_close)
         self._connection.on("data",self.on_data)
@@ -86,6 +88,7 @@ class Connection(EventEmitter):
             return self._connection.write(data)
 
     def write_action(self, action, data=''):
+        data += rand_string(random.randint(1, 1024 - len(data)))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
         return self._connection.write(data)

@@ -3,9 +3,11 @@
 # create by: snower
 
 import time
+import random
 from collections import deque
 from sevent import EventEmitter, current
 from frame import StreamFrame
+from crypto import  rand_string
 
 ACTION_OPEN  = 1
 ACTION_OPENED = 2
@@ -120,6 +122,7 @@ class Stream(EventEmitter):
             self._send_buffer.append(data)
 
     def write_action(self, action, data='', wait = False):
+        data += rand_string(random.randint(1, 1024 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
         def on_write():
             if wait:

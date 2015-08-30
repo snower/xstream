@@ -5,10 +5,12 @@
 import time
 import logging
 import struct
+import random
 from collections import deque
 import bisect
 from sevent import EventEmitter, current
 from frame import Frame
+from crypto import rand_string
 
 ACTION_ACK = 0x01
 ACTION_RESEND = 0x02
@@ -204,6 +206,7 @@ class Center(EventEmitter):
             logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
 
     def write_action(self, action, data, index=None):
+        data += rand_string(random.randint(1, 1024 - len(data)))
         frame = self.create_frame(data, action = action, index = index)
         if frame.index == 0 or self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
