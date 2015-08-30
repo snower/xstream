@@ -118,7 +118,7 @@ class Connection(EventEmitter):
                 self._ping_time = 0
                 current().timeout(2, self.on_ping_timeout)
             else:
-                current().timeout(15, self.on_ping_loop)
+                current().timeout(5, self.on_ping_loop)
 
     def on_ping_timeout(self):
         if not self._closed:
@@ -127,7 +127,7 @@ class Connection(EventEmitter):
                 self._connection.close()
                 logging.info("connection %s ping timeout", self)
             else:
-                current().timeout(15, self.on_ping_loop)
+                current().timeout(5, self.on_ping_loop)
 
     def close(self):
         if self._closed:
