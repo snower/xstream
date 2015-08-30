@@ -167,11 +167,11 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            index, = struct.unpack("!I", data)
+            index, = struct.unpack("!I", data[:4])
             while self.send_frames and self.send_frames[0].index <= index:
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
-            index, recv_index = struct.unpack("!II", data)
+            index, recv_index = struct.unpack("!II", data[:8])
             recv_index = index + int((recv_index - index) * 0.8)
             while self.send_frames and self.send_frames[0].index <= recv_index:
                 frame = self.send_frames.pop(0)
@@ -196,9 +196,9 @@ class Center(EventEmitter):
                 self.write_frame()
             logging.info("stream session %s center %s index reset ack action", self.session, self)
         elif action == ACTION_TTL:
-            self.write_action(ACTION_TTL_ACK, data, index=0)
+            self.write_action(ACTION_TTL_ACK, data[:4], index=0)
         elif action == ACTION_TTL_ACK:
-            start_time, = struct.unpack("!I", data)
+            start_time, = struct.unpack("!I", data[:4])
             if len(self.ttls) >= 3:
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
