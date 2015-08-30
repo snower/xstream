@@ -92,6 +92,8 @@ class Stream(EventEmitter):
         return self._send_is_set_ready
         
     def flush(self):
+        if self._closed:
+            return
         if not self._send_buffer:
             return 
         
