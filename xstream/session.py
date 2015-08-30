@@ -128,7 +128,6 @@ class Session(EventEmitter):
 
     def on_action(self, action, data):
         if action & 0x8000 == 0:
-            data += rand_string(random.randint(1, 1024 - len(data)))
             self._center.on_action(action, data)
 
     def on_check_loop(self):
