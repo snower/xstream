@@ -75,6 +75,9 @@ class Center(EventEmitter):
         return frame
 
     def ready_write(self, stream, is_ready=True):
+        if self.closed:
+            return False
+
         if not is_ready:
             if stream in self.ready_streams:
                 self.ready_streams.remove(stream)
@@ -88,6 +91,7 @@ class Center(EventEmitter):
             stream = self.ready_streams[0]
             if not stream.do_write():
                 self.ready_streams.pop(0)
+        return True
 
     def write(self, data):
         frame = self.create_frame(data)
@@ -241,6 +245,9 @@ class Center(EventEmitter):
 
     def close(self):
         if not self.closed:
+            while self.ready_streams:
+                stream = self.ready_streams.pop(0)
+                stream.do_close()
             self.closed = True
             self.remove_all_listeners()
             logging.info("xstream session %s center %s close", self.session, self)

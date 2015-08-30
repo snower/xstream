@@ -104,7 +104,8 @@ class Stream(EventEmitter):
         if not self._send_is_set_ready and self._send_frames:
             self._send_time = time.time()
             self._send_is_set_ready = True
-            self._session.ready_write(self)
+            if not self._session.ready_write(self):
+                self.do_close()
             
     def on_write(self):
         if self._send_is_set_ready and self._send_frames:
@@ -132,7 +133,8 @@ class Stream(EventEmitter):
                 if not self._send_is_set_ready:
                     self._send_time = time.time()
                     self._send_is_set_ready = True
-                    self._session.ready_write(self)
+                    if not self._session.ready_write(self):
+                        self.do_close()
             else:
                 self._session.write(frame)
         self.loop.sync(on_write)
@@ -158,7 +160,10 @@ class Stream(EventEmitter):
     def do_close(self):
         self._closed = True
         def do_close():
-            if self._send_frames:
+            if not self._session:
+                return
+
+            if self._send_frames and self._send_is_set_ready:
                 self._session.ready_write(self, False)
                 self._send_is_set_ready = False
 
@@ -167,6 +172,7 @@ class Stream(EventEmitter):
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
+
         self.loop.sync(do_close)
 
     def on_time_out_loop(self):
