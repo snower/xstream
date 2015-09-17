@@ -76,6 +76,7 @@ class Stream(EventEmitter):
 
     def remove_all_send_frames(self):
         self._send_frames = deque()
+        self._send_buffer = None
 
     def do_write(self):
         if self._send_frames:
