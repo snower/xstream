@@ -42,10 +42,10 @@ class Client(EventEmitter):
         connection = tcp.Socket()
         setattr(connection, "is_connected", False)
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
-        connection.connect((self._host, self._port))
         connection.on("connect", self.on_connect)
         connection.on("data", self.on_data)
         connection.on("close", self.on_close)
+        connection.connect((self._host, self._port))
 
     def reopen(self, callback=None):
         if callable(callback):
@@ -89,10 +89,10 @@ class Client(EventEmitter):
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         setattr(connection, "is_connected_session", False),
-        connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
         connection.once("close", self.on_fork_close)
         connection.once("data", self.on_fork_data)
+        connection.connect((self._host, self._port))
         self._connections.append(connection)
         return connection
 
