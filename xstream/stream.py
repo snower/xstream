@@ -119,7 +119,7 @@ class Stream(EventEmitter):
     def write(self, data):
         if not self._closed:
             self._data_time = time.time()
-            if data == self._send_buffer:
+            if not data or data == self._send_buffer:
                 return
 
             if isinstance(data, Buffer):
