@@ -5,7 +5,7 @@
 import time
 import random
 from collections import deque
-from sevent import EventEmitter, current
+from sevent import EventEmitter, current, Buffer
 from frame import StreamFrame
 from crypto import  rand_string
 
@@ -98,7 +98,7 @@ class Stream(EventEmitter):
         if not self._send_buffer:
             return 
         
-        data = "".join(self._send_buffer)
+        data = self._send_buffer.read(-1)
         for i in range(int(len(data) / self._mss) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
             self._send_frames.append(frame)
@@ -119,11 +119,20 @@ class Stream(EventEmitter):
     def write(self, data):
         if not self._closed:
             self._data_time = time.time()
+            if data == self._send_buffer:
+                return
 
-            if self._send_buffer is None:
-                self._send_buffer = deque()
-                self.loop.sync(self.on_write)
-            self._send_buffer.append(data)
+            if isinstance(data, Buffer):
+                if self._send_buffer is None:
+                    self._send_buffer = data
+                    self.loop.sync(self.on_write)
+                else:
+                    self._send_buffer.write(data.read(-1))
+            else:
+                if self._send_buffer is None:
+                    self._send_buffer = Buffer()
+                    self.loop.sync(self.on_write)
+                self._send_buffer.write(data)
 
     def write_action(self, action, data='', wait = False):
         data += rand_string(random.randint(1, 1024 - len(data)))
