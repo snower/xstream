@@ -123,13 +123,13 @@ class Stream(EventEmitter):
                 return
 
             if isinstance(data, Buffer):
-                if self._send_buffer is None:
+                if not self._send_buffer:
                     self._send_buffer = data
                     self.loop.sync(self.on_write)
                 else:
                     self._send_buffer.write(data.read(-1))
             else:
-                if self._send_buffer is None:
+                if not self._send_buffer:
                     self._send_buffer = Buffer()
                     self.loop.sync(self.on_write)
                 self._send_buffer.write(data)
