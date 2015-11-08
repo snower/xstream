@@ -98,11 +98,11 @@ class Stream(EventEmitter):
         if not self._send_buffer:
             return 
         
-        data = self._send_buffer.read(-1)
+        data = self._send_buffer.read(262144) if len(self._send_buffer) > 262144 else self._send_buffer.read(-1)
         for i in range(int(len(data) / self._mss) + 1):
             frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
             self._send_frames.append(frame)
-        self._send_buffer = None
+        self._send_buffer = self._send_buffer or None
 
         if not self._send_is_set_ready and self._send_frames:
             self._send_time = time.time()
