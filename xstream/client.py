@@ -113,7 +113,7 @@ class Client(EventEmitter):
 
         def add_connection():
             self._session.add_connection(connection)
-        current().sync(add_connection)
+        current().async(add_connection)
         self._connecting = None
         self.init_connection()
         connection.is_connected_session = True

@@ -61,7 +61,7 @@ class Stream(EventEmitter):
         if frame.action == 0:
             if self._recv_buffer is None:
                 self._recv_buffer = deque()
-                self.loop.sync(self.on_data)
+                self.loop.async(self.on_data)
             self._recv_buffer.append(frame.data)
             self._recv_frame_count += 1
             self._recv_data_len += len(frame)
@@ -125,13 +125,13 @@ class Stream(EventEmitter):
             if isinstance(data, Buffer):
                 if not self._send_buffer:
                     self._send_buffer = data
-                    self.loop.sync(self.on_write)
+                    self.loop.async(self.on_write)
                 else:
                     self._send_buffer.write(data.read(-1))
             else:
                 if not self._send_buffer:
                     self._send_buffer = Buffer()
-                    self.loop.sync(self.on_write)
+                    self.loop.async(self.on_write)
                 self._send_buffer.write(data)
 
     def write_action(self, action, data='', wait = False):
@@ -149,7 +149,7 @@ class Stream(EventEmitter):
                         self.do_close()
             else:
                 self._session.write(frame)
-        self.loop.sync(on_write)
+        self.loop.async(on_write)
 
     def on_action(self, action, data):
         if action == ACTION_OPEN:
@@ -185,7 +185,7 @@ class Stream(EventEmitter):
                 self.remove_all_listeners()
                 self._session = None
 
-        self.loop.sync(do_close)
+        self.loop.async(do_close)
 
     def on_time_out_loop(self):
         if not self._closed:

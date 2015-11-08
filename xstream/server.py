@@ -81,7 +81,7 @@ class Server(EventEmitter):
                 connection.write(data + obstruction)
                 def add_connection():
                     session.add_connection(connection)
-                current().sync(add_connection)
+                current().async(add_connection)
 
                 def on_fork_connection_close(connection):
                     session.remove_connection(connection)

@@ -148,7 +148,7 @@ class Center(EventEmitter):
 
             now_ts = time.time()
             if now_ts - self.ack_time > 2:
-                current().sync(self.write_ack)
+                current().async(self.write_ack)
                 self.ack_time = now_ts
 
         if frame:
