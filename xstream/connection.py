@@ -43,10 +43,11 @@ class Connection(EventEmitter):
             current().timeout(15, self.on_ping_loop)
 
     def on_data(self, connection, data):
-        data = self._crypto.decrypt(data.read(-1))
-        self._buffer.write(data)
         self._data_time = time.time()
-        self.read()
+        if self._buffer._len + data._len >= self._data_len:
+            data = self._crypto.decrypt(data.read(-1))
+            self._buffer.write(data)
+            self.read()
 
     def on_drain(self, connection):
         if not self._closed:
