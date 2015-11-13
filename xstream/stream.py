@@ -98,12 +98,15 @@ class Stream(EventEmitter):
         if not self._send_buffer:
             return 
         
-        max_size = self._mss * 64
-        data = self._send_buffer.read(max_size) if len(self._send_buffer) > max_size else self._send_buffer.read(-1)
-        for i in range(int(len(data) / self._mss) + 1):
-            frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
-            self._send_frames.append(frame)
-        self._send_buffer = self._send_buffer or None
+        for _ in range(64):
+            if len(self._send_buffer) > self._mss:
+                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
+                self._send_frames.append(frame)
+            else:
+                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
+                self._send_frames.append(frame)
+                self._send_buffer = None
+                break
 
         if not self._send_is_set_ready and self._send_frames:
             self._send_time = time.time()
