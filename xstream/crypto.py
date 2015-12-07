@@ -42,6 +42,7 @@ def sign_string(data):
     return data
 
 def get_crypto_time():
+    return 17
     now = int(time.time())
     return now - now % 50
 
