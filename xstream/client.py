@@ -36,7 +36,7 @@ class Client(EventEmitter):
             if now % 20 > 15:
                 def do_fork_connection():
                     self._connecting = self.fork_connection()
-                current().timeout(20 - (now % 20) + 1, do_fork_connection)
+                current().timeout(20 - (now % 20) + 5, do_fork_connection)
                 self._connecting = True
             else:
                 self._connecting = self.fork_connection()
@@ -44,7 +44,7 @@ class Client(EventEmitter):
     def open(self):
         now = int(time.time())
         if now % 20 > 15:
-            time.sleep(20 - (now % 20) + 1)
+            time.sleep(20 - (now % 20) + 5)
 
         self.opening = True
         self._connections = []
