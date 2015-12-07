@@ -2,6 +2,9 @@
 #14_6_20
 # create by: snower
 
+import time
+import datetime
+import pytz
 from M2Crypto import Rand,EVP
 
 ALG_KEY_IV_LEN = {
@@ -33,8 +36,20 @@ def xor_string(key, data, encrypt=True):
         key = r if encrypt else ord(c)
     return "".join(result)
 
+def sign_string(data):
+    for t in ("md5", "sha1", "md5"):
+        s=EVP.MessageDigest(t)
+        s.update(data)
+        data=s.digest()
+    return data
+
+def get_crypto_time():
+    dt = datetime.datetime.now(tz = pytz.UTC) - datetime.timedelta(seconds=5)
+    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 10, 0, pytz.UTC)
+    return int(time.mktime(dt.timetuple()))
+
 class Crypto(object):
-    def __init__(self,key,alg='aes_256_cfb'):
+    def __init__(self, key, alg='aes_256_cfb'):
         self._key=key
         self._alg=alg
 
@@ -55,10 +70,11 @@ class Crypto(object):
     
     def bytes_to_key(self, salt):
         key_len = ALG_KEY_IV_LEN.get(self._alg)[0]
-        d1, d2 = (self._key.encode('utf-8') if isinstance(self._key,unicode) else self._key), ''
+        d1, d2 = (self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key), ''
+        crypto_time = str(get_crypto_time())
         for i in range(5):
             s=EVP.MessageDigest('sha1')
-            s.update(d1+salt)
+            s.update("".join([d1, salt, crypto_time]))
             d2=d1
             d1=s.digest()
         return (d1+d2)[:key_len]
