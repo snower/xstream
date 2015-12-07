@@ -63,6 +63,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         crypto_time = get_crypto_time()
         setattr(connection, "protecol_code", random.randint(0x0000, 0xffff) & 0xff7f)
+        setattr(connection, "crypto_time", crypto_time)
         protecol_code = struct.pack("!H", connection.protecol_code)
         protecol_code = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], protecol_code)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
@@ -70,7 +71,7 @@ class Client(EventEmitter):
 
     def on_data(self, connection, data):
         self.opening = False
-        crypto_time = get_crypto_time()
+        crypto_time = connection.crypto_time
         protecol_code = connection.protecol_code
         session_id, = struct.unpack("!H", xor_string(self._crypto_key[protecol_code % len(self._crypto_key)], data.read(2), False))
         key = data.read(64)
@@ -101,10 +102,10 @@ class Client(EventEmitter):
         connection = tcp.Socket()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         setattr(connection, "is_connected_session", False),
-        connection.connect((self._host, self._port))
         connection.once("connect", self.on_fork_connect)
         connection.once("close", self.on_fork_close)
         connection.once("data", self.on_fork_data)
+        connection.connect((self._host, self._port))
         self._connections.append(connection)
         return connection
 
@@ -112,6 +113,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         crypto_time = get_crypto_time()
         setattr(connection, "protecol_code", random.randint(0x0000, 0xffff) | 0x0080)
+        setattr(connection, "crypto_time", crypto_time)
         protecol_code = struct.pack("!H", connection.protecol_code)
         protecol_code = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], protecol_code)
         auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
@@ -123,7 +125,7 @@ class Client(EventEmitter):
 
     def on_fork_data(self, connection, data):
         key_data = self._session._crypto.decrypt(data.read(82))
-        crypto_time = get_crypto_time()
+        crypto_time = connection.crypto_time
 
         if key_data[:16] == sign_string(self._crypto_key + key_data[16:80] + self._auth_key + str(crypto_time)):
             connection.crypto.init_decrypt(key_data[16:80])
@@ -132,7 +134,7 @@ class Client(EventEmitter):
 
             def add_connection():
                 self._session.add_connection(connection)
-            current().sync(add_connection)
+            current().async(add_connection)
             self._connecting = None
             self.init_connection()
             connection.is_connected_session = True

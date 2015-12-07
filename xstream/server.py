@@ -30,7 +30,7 @@ class Server(EventEmitter):
         connection.once("data", self.on_data)
 
     def on_data(self, connection, data):
-        crypto_time = get_crypto_time()
+        crypto_time = get_crypto_time(False)
         action = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], data.read(2), False)
         action, = struct.unpack("!H", action)
         if action & 0x0080 == 0:
@@ -94,7 +94,7 @@ class Server(EventEmitter):
                     connection.write(data + obstruction)
                     def add_connection():
                         session.add_connection(connection)
-                    current().sync(add_connection)
+                    current().async(add_connection)
 
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)

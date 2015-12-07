@@ -3,11 +3,9 @@
 # create by: snower
 
 import time
-import random
 from collections import deque
-from sevent import EventEmitter, current, Buffer
+from sevent import EventEmitter, current
 from frame import StreamFrame
-from crypto import  rand_string
 
 ACTION_OPEN  = 1
 ACTION_OPENED = 2
@@ -76,7 +74,6 @@ class Stream(EventEmitter):
 
     def remove_all_send_frames(self):
         self._send_frames = deque()
-        self._send_buffer = None
 
     def do_write(self):
         if self._send_frames:
@@ -93,26 +90,19 @@ class Stream(EventEmitter):
         return self._send_is_set_ready
         
     def flush(self):
-        if self._closed:
-            return
         if not self._send_buffer:
             return 
         
-        for _ in range(64):
-            if len(self._send_buffer) > self._mss:
-                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
-                self._send_frames.append(frame)
-            else:
-                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
-                self._send_frames.append(frame)
-                self._send_buffer = None
-                break
+        data = "".join(self._send_buffer)
+        for i in range(int(len(data) / self._mss) + 1):
+            frame = StreamFrame(self._stream_id, 0, 0, data[i * self._mss: (i+1) * self._mss])
+            self._send_frames.append(frame)
+        self._send_buffer = None
 
         if not self._send_is_set_ready and self._send_frames:
             self._send_time = time.time()
             self._send_is_set_ready = True
-            if not self._session.ready_write(self):
-                self.do_close()
+            self._session.ready_write(self)
             
     def on_write(self):
         if self._send_is_set_ready and self._send_frames:
@@ -123,23 +113,13 @@ class Stream(EventEmitter):
     def write(self, data):
         if not self._closed:
             self._data_time = time.time()
-            if not data or data == self._send_buffer:
-                return
 
-            if isinstance(data, Buffer):
-                if not self._send_buffer:
-                    self._send_buffer = data
-                    self.loop.async(self.on_write)
-                else:
-                    self._send_buffer.write(data.read(-1))
-            else:
-                if not self._send_buffer:
-                    self._send_buffer = Buffer()
-                    self.loop.async(self.on_write)
-                self._send_buffer.write(data)
+            if self._send_buffer is None:
+                self._send_buffer = deque()
+                self.loop.async(self.on_write)
+            self._send_buffer.append(data)
 
     def write_action(self, action, data='', wait = False):
-        data += rand_string(random.randint(1, 1024 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
         def on_write():
             if wait:
@@ -149,8 +129,7 @@ class Stream(EventEmitter):
                 if not self._send_is_set_ready:
                     self._send_time = time.time()
                     self._send_is_set_ready = True
-                    if not self._session.ready_write(self):
-                        self.do_close()
+                    self._session.ready_write(self)
             else:
                 self._session.write(frame)
         self.loop.async(on_write)
@@ -176,10 +155,7 @@ class Stream(EventEmitter):
     def do_close(self):
         self._closed = True
         def do_close():
-            if not self._session:
-                return
-
-            if self._send_frames and self._send_is_set_ready:
+            if self._send_frames:
                 self._session.ready_write(self, False)
                 self._send_is_set_ready = False
 
@@ -188,7 +164,6 @@ class Stream(EventEmitter):
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
-
         self.loop.async(do_close)
 
     def on_time_out_loop(self):

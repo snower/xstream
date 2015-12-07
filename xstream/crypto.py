@@ -42,9 +42,12 @@ def sign_string(data):
         data=s.digest()
     return data
 
-def get_crypto_time():
-    dt = datetime.datetime.now() - datetime.timedelta(seconds=5)
-    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 10)
+def get_crypto_time(master = True):
+    if master:
+        dt = datetime.datetime.now() + datetime.timedelta(seconds=2)
+    else:
+        dt = datetime.datetime.now() - datetime.timedelta(seconds=2)
+    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 20)
     return int(time.mktime(dt.timetuple()))
 
 class Crypto(object):
