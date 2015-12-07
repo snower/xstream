@@ -37,7 +37,7 @@ class Client(EventEmitter):
             if dt.second % 20 > 15:
                 def do_fork_connection():
                     self._connecting = self.fork_connection()
-                current().async(20 - (dt.second % 20) + 1, do_fork_connection)
+                current().timeout(20 - (dt.second % 20) + 1, do_fork_connection)
                 self._connecting = True
             else:
                 self._connecting = self.fork_connection()
