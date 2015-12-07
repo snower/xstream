@@ -3,7 +3,6 @@
 # create by: snower
 
 import time
-import datetime
 from M2Crypto import Rand,EVP
 
 ALG_KEY_IV_LEN = {
@@ -43,9 +42,8 @@ def sign_string(data):
     return data
 
 def get_crypto_time():
-    dt = datetime.datetime.now()
-    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 20)
-    return int(time.mktime(dt.timetuple()))
+    now = int(time.time())
+    return now - now % 20
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):
