@@ -4,7 +4,6 @@
 
 import time
 import datetime
-import pytz
 from M2Crypto import Rand,EVP
 
 ALG_KEY_IV_LEN = {
@@ -44,8 +43,8 @@ def sign_string(data):
     return data
 
 def get_crypto_time():
-    dt = datetime.datetime.now(tz = pytz.UTC) - datetime.timedelta(seconds=5)
-    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 10, 0, pytz.UTC)
+    dt = datetime.datetime.now() - datetime.timedelta(seconds=5)
+    dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second - dt.second % 10)
     return int(time.mktime(dt.timetuple()))
 
 class Crypto(object):
