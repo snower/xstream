@@ -43,7 +43,7 @@ def sign_string(data):
 
 def get_crypto_time():
     now = int(time.time())
-    return now - now % 20
+    return now - now % 50
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):

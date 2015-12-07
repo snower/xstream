@@ -33,18 +33,18 @@ class Client(EventEmitter):
     def init_connection(self):
         if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
             now = int(time.time())
-            if now % 20 > 15:
+            if now % 50 > 45:
                 def do_fork_connection():
                     self._connecting = self.fork_connection()
-                current().timeout(20 - (now % 20) + 5, do_fork_connection)
+                current().timeout(50 - (now % 50), do_fork_connection)
                 self._connecting = True
             else:
                 self._connecting = self.fork_connection()
 
     def open(self):
         now = int(time.time())
-        if now % 20 > 15:
-            time.sleep(20 - (now % 20) + 5)
+        if now % 50 > 45:
+            time.sleep(50 - (now % 50))
 
         self.opening = True
         self._connections = []
