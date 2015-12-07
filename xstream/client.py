@@ -97,6 +97,7 @@ class Client(EventEmitter):
             self.opening = False
             self.running = False
             logging.info("xstream connection close %s %s", connection, len(self._connections))
+        current().timeout(1, self.reopen)
 
     def fork_connection(self):
         connection = tcp.Socket()
