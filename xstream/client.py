@@ -3,6 +3,7 @@
 # create by: snower
 
 import time
+import datetime
 import logging
 import struct
 import socket
@@ -32,9 +33,20 @@ class Client(EventEmitter):
 
     def init_connection(self):
         if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
-            self._connecting = self.fork_connection()
+            dt = datetime.datetime.now()
+            if dt.second % 20 > 15:
+                def do_fork_connection():
+                    self._connecting = self.fork_connection()
+                current().async(20 - (dt.second % 20) + 1, do_fork_connection)
+                self._connecting = True
+            else:
+                self._connecting = self.fork_connection()
 
     def open(self):
+        dt = datetime.datetime.now()
+        if dt.second % 20 > 15:
+            time.sleep(20 - (dt.second % 20) + 1)
+
         self.opening = True
         self._connections = []
         self._connecting = None

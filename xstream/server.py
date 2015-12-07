@@ -30,7 +30,7 @@ class Server(EventEmitter):
         connection.once("data", self.on_data)
 
     def on_data(self, connection, data):
-        crypto_time = get_crypto_time(False)
+        crypto_time = get_crypto_time()
         action = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], data.read(2), False)
         action, = struct.unpack("!H", action)
         if action & 0x0080 == 0:
