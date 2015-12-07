@@ -104,12 +104,13 @@ class Client(EventEmitter):
         logging.info("xstream client %s session auth fail", self)
 
     def on_close(self, connection):
+        self.opening = False
         if not connection.is_connected:
             self._session = None
-            self.opening = False
             self.running = False
             logging.info("xstream connection close %s %s", connection, len(self._connections))
-        current().timeout(1, self.reopen)
+        if not self._session:
+            current().timeout(1, self.reopen)
 
     def fork_connection(self):
         connection = tcp.Socket()
