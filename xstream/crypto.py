@@ -50,6 +50,8 @@ def get_crypto_time(t = None):
     now_t = now & 0x3f
     if now_t >= t:
         return (now & 0xffffffc0) | (t & 0x3f)
+    if t - now_t < 0x1f:
+        return (now & 0xffffffc0) | (t & 0x3f) 
     return now - now_t - (0x40 - t)
 
 def pack_protocel_code(crypto_time, action, crypto_key):
