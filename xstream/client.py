@@ -62,7 +62,7 @@ class Client(EventEmitter):
         connection.is_connected = True
         crypto_time = get_crypto_time()
         _, protecol_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
-        key = connection.crypto.init_encrypt()
+        key = connection.crypto.init_encrypt(crypto_time)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
         connection.write(protecol_code + key + auth + rand_string(random.randint(16, 512)))
 
@@ -71,7 +71,7 @@ class Client(EventEmitter):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2), self._crypto_key)
         session_id, = struct.unpack("!H", xor_string(self._crypto_key[rand_code % len(self._crypto_key)], data.read(2), False))
         key = data.read(64)
-        connection.crypto.init_decrypt(key)
+        connection.crypto.init_decrypt(crypto_time, key)
         auth = connection.crypto.decrypt(data.read(16))
 
         if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
@@ -113,7 +113,7 @@ class Client(EventEmitter):
         rand_code, protecol_code = pack_protocel_code(crypto_time, 1, self._crypto_key)
         session_id = xor_string(self._crypto_key[rand_code % len(self._crypto_key)], struct.pack("!H", self._session.id))
 
-        key = connection.crypto.init_encrypt()
+        key = connection.crypto.init_encrypt(crypto_time)
         auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
         obstruction_len = random.randint(1, 1200)
         obstruction = rand_string(obstruction_len)
@@ -124,7 +124,7 @@ class Client(EventEmitter):
 
     def on_fork_data(self, connection, data):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2), self._crypto_key)
-        decrypt_data = self._session._crypto.decrypt(data.read(82))
+        decrypt_data = self._session._crypto.decrypt(crypto_time, data.read(82))
 
         key = decrypt_data[16:80]
         if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
