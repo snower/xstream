@@ -45,10 +45,10 @@ class Server(EventEmitter):
             auth = crypto.decrypt(data.read(32))
             auth_key = auth[:16]
             if auth[16:] == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
+                crypto_time = get_crypto_time()
                 key = crypto.init_encrypt(crypto_time)
                 session = self.create_session(connection, auth_key, crypto)
 
-                crypto_time = get_crypto_time()
                 rand_code, protocel_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
                 session_id = xor_string(self._crypto_key[rand_code % len(self._crypto_key)], struct.pack("!H", session.id))
                 auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
@@ -90,8 +90,8 @@ class Server(EventEmitter):
                     obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
                     data.read(obstruction_len)
 
-                    key = connection.crypto.init_encrypt(crypto_time)
                     crypto_time = get_crypto_time()
+                    key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
                     auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time))
                     obstruction_len = random.randint(1, 1200)
