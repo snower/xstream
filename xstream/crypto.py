@@ -90,7 +90,7 @@ class Crypto(object):
         d1, d2 = (self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key), ''
         for i in range(5):
             s=EVP.MessageDigest('sha1')
-            s.update("".join([d1, salt, crypto_time]))
+            s.update("".join([d1, salt, str(crypto_time)]))
             d2=d1
             d1=s.digest()
         return (d1+d2)[:key_len]
