@@ -3,6 +3,8 @@
 # create by: snower
 
 import time
+import random
+import struct
 from M2Crypto import Rand,EVP
 
 ALG_KEY_IV_LEN = {
@@ -49,6 +51,19 @@ def get_crypto_time(t = None):
     if now_t >= t:
         return (now & 0xffffffc0) | (t & 0x3f)
     return now - now_t - (0x40 - t)
+
+def pack_protocel_code(crypto_time, action, crypto_key):
+    rand_code = random.randint(0x001, 0x1ff)
+    action_time = (crypto_time & 0x3f) | (action << 6)
+    protecol_code = (rand_code << 7) | (ord(crypto_key[rand_code % len(crypto_key)]) ^ action_time)
+    return rand_code, struct.pack("!H", protecol_code)
+
+def unpack_protocel_code(protecol_code, crypto_key):
+    protecol_code, = struct.unpack("!H", protecol_code)
+    rand_code = (protecol_code & 0xff80) >> 7
+    action_time = ((protecol_code & 0xff) ^ ord(crypto_key[rand_code % len(crypto_key)])) & 0x7f
+    crypto_time = get_crypto_time(action_time & 0x3f)
+    return rand_code, ((action_time & 0x40) >> 6), crypto_time
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):

@@ -8,7 +8,7 @@ import socket
 import random
 from sevent import EventEmitter, tcp, current
 from session import Session
-from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string
+from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
 
 class Server(EventEmitter):
     def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
@@ -30,29 +30,30 @@ class Server(EventEmitter):
         connection.once("data", self.on_data)
 
     def on_data(self, connection, data):
-        action = data.read(2)
-        crypto_time = get_crypto_time(struct.unpack("!B", data.read(1))[0])
-        action = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], action, False)
-        action, = struct.unpack("!H", action)
-        if action & 0x0080 == 0:
-            self.on_open_session(connection, data, action, crypto_time)
+        rand_code, action, crypto_time = unpack_protocel_code(data.read(2), self._crypto_key)
+        if action == 0:
+            self.on_open_session(connection, data, crypto_time)
         else:
-            self.on_fork_connection(connection, data, action, crypto_time)
+            self.on_fork_connection(connection, data, rand_code, crypto_time)
 
-    def on_open_session(self, connection, data, action, crypto_time):
-        if len(data) >= 97:
+    def on_open_session(self, connection, data, crypto_time):
+        if len(data) >= 96:
             key = data.read(64)
             crypto = Crypto(self._crypto_key, self._crypto_alg)
             crypto.init_decrypt(key)
+
             auth = crypto.decrypt(data.read(32))
             auth_key = auth[:16]
             if auth[16:] == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
                 key = crypto.init_encrypt()
                 session = self.create_session(connection, auth_key, crypto)
-                session_id = xor_string(self._crypto_key[action % len(self._crypto_key)], struct.pack("!H", session.id))
+
                 crypto_time = get_crypto_time()
+                rand_code, protocel_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
+                session_id = xor_string(self._crypto_key[rand_code % len(self._crypto_key)], struct.pack("!H", session.id))
                 auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
-                connection.write(struct.pack("!B", crypto_time & 0x3f) + session_id + key + auth + rand_string(random.randint(1024, 4096)))
+                connection.write(protocel_code + session_id + key + auth + rand_string(random.randint(1024, 4096)))
+
                 session.on("close", self.on_session_close)
                 self.emit("session", self, session)
                 logging.info("xstream session open %s", session)
@@ -73,28 +74,32 @@ class Server(EventEmitter):
         self._current_session_id += 1
         return session_id
 
-    def on_fork_connection(self, connection, data, action, crypto_time):
+    def on_fork_connection(self, connection, data, rand_code, crypto_time):
+        session_id = ''
         if len(data) >= 84:
-            session_id, = struct.unpack("!H", xor_string(self._crypto_key[action % len(self._crypto_key)], data.read(2), False))
+            session_id, = struct.unpack("!H", xor_string(self._crypto_key[rand_code % len(self._crypto_key)], data.read(2), False))
             if session_id in self._sessions:
                 session = self._sessions[session_id]
                 decrypt_data = session._crypto.decrypt(data.read(82))
                 auth = decrypt_data[:16]
                 key = decrypt_data[16:80]
+
                 if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     connection.crypto.init_decrypt(key)
-                    key = connection.crypto.init_encrypt()
-
                     obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
                     data.read(obstruction_len)
 
+                    key = connection.crypto.init_encrypt()
                     crypto_time = get_crypto_time()
+                    rand_code, protocel_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
                     auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time))
                     obstruction_len = random.randint(1, 1200)
                     obstruction = rand_string(obstruction_len)
-                    data = session._crypto.encrypt(struct.pack("!B", crypto_time & 0x3f) + auth + key + struct.pack("!H", obstruction_len))
-                    connection.write(data + obstruction)
+
+                    data = session._crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
+                    connection.write(protocel_code + data + obstruction)
+
                     def add_connection():
                         session.add_connection(connection)
                     current().async(add_connection)
