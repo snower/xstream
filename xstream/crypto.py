@@ -41,9 +41,14 @@ def sign_string(data):
         data=s.digest()
     return data
 
-def get_crypto_time():
+def get_crypto_time(t = None):
+    if t is None:
+        return int(time.time())
     now = int(time.time())
-    return now - now % 50
+    now_t = now & 0x3f
+    if now_t >= t:
+        return (now & 0xffffffc0) | (t & 0x3f)
+    return now - now_t - (0x40 - t)
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):

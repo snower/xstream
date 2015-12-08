@@ -32,20 +32,9 @@ class Client(EventEmitter):
 
     def init_connection(self):
         if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
-            now = int(time.time())
-            if now % 50 >= 48:
-                def do_fork_connection():
-                    self._connecting = self.fork_connection()
-                current().timeout(50 - (now % 50), do_fork_connection)
-                self._connecting = True
-            else:
-                self._connecting = self.fork_connection()
+            self._connecting = self.fork_connection()
 
     def open(self):
-        now = int(time.time())
-        if now % 50 >= 48:
-            time.sleep(50 - (now % 50))
-
         self.opening = True
         self._connections = []
         self._connecting = None
@@ -74,15 +63,14 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         crypto_time = get_crypto_time()
         setattr(connection, "protecol_code", random.randint(0x0000, 0xffff) & 0xff7f)
-        setattr(connection, "crypto_time", crypto_time)
         protecol_code = struct.pack("!H", connection.protecol_code)
         protecol_code = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], protecol_code)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
-        connection.write(protecol_code + key + auth + rand_string(random.randint(16, 512)))
+        connection.write(protecol_code + struct.pack("!B", crypto_time & 0x3f) + key + auth + rand_string(random.randint(16, 512)))
 
     def on_data(self, connection, data):
         self.opening = False
-        crypto_time = connection.crypto_time
+        crypto_time = get_crypto_time(struct.unpack("!B", data.read(1))[0])
         protecol_code = connection.protecol_code
         session_id, = struct.unpack("!H", xor_string(self._crypto_key[protecol_code % len(self._crypto_key)], data.read(2), False))
         key = data.read(64)
@@ -126,23 +114,22 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt()
         crypto_time = get_crypto_time()
         setattr(connection, "protecol_code", random.randint(0x0000, 0xffff) | 0x0080)
-        setattr(connection, "crypto_time", crypto_time)
         protecol_code = struct.pack("!H", connection.protecol_code)
         protecol_code = xor_string(self._crypto_key[crypto_time % len(self._crypto_key)], protecol_code)
         auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
         obstruction_len = random.randint(1, 1200)
         obstruction = rand_string(obstruction_len)
         data = self._session._crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
-        connection.write(protecol_code + xor_string(self._crypto_key[connection.protecol_code % len(self._crypto_key)], struct.pack("!H", self._session.id)) + data + obstruction)
+        connection.write(protecol_code + struct.pack("!B", crypto_time & 0x3f) + xor_string(self._crypto_key[connection.protecol_code % len(self._crypto_key)], struct.pack("!H", self._session.id)) + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        key_data = self._session._crypto.decrypt(data.read(82))
-        crypto_time = connection.crypto_time
+        key_data = self._session._crypto.decrypt(data.read(83))
+        crypto_time = get_crypto_time(struct.unpack("!B", key_data[0])[0])
 
-        if key_data[:16] == sign_string(self._crypto_key + key_data[16:80] + self._auth_key + str(crypto_time)):
-            connection.crypto.init_decrypt(key_data[16:80])
-            obstruction_len, = struct.unpack("!H", key_data[80:82])
+        if key_data[1:17] == sign_string(self._crypto_key + key_data[17:81] + self._auth_key + str(crypto_time)):
+            connection.crypto.init_decrypt(key_data[17:81])
+            obstruction_len, = struct.unpack("!H", key_data[81:83])
             data.read(obstruction_len)
 
             def add_connection():
