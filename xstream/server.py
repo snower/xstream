@@ -59,7 +59,7 @@ class Server(EventEmitter):
                 logging.info("xstream session open %s", session)
                 return
         connection.close()
-        logging.info("xstream session open auth fail %s", connection)
+        logging.info("xstream session open auth fail %s %s", connection, crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
         mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32
