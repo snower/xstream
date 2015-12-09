@@ -61,15 +61,15 @@ class Client(EventEmitter):
     def on_connect(self, connection):
         connection.is_connected = True
         crypto_time = get_crypto_time()
-        _, protecol_code = pack_protocel_code(crypto_time, 0, self._crypto_key)
+        _, protecol_code = pack_protocel_code(crypto_time, 0)
         key = connection.crypto.init_encrypt(crypto_time)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
         connection.write(protecol_code + key + auth + rand_string(random.randint(16, 512)))
 
     def on_data(self, connection, data):
         self.opening = False
-        rand_code, action, crypto_time = unpack_protocel_code(data.read(2), self._crypto_key)
-        session_id, = struct.unpack("!H", xor_string(self._crypto_key[rand_code % len(self._crypto_key)], data.read(2), False))
+        rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
+        session_id, = struct.unpack("!H", xor_string(rand_code & 0xff, data.read(2), False))
         key = data.read(64)
         connection.crypto.init_decrypt(crypto_time, key)
         auth = connection.crypto.decrypt(data.read(16))
@@ -110,8 +110,8 @@ class Client(EventEmitter):
 
     def on_fork_connect(self, connection):
         crypto_time = get_crypto_time()
-        rand_code, protecol_code = pack_protocel_code(crypto_time, 1, self._crypto_key)
-        session_id = xor_string(self._crypto_key[rand_code % len(self._crypto_key)], struct.pack("!H", self._session.id))
+        rand_code, protecol_code = pack_protocel_code(crypto_time, 1)
+        session_id = xor_string(rand_code & 0xff, struct.pack("!H", self._session.id))
 
         key = connection.crypto.init_encrypt(crypto_time)
         auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
@@ -123,7 +123,7 @@ class Client(EventEmitter):
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        rand_code, action, crypto_time = unpack_protocel_code(data.read(2), self._crypto_key)
+        rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
         decrypt_data = self._session._crypto.decrypt(data.read(82))
 
         key = decrypt_data[16:80]
