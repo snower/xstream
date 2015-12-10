@@ -86,7 +86,7 @@ class Client(EventEmitter):
             logging.info("xstream client %s session open", self)
             return
         connection.close()
-        logging.info("xstream client %s session auth fail %s", self, crypto_time)
+        logging.info("xstream client %s session auth fail %s %s", self, time.time(), crypto_time)
 
     def on_close(self, connection):
         self.opening = False
