@@ -142,7 +142,7 @@ class Client(EventEmitter):
             logging.info("xstream connection ready %s", connection)
             return
         connection.close()
-        logging.info("xstream connection auth fail %s", connection)
+        logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def on_fork_close(self, connection):
         self._session.remove_connection(connection)
