@@ -65,6 +65,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt(crypto_time)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
         connection.write(protecol_code + key + auth + rand_string(random.randint(16, 512)))
+        logging.info("xstream auth connection connect %s", connection)
 
     def on_data(self, connection, data):
         self.opening = False
@@ -93,9 +94,9 @@ class Client(EventEmitter):
         if not connection.is_connected:
             self._session = None
             self.running = False
-            logging.info("xstream connection close %s %s", connection, len(self._connections))
         if not self._session:
             current().timeout(1, self.reopen)
+        logging.info("xstream auth connection close %s %s", connection, len(self._connections))
 
     def fork_connection(self):
         connection = tcp.Socket()
@@ -149,8 +150,11 @@ class Client(EventEmitter):
             self._connections.remove(connection)
         if self._connecting == connection:
             self._connecting = None
-        if connection.is_connected_session and self.running:
-            self.init_connection()
+        if self.running:
+            if connection.is_connected_session:
+                self.init_connection()
+            else:
+                current().timeout(1, self.init_connection)
         logging.info("xstream connection close %s %s", connection, len(self._connections))
 
     def session(self, callback=None):
