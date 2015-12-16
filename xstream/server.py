@@ -112,7 +112,7 @@ class Server(EventEmitter):
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
         connection.close()
-        logging.info("xstream connection refuse %s %s", session_id, connection)
+        logging.info("xstream connection refuse %s %s %s %s", session_id, connection, time.time(), crypto_time)
 
     def on_session_close(self, session):
         session = self._sessions.pop(session.id)
