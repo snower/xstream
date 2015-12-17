@@ -33,7 +33,7 @@ def xor_string(key, data, encrypt=True):
     for c in data:
         r = ord(c) ^ key
         result.append(chr(r))
-        key = r if encrypt else ord(c)
+        key = ord(c) if encrypt else r
     return "".join(result)
 
 def sign_string(data):
