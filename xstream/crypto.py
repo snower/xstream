@@ -57,7 +57,7 @@ def get_crypto_time(t = None):
 def pack_protocel_code(crypto_time, action):
     rand_code = random.randint(0x001, 0x1ff)
     action_time = (crypto_time & 0x3f) | (action << 6)
-    protecol_code = (rand_code << 7) | ((rand_code & 0xff) ^ action_time)
+    protecol_code = (rand_code << 7) | (((rand_code & 0xff) ^ action_time) & 0x7f)
     return rand_code, struct.pack("!H", protecol_code)
 
 def unpack_protocel_code(protecol_code):
