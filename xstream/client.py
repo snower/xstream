@@ -24,6 +24,7 @@ class Client(EventEmitter):
         self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
         self._crypto_alg = crypto_alg
         self._connecting = None
+        self._reconnect_count = 0
         self.opening= False
         self.running = False
 
@@ -137,6 +138,7 @@ class Client(EventEmitter):
                 self._session.add_connection(connection)
             current().async(add_connection)
             self._connecting = None
+            self._reconnect_count = 0
             self.init_connection()
             connection.is_connected_session = True
             logging.info("xstream connection ready %s", connection)
@@ -145,6 +147,8 @@ class Client(EventEmitter):
         logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def on_fork_close(self, connection):
+        if not self._session:
+            return
         self._session.remove_connection(connection)
         if connection in self._connections:
             self._connections.remove(connection)
@@ -153,8 +157,11 @@ class Client(EventEmitter):
         if self.running:
             if connection.is_connected_session:
                 self.init_connection()
-            else:
+            elif self._reconnect_count < 5:
+                self._reconnect_count += 1
                 current().timeout(1, self.init_connection)
+            else:
+                self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))
 
     def session(self, callback=None):
