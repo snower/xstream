@@ -97,7 +97,7 @@ class Session(EventEmitter):
     def create_stream(self, stream_id = None):
         if stream_id is None:
             stream_id = self.get_stream_id()
-        stream = Stream(stream_id, self, self._mss)
+        stream = Stream(stream_id, self, stream_id is not None, self._mss)
         self._streams[stream_id] = stream
         self.emit("stream", self, stream)
         return stream
@@ -106,8 +106,6 @@ class Session(EventEmitter):
         stream = self.create_stream()
         if callable(callback):
             callback(self, stream)
-        frame = StreamFrame(stream.id, 0x00, 0x01, '')
-        self.write(frame)
         return stream
 
     def close_stream(self, stream):

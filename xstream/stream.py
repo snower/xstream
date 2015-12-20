@@ -15,12 +15,13 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, mss=None):
+    def __init__(self, stream_id, session, is_server = False, mss=None):
         super(Stream, self).__init__()
 
         self.loop = current()
         self._stream_id = stream_id
         self._session = session
+        self._is_server = is_server
         self._mss = mss or StreamFrame.FRAME_LEN
         self._closed = False
         self._start_time = time.time()
@@ -33,10 +34,11 @@ class Stream(EventEmitter):
         self._send_time = time.time()
         self._send_is_set_ready = False
 
-        self._recv_buffer = None
+        self._recv_buffer = Buffer()
         self._recv_frame_count = 0
         self._recv_data_len = 0
         self._recv_time = time.time()
+        self._recv_wait_emit = False
 
         self.loop.timeout(300, self.on_time_out_loop)
 
@@ -52,22 +54,25 @@ class Stream(EventEmitter):
             return self._send_frame_count * 2.0
 
     def on_data(self):
-        self.emit("data", self, "".join(self._recv_buffer))
-        self._recv_buffer = None
+        self.emit("data", self, self._recv_buffer)
+        self._recv_wait_emit = False
 
     def on_frame(self, frame):
         self._data_time = time.time()
 
         if frame.action == 0:
-            if self._recv_buffer is None:
-                self._recv_buffer = deque()
-                self.loop.async(self.on_data)
-            self._recv_buffer.append(frame.data)
-            self._recv_frame_count += 1
-            self._recv_data_len += len(frame)
-            self._recv_time = time.time()
+            self.on_read(frame)
         else:
-            self.on_action(frame.action, frame.data)
+            self.on_action(frame)
+
+    def on_read(self, frame):
+        if not self._recv_wait_emit:
+            self._recv_wait_emit = True
+            self.loop.async(self.on_data)
+        self._recv_buffer.write(frame.data)
+        self._recv_frame_count += 1
+        self._recv_data_len += len(frame.data)
+        self._recv_time = time.time()
 
     def remove_send_frame(self, frame):
         try:
@@ -81,6 +86,8 @@ class Stream(EventEmitter):
     def do_write(self):
         if self._send_frames:
             frame = self._send_frames.popleft()
+            if self._send_frame_count == 0 and frame.action == 0 and not self._is_server:
+                frame.action = ACTION_OPEN
             self._session.write(frame)
             self._send_frame_count += 1
             self._send_data_len += len(frame)
@@ -155,16 +162,17 @@ class Stream(EventEmitter):
                 self._session.write(frame)
         self.loop.async(on_write)
 
-    def on_action(self, action, data):
-        if action == ACTION_OPEN:
+    def on_action(self, frame):
+        if frame.action == ACTION_OPEN:
             self.write_action(ACTION_OPENED)
-        elif action == ACTION_OPENED:
+            self.on_read(frame)
+        elif frame.action == ACTION_OPENED:
             pass
-        elif action == ACTION_CLIOSE:
+        elif frame.action == ACTION_CLIOSE:
             self.write_action(ACTION_CLIOSED)
             self.remove_all_send_frames()
             self.do_close()
-        elif action == ACTION_CLIOSED:
+        elif frame.action == ACTION_CLIOSED:
             self.do_close()
 
     def close(self):
