@@ -95,9 +95,10 @@ class Session(EventEmitter):
         return stream_id
 
     def create_stream(self, stream_id = None):
+        is_server = stream_id is not None
         if stream_id is None:
             stream_id = self.get_stream_id()
-        stream = Stream(stream_id, self, stream_id is not None, self._mss)
+        stream = Stream(stream_id, self, is_server, self._mss)
         self._streams[stream_id] = stream
         self.emit("stream", self, stream)
         return stream
