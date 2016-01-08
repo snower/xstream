@@ -101,6 +101,9 @@ class Stream(EventEmitter):
         return self._send_is_set_ready
         
     def flush(self):
+        if not self._send_buffer:
+            return 
+        
         for _ in range(64):
             blen = len(self._send_buffer)
             if blen > self._mss:
