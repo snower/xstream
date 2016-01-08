@@ -150,7 +150,8 @@ class Stream(EventEmitter):
         frame = StreamFrame(self._stream_id, 0, action, data)
         def on_write():
             if wait:
-                self.flush()
+                while self._send_buffer:
+                    self.flush()
                 self._send_frames.append(frame)
                 
                 if not self._send_is_set_ready:
