@@ -94,25 +94,24 @@ class Stream(EventEmitter):
             self._send_time = time.time()
 
         if not self._send_frames and self._send_buffer:
-            self.flush()
+            if not self._closed:
+                self.flush()
 
         self._send_is_set_ready = bool(self._send_frames)
         return self._send_is_set_ready
         
     def flush(self):
-        if self._closed:
-            return
-        if not self._send_buffer:
-            return 
-        
         for _ in range(64):
-            if len(self._send_buffer) > self._mss:
+            blen = len(self._send_buffer)
+            if blen > self._mss:
                 frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
                 self._send_frames.append(frame)
-            else:
+            elif blen > 0:
                 frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
                 self._send_frames.append(frame)
                 self._send_buffer = None
+                break
+            else:
                 break
 
         if not self._send_is_set_ready and self._send_frames:
@@ -185,15 +184,12 @@ class Stream(EventEmitter):
     def do_close(self):
         self._closed = True
         def do_close():
-            if not self._session:
-                return
-
-            if self._send_frames and self._send_is_set_ready:
+            if self._send_is_set_ready:
                 self._session.ready_write(self, False)
                 self._send_is_set_ready = False
 
-            self.emit("close", self)
             if self._session:
+                self.emit("close", self)
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
