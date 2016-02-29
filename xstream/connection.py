@@ -25,7 +25,6 @@ class Connection(EventEmitter):
 
         connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         connection.socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)
-        connection.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8192)
         try:
             connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
         except: pass
