@@ -116,18 +116,18 @@ class Stream(EventEmitter):
                 break
             else:
                 break
-
-        if not self._send_is_set_ready and self._send_frames:
-            self._send_time = time.time()
-            self._send_is_set_ready = True
-            if not self._session.ready_write(self):
-                self.do_close()
             
     def on_write(self):
         if self._send_is_set_ready and self._send_frames:
             return
         
         self.flush()
+
+        if not self._send_is_set_ready and self._send_frames:
+            self._send_time = time.time()
+            self._send_is_set_ready = True
+            if not self._session.ready_write(self):
+                self.do_close()
 
     def write(self, data):
         if not self._closed:
@@ -147,31 +147,21 @@ class Stream(EventEmitter):
                     self.loop.async(self.on_write)
                 self._send_buffer.write(data)
 
-    def write_action(self, action, data='', wait = False):
-        data += rand_string(random.randint(1, 1024 - len(data)))
+    def write_action(self, action, data=''):
+        data += rand_string(random.randint(1, 256 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
-        def on_write():
-            if wait:
-                while self._send_buffer:
-                    self.flush()
-                self._send_frames.append(frame)
-                
-                if not self._send_is_set_ready:
-                    self._send_time = time.time()
-                    self._send_is_set_ready = True
-                    if not self._session.ready_write(self):
-                        self.do_close()
-            else:
-                self._session.write(frame)
-        self.loop.async(on_write)
+        self.loop.async(self._session.write, frame)
 
     def on_action(self, frame):
         if frame.action == ACTION_OPEN:
-            self.write_action(ACTION_OPENED)
+            if frame.flag == 0x01:
+                self.write_action(ACTION_OPENED)
             self.on_read(frame)
         elif frame.action == ACTION_OPENED:
             pass
         elif frame.action == ACTION_CLIOSE:
+            if frame.flag == 0x01:
+                self.on_read(frame)
             self.write_action(ACTION_CLIOSED)
             self.remove_all_send_frames()
             self.do_close()
@@ -182,7 +172,22 @@ class Stream(EventEmitter):
         if self._closed:
             return
         self._closed = True
-        self.write_action(ACTION_CLIOSE, '', True)
+
+        while self._send_buffer:
+            self.flush()
+
+        if self._send_frames:
+            frame = self._send_frames[-1]
+            frame.action = ACTION_CLIOSE
+            frame.flag = 0x01
+
+            if not self._send_is_set_ready and self._send_frames:
+                self._send_time = time.time()
+                self._send_is_set_ready = True
+                if not self._session.ready_write(self):
+                    self.do_close()
+        else:
+            self.write_action(ACTION_CLIOSE)
 
     def do_close(self):
         self._closed = True
