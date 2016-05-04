@@ -182,6 +182,7 @@ class Center(EventEmitter):
                 if frame.index >= index:
                     bisect.insort(self.frames, frame)
                     self.write_frame()
+            logging.info("stream session %s center %s index resend action", self.session, self)
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET_ACK)
             self.recv_index = 0
