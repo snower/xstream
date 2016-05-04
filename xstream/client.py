@@ -157,9 +157,9 @@ class Client(EventEmitter):
         if self.running:
             if connection.is_connected_session:
                 self.init_connection()
-            elif self._reconnect_count < 5:
+            elif self._reconnect_count < 60:
                 self._reconnect_count += 1
-                current().timeout(1, self.init_connection)
+                current().timeout(min(self._reconnect_count, 5), self.init_connection)
             else:
                 self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))

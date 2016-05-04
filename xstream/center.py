@@ -209,7 +209,7 @@ class Center(EventEmitter):
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
             logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
 
-    def write_action(self, action, data, index=None):
+    def write_action(self, action, data='', index=None):
         data += rand_string(random.randint(1, 1024 - len(data)))
         frame = self.create_frame(data, action = action, index = index)
         if frame.index == 0 or self.wait_reset_frames is None:
@@ -232,7 +232,7 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
 
     def write_ttl(self):
-        for i in range(2):
+        for i in range(1):
             data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
         if not self.closed:

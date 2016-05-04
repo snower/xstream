@@ -72,7 +72,7 @@ class Session(EventEmitter):
                 def on_exit():
                     if not self._connections:
                         self.do_close()
-                current().timeout(8, on_exit)
+                current().timeout(300, on_exit)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
