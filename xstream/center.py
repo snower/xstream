@@ -223,12 +223,16 @@ class Center(EventEmitter):
         data = struct.pack("!I", self.recv_index - 1)
         self.write_action(ACTION_ACK, data, index=0)
 
-    def on_ack_timeout_loop(self, recv_index):
+    def on_ack_timeout_loop(self, recv_index, retry_rate = 2, retry_recv_index = 0):
+        retry_recv_index = retry_recv_index or recv_index
+        if recv_index != retry_recv_index:
+            retry_rate = 2
+            
         if self.recv_frames and recv_index == self.recv_index:
             data = struct.pack("!II", recv_index, self.recv_frames[0].index)
             self.write_action(ACTION_RESEND, data, index=0)
         if self.recv_frames and not self.closed:
-            current().timeout(self.ttl * 2 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(self.ttl * retry_rate / 1000, self.on_ack_timeout_loop, self.recv_index, retry_rate * 2, recv_index)
         else:
             self.ack_timeout_loop = False
 
