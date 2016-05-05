@@ -23,10 +23,8 @@ class Connection(EventEmitter):
         self._session = session
         self._crypto = connection.crypto
 
-        buf_size = int((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 1.5 + 1)
         connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection.socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buf_size)
-        connection.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buf_size)
+        connection.socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)
         try:
             connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
         except: pass

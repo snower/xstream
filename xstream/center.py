@@ -104,7 +104,7 @@ class Center(EventEmitter):
 
     def write_frame(self):
         for _ in range(len(self.drain_connections)):
-            connection = self.drain_connections.pop()
+            connection = self.drain_connections.popleft()
             if not connection._closed:
                 if self.write_next(connection):
                     return
@@ -126,7 +126,7 @@ class Center(EventEmitter):
                 bisect.insort(self.send_frames, frame)
             
         else:
-            self.drain_connections.appendleft(connection)
+            self.drain_connections.append(connection)
         return frame
 
     def on_frame(self, connection, data):
