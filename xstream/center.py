@@ -176,13 +176,13 @@ class Center(EventEmitter):
                 self.send_frames.pop(0)
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data[:8])
+            logging.info("stream session %s center %s index resend action %s %s", self.session, self, index, recv_index)
             recv_index = index + int((recv_index - index) * 0.8)
             while self.send_frames and self.send_frames[0].index <= recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
                     bisect.insort(self.frames, frame)
                     self.write_frame()
-            logging.info("stream session %s center %s index resend action", self.session, self)
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET_ACK)
             self.recv_index = 0
