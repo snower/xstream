@@ -116,7 +116,7 @@ class Connection(EventEmitter):
 
     def on_ping_loop(self):
         if not self._closed:
-            if time.time() - self._data_time >= 15:
+            if time.time() - self._data_time >= 240:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
                 current().timeout(2, self.on_ping_timeout)
