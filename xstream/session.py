@@ -84,6 +84,7 @@ class Session(EventEmitter):
                 self.create_stream(stream_frame.stream_id)
             if stream_frame.stream_id in self._streams:
                 self._streams[stream_frame.stream_id].on_frame(stream_frame)
+            self.emit("stream", self, stream)
         else:
             self.on_action(frame.action, frame.data)
 
@@ -94,19 +95,19 @@ class Session(EventEmitter):
             self._current_stream_id = 1 if self._is_server else 2
         return stream_id
 
-    def create_stream(self, stream_id = None):
+    def create_stream(self, stream_id = None, **kwargs):
         is_server = stream_id is not None
         if stream_id is None:
             stream_id = self.get_stream_id()
-        stream = Stream(stream_id, self, is_server, self._mss)
+        stream = Stream(stream_id, self, is_server, self._mss, **kwargs)
         self._streams[stream_id] = stream
-        self.emit("stream", self, stream)
         return stream
 
-    def stream(self, callback=None):
-        stream = self.create_stream()
+    def stream(self, callback=None, **kwargs):
+        stream = self.create_stream(**kwargs)
         if callable(callback):
             callback(self, stream)
+        self.emit("stream", self, stream)
         return stream
 
     def close_stream(self, stream):

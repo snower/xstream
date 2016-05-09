@@ -15,7 +15,7 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, is_server = False, mss=None):
+    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False):
         super(Stream, self).__init__()
 
         self.loop = current()
@@ -23,6 +23,8 @@ class Stream(EventEmitter):
         self._session = session
         self._is_server = is_server
         self._mss = mss or StreamFrame.FRAME_LEN
+        self._priority = priority
+        self._capped = capped
         self._closed = False
         self._start_time = time.time()
         self._data_time = time.time()
@@ -48,10 +50,17 @@ class Stream(EventEmitter):
 
     @property
     def priority(self):
+        if self._priority != 0:
+            return 0
+
         if self._send_is_set_ready:
             return self._send_frame_count * 2.0 / (1 + time.time() - self._send_time)
         else:
             return self._send_frame_count * 2.0
+
+    @property
+    def capped(self):
+        return self._capped
 
     def on_data(self):
         self.emit("data", self, self._recv_buffer)
@@ -88,6 +97,11 @@ class Stream(EventEmitter):
             frame = self._send_frames.popleft()
             if self._send_frame_count == 0 and frame.action == 0 and not self._is_server:
                 frame.action = ACTION_OPEN
+                if self._priority != 0:
+                    frame.flag |= 0x02
+                if self._capped:
+                    frame.flag |= 0x04
+
             self._session.write(frame)
             self._send_frame_count += 1
             self._send_data_len += len(frame)
@@ -103,19 +117,27 @@ class Stream(EventEmitter):
     def flush(self):
         if not self._send_buffer:
             return 
-        
-        for _ in range(64):
-            blen = len(self._send_buffer)
-            if blen > self._mss:
-                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
-                self._send_frames.append(frame)
-            elif blen > 0:
-                frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
-                self._send_frames.append(frame)
-                self._send_buffer = None
-                break
-            else:
-                break
+
+        if self._capped:
+            for _ in range(64):
+                if self._send_buffer:
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.next())
+                    self._send_frames.append(frame)
+                else:
+                    break
+        else:
+            for _ in range(64):
+                blen = len(self._send_buffer)
+                if blen > self._mss:
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
+                    self._send_frames.append(frame)
+                elif blen > 0:
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
+                    self._send_frames.append(frame)
+                    self._send_buffer = None
+                    break
+                else:
+                    break
             
     def on_write(self):
         if self._send_is_set_ready and self._send_frames:
@@ -154,13 +176,18 @@ class Stream(EventEmitter):
 
     def on_action(self, frame):
         if frame.action == ACTION_OPEN:
-            if frame.flag == 0x01:
+            if frame.flag & 0x01:
                 self.write_action(ACTION_OPENED)
+            if frame.flag & 0x02:
+                self._priority = 1
+            if frame.flag & 0x04:
+                self._capped = True
+
             self.on_read(frame)
         elif frame.action == ACTION_OPENED:
             pass
         elif frame.action == ACTION_CLIOSE:
-            if frame.flag == 0x01:
+            if frame.flag & 0x01:
                 self.on_read(frame)
             self.write_action(ACTION_CLIOSED)
             self.remove_all_send_frames()
