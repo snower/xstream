@@ -178,10 +178,6 @@ class Stream(EventEmitter):
         if frame.action == ACTION_OPEN:
             if frame.flag & 0x01:
                 self.write_action(ACTION_OPENED)
-            if frame.flag & 0x02:
-                self._priority = 1
-            if frame.flag & 0x04:
-                self._capped = True
 
             self.on_read(frame)
         elif frame.action == ACTION_OPENED:
