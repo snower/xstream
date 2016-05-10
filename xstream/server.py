@@ -10,6 +10,7 @@ import random
 from sevent import EventEmitter, tcp, current
 from session import Session
 from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from frame import StreamFrame
 
 class Server(EventEmitter):
     def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
@@ -63,7 +64,7 @@ class Server(EventEmitter):
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
-        mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32
+        mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32, StreamFrame.FRAME_LEN)
         session = Session(self.get_session_id(), auth_key, True, crypto, mss)
         self._sessions[session.id] = session
         return session

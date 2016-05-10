@@ -10,6 +10,7 @@ import random
 from sevent import EventEmitter, current, tcp
 from session import Session
 from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from frame import StreamFrame
 
 class Client(EventEmitter):
     def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
@@ -77,7 +78,7 @@ class Client(EventEmitter):
         auth = connection.crypto.decrypt(data.read(16))
 
         if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
-            mss = (connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32
+            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32, StreamFrame.FRAME_LEN)
             self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
             self._session.on("close", self.on_session_close)
             self.emit("session", self, self._session)
