@@ -32,6 +32,7 @@ class Center(EventEmitter):
         self.send_index = 1
         self.drain_connections = deque()
         self.ack_time = 0
+        self.ack_loop = False
         self.ack_timeout_loop = False
         self.send_timeout_loop = False
         self.ttls = [0]
@@ -150,10 +151,9 @@ class Center(EventEmitter):
 
                 frame = self.recv_frames.pop(0) if self.recv_frames else None
 
-            now_ts = time.time()
-            if now_ts - self.ack_time > 1:
-                current().async(self.write_ack)
-                self.ack_time = now_ts
+            if not self.ack_loop:
+                current().timeout(1, self.on_ack_loop)
+                self.ack_loop = True
 
         if frame:
             bisect.insort_left(self.recv_frames, frame)
@@ -223,9 +223,11 @@ class Center(EventEmitter):
         else:
             bisect.insort(self.wait_reset_frames, frame)
 
-    def write_ack(self):
+    def on_ack_loop(self):
         data = struct.pack("!I", self.recv_index - 1)
         self.write_action(ACTION_ACK, data, index=0)
+        self.ack_time = time.time()
+        self.ack_loop = False
 
     def on_ack_timeout_loop(self, recv_index, retry_rate = 2):
         if self.recv_frames and recv_index == self.recv_index:
