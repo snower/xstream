@@ -139,6 +139,7 @@ class Connection(EventEmitter):
         else:
             self._closed = True
             self.write_action(ACTION_CLOSE)
+            current().timeout(5, self._connection.close)
 
     def __del__(self):
         self.close()

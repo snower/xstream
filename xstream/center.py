@@ -33,6 +33,7 @@ class Center(EventEmitter):
         self.drain_connections = deque()
         self.ack_time = 0
         self.ack_timeout_loop = False
+        self.send_timeout_loop = False
         self.ttls = [0]
         self.ttl = 1000
         self.wait_reset_frames = None
@@ -124,6 +125,9 @@ class Center(EventEmitter):
             if frame.index != 0:
                 frame.connection = connection
                 bisect.insort(self.send_frames, frame)
+                if not self.send_timeout_loop:
+                    current().timeout(max(2, self.ttl / 100.0), self.on_send_timeout_loop, self.send_frames[0])
+                    self.send_timeout_loop = True
             
         else:
             self.drain_connections.append(connection)
@@ -234,6 +238,20 @@ class Center(EventEmitter):
             current().timeout(self.ttl * retry_rate / 1000, self.on_ack_timeout_loop, self.recv_index, retry_rate * 2)
         else:
             self.ack_timeout_loop = False
+
+    def on_send_timeout_loop(self, frame):
+        if self.send_frames:
+            if frame == self.send_frames[0]:
+                bisect.insort(self.frames, frame)
+                self.send_frames.pop(0)
+                if frame.connection and frame.connection._connection:
+                    frame.connection._connection.close()
+                current().async(self.write_frame)
+
+        if self.send_frames:
+            current().timeout(max(2, self.ttl / 100.0), self.on_send_timeout_loop, self.send_frames[0])
+        else:
+            self.send_timeout_loop = False
 
     def write_ttl(self):
         for i in range(1):
