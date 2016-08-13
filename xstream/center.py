@@ -6,6 +6,7 @@ import time
 import logging
 import struct
 import random
+import math
 from collections import deque
 import bisect
 from sevent import EventEmitter, current
@@ -127,7 +128,7 @@ class Center(EventEmitter):
                 frame.connection = connection
                 bisect.insort(self.send_frames, frame)
                 if not self.send_timeout_loop:
-                    current().timeout(max(5, self.ttl / 10.0), self.on_send_timeout_loop, self.send_frames[0])
+                    current().timeout(max(10, math.sqrt(self.ttl / 10.0) * 2), self.on_send_timeout_loop, self.send_frames[0])
                     self.send_timeout_loop = True
             
         else:
@@ -251,7 +252,7 @@ class Center(EventEmitter):
                 current().async(self.write_frame)
 
         if self.send_frames:
-            current().timeout(max(5, self.ttl / 10.0), self.on_send_timeout_loop, self.send_frames[0])
+            current().timeout(max(10, math.sqrt(self.ttl / 10.0) * 2), self.on_send_timeout_loop, self.send_frames[0])
         else:
             self.send_timeout_loop = False
 
