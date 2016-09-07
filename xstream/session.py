@@ -143,12 +143,16 @@ class Session(EventEmitter):
     def close(self):
         if self._status == STATUS_CLOSED:
             return
+        
+        self._status = STATUS_CLOSED
+        if not self._streams:
+            return self.do_close()
+            
         for stream_id, stream in self._streams.items():
             if self._connections:
                 stream.close()
             else:
                 stream.do_close()
-        self._status = STATUS_CLOSED
 
     def do_close(self):
         if self._center is None:
