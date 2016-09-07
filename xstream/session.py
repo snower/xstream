@@ -112,6 +112,8 @@ class Session(EventEmitter):
         stream = self.create_stream(**kwargs)
         if callable(callback):
             callback(self, stream)
+        if self._status == STATUS_CLOSED:
+            stream.do_close()
         return stream
 
     def close_stream(self, stream):
