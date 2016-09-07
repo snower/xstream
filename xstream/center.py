@@ -106,6 +106,9 @@ class Center(EventEmitter):
         return frame
 
     def write_frame(self):
+        if not self.frames:
+            return
+        
         for _ in range(len(self.drain_connections)):
             connection = self.drain_connections.popleft()
             if not connection._closed:
