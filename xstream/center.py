@@ -220,7 +220,7 @@ class Center(EventEmitter):
     def write_action(self, action, data='', index=None):
         data += rand_string(random.randint(1, 1024 - len(data)))
         frame = self.create_frame(data, action = action, index = index)
-        if frame.index == 0 or self.wait_reset_frames is None:
+        if self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
             self.write_frame()
         else:
