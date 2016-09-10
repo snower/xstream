@@ -240,7 +240,7 @@ class Center(EventEmitter):
             retry_rate = 2
             
         if self.recv_frames and not self.closed:
-            current().timeout(self.ttl * retry_rate / 1000, self.on_ack_timeout_loop, self.recv_index, retry_rate * 2)
+            current().timeout(self.ttl * retry_rate / 1000, self.on_ack_timeout_loop, self.recv_index, retry_rate * 3)
         else:
             self.ack_timeout_loop = False
 
