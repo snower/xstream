@@ -47,25 +47,31 @@ def get_crypto_time(t = None):
     if t is None:
         return int(time.time())
     now = int(time.time())
-    now_t = now & 0x3f
+    now_t = int(str(now)[-2:])
     if now_t >= t:
-        return (now & 0xffffffc0) | (t & 0x3f)
-    if t - now_t < 0x1f:
-        return (now & 0xffffffc0) | (t & 0x3f) 
-    return now - now_t - (0x40 - t)
+        if now_t - t < 48:
+            t = int(str(now)[:-2] + ("%0.2d" % (t & 0x7f)))
+        else:
+            t = int(str(int(str(now)[:-2]) + 1) + ("%0.2d" % (t & 0x7f)))
+    else:
+        if t - now_t < 48:
+            t = int(str(now)[:-2] + ("%0.2d" % (t & 0x7f)))
+        else:
+            t = int(str(int(str(now)[:-2]) - 1) + ("%0.2d" % (t & 0x7f)))
+    return t
 
 def pack_protocel_code(crypto_time, action):
-    rand_code = random.randint(0x001, 0x1ff)
-    action_time = (crypto_time & 0x3f) | (action << 6)
-    protecol_code = (rand_code << 7) | (((rand_code & 0xff) ^ action_time) & 0x7f)
+    rand_code = random.randint(0x001, 0xff)
+    action_time = (int(str(crypto_time)[-2:]) & 0x7f) | (action << 7)
+    protecol_code = (rand_code << 8) | action_time
     return rand_code, struct.pack("!H", protecol_code)
 
 def unpack_protocel_code(protecol_code):
     protecol_code, = struct.unpack("!H", protecol_code)
-    rand_code = (protecol_code & 0xff80) >> 7
-    action_time = ((protecol_code & 0xff) ^ (rand_code & 0xff)) & 0x7f
-    crypto_time = get_crypto_time(action_time & 0x3f)
-    return rand_code, ((action_time & 0x40) >> 6), crypto_time
+    rand_code = (protecol_code & 0xff00) >> 8
+    action_time = protecol_code & 0xff
+    crypto_time = get_crypto_time(action_time & 0x7f)
+    return rand_code, ((action_time & 0x80) >> 7), crypto_time
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):
