@@ -78,7 +78,7 @@ class Client(EventEmitter):
         auth = connection.crypto.decrypt(data.read(16))
 
         if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
-            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 3 - 32, StreamFrame.FRAME_LEN)
+            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 32, StreamFrame.FRAME_LEN)
             self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
             self._session.on("close", self.on_session_close)
             self.emit("session", self, self._session)
