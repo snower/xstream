@@ -166,8 +166,6 @@ class Center(EventEmitter):
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
-        self.drain_connections.append(connection)
-        connection = self.drain_connections.popleft()
         while not self.frames and self.wait_reset_frames is None and self.ready_streams:
             stream = self.ready_streams[0]
             if not stream.do_write():
