@@ -83,7 +83,7 @@ class Server(EventEmitter):
             if session_id in self._sessions:
                 session = self._sessions[session_id]
 
-                last_session_crypto_time = crypto_time - struct.unpack("!H", data.read(2))[0]
+                last_session_crypto_time = crypto_time - struct.unpack("!h", data.read(2))[0]
                 crypto = session.get_decrypt_crypto(crypto_time, last_session_crypto_time)
                 decrypt_data = crypto.decrypt(data.read(146))
                 auth = decrypt_data[:16]
@@ -106,7 +106,7 @@ class Server(EventEmitter):
                     crypto = session.get_encrypt_crypto(crypto_time)
                     data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
 
-                    connection.write(protocel_code + struct.pack("!H", crypto_time - last_session_crypto_time) + data + obstruction)
+                    connection.write(protocel_code + struct.pack("!h", crypto_time - last_session_crypto_time) + data + obstruction)
 
                     session.current_crypto_key = (last_session_crypto_time, session_crypto_key)
 

@@ -126,12 +126,12 @@ class Client(EventEmitter):
         data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
 
         last_session_crypto_time, _ = self._session.current_crypto_key
-        connection.write(protecol_code + session_id + struct.pack("!H", (crypto_time - last_session_crypto_time) if last_session_crypto_time > 0 else 0) + data + obstruction)
+        connection.write(protecol_code + session_id + struct.pack("!h", (crypto_time - last_session_crypto_time) if last_session_crypto_time > 0 else 0) + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
-        session_crypto_time = crypto_time - struct.unpack("!H", data.read(2))[0]
+        session_crypto_time = crypto_time - struct.unpack("!h", data.read(2))[0]
         last_session_crypto_time, _ = self._session.current_crypto_key
         crypto = self._session.get_decrypt_crypto(crypto_time, last_session_crypto_time)
         decrypt_data = crypto.decrypt(data.read(146))
