@@ -3,7 +3,6 @@
 # create by: snower
 
 import time
-import random
 import logging
 from sevent import EventEmitter, current
 from connection import Connection
@@ -22,7 +21,11 @@ class Session(EventEmitter):
         self._is_server = is_server
         self._session_id = session_id
         self._auth_key = auth_key
+        self._crypto_ensecret = crypto._ensecret
+        self._crypto_desecret = crypto._desecret
         self._crypto = crypto
+        self._crypto_keys = {}
+        self._current_crypto_key = {}
         self._mss = mss
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
@@ -46,6 +49,44 @@ class Session(EventEmitter):
     @property
     def closed(self):
         return self._status == STATUS_CLOSED
+
+    @property
+    def current_crypto_key(self):
+        if not self._current_crypto_key:
+            return (0, '0' * 64)
+        return self._current_crypto_key
+
+    @current_crypto_key.setter
+    def current_crypto_key(self, value):
+        self._current_crypto_key = value
+        self._crypto_keys[value[0]] = value[1]
+
+        if len(self._crypto_keys) >= 5:
+            now = time.time()
+            for key_time in self._crypto_keys.keys():
+                if now - key_time > 2 * 60 * 60:
+                    del self._crypto_keys[key_time]
+
+    def get_crypto_key(self, crypto_time):
+        if crypto_time not in self._crypto_keys:
+            return None
+        return self._crypto_keys[crypto_time]
+
+    def get_encrypt_crypto(self, crypto_time):
+        current_crypto_key = self.current_crypto_key
+        if not current_crypto_key:
+            current_crypto_key = (0, '0' * 64)
+
+        self._crypto.init_encrypt(crypto_time, self._crypto_ensecret, current_crypto_key[1])
+        return self._crypto
+
+    def get_decrypt_crypto(self, crypto_time, last_crypto_time):
+        current_crypto_key = self.get_crypto_key(last_crypto_time)
+        if not current_crypto_key:
+            current_crypto_key = '0' * 64
+
+        self._crypto.init_decrypt(crypto_time, self._crypto_desecret, current_crypto_key)
+        return self._crypto
 
     def add_connection(self, conn):
         if self._status == STATUS_CLOSED:

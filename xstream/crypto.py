@@ -78,21 +78,27 @@ class Crypto(object):
         self._key=key
         self._alg=alg
 
-    def init_encrypt(self, crypto_time, secret=None):
-        self._ensecret = (secret[:32], secret[32:]) if secret  and len(secret)>=64 else (rand_string(32), rand_string(32))
+    def init_encrypt(self, crypto_time, secret=None, session_secret = ""):
+        if isinstance(secret, tuple):
+            self._ensecret = secret
+        else:
+            self._ensecret = (secret[:32], secret[32:]) if secret and len(secret)>=64 else (rand_string(32), rand_string(32))
         self._encipher = EVP.Cipher(
             self._alg,
-            self.bytes_to_key(self._ensecret[0], crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
-            self.bytes_to_key(self._ensecret[1], crypto_time, 32),
+            self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
+            self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, 32),
             1, 0)
         return  "".join(self._ensecret)
 
-    def init_decrypt(self, crypto_time, secret):
-        self._desecret=(secret[:32], secret[32:])
+    def init_decrypt(self, crypto_time, secret, session_secret = ""):
+        if isinstance(secret, tuple):
+            self._ensecret = secret
+        else:
+            self._desecret= (secret[:32], secret[32:])
         self._decipher=EVP.Cipher(
             self._alg,
-            self.bytes_to_key(self._desecret[0], crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
-            self.bytes_to_key(self._desecret[1], crypto_time, 32),
+            self.bytes_to_key(self._desecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
+            self.bytes_to_key(self._desecret[1] + session_secret, crypto_time, 32),
             0, 0)
 
     def encrypt(self, data):
