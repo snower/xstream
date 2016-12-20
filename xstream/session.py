@@ -165,11 +165,15 @@ class Session(EventEmitter):
 
     def ready_write(self, stream, is_ready=True):
         if self._status == STATUS_CLOSED:
+            if frame.stream_id in self._streams:
+                current().async(self._streams[frame.stream_id].do_close)
             return False
         return self._center.ready_write(stream, is_ready)
 
     def write(self, frame):
         if self._status == STATUS_CLOSED:
+            if frame.stream_id in self._streams:
+                current().async(self._streams[frame.stream_id].do_close)
             return False
         
         self._data_time = time.time()
