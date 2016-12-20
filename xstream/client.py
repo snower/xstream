@@ -48,6 +48,10 @@ class Client(EventEmitter):
         connection.on("data", self.on_data)
         connection.on("close", self.on_close)
         connection.connect((self._host, self._port))
+        
+        def on_timeout():
+            connection.close()
+        current().timeout(5, on_timeout)
 
     def reopen(self, callback=None):
         if callable(callback):
@@ -109,6 +113,11 @@ class Client(EventEmitter):
         connection.once("data", self.on_fork_data)
         connection.connect((self._host, self._port))
         self._connections.append(connection)
+        
+        def on_timeout():
+            if not connection.is_connected_session:
+                connection.close()
+        current().timeout(5, on_timeout)
         return connection
 
     def on_fork_connect(self, connection):
@@ -170,7 +179,7 @@ class Client(EventEmitter):
                 self.init_connection()
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
-                current().timeout(min(self._reconnect_count, 5), self.init_connection)
+                current().timeout(self._reconnect_count, self.init_connection)
             else:
                 self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))
