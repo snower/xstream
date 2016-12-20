@@ -169,6 +169,9 @@ class Session(EventEmitter):
         return self._center.ready_write(stream, is_ready)
 
     def write(self, frame):
+        if self._status == STATUS_CLOSED:
+            return False
+        
         self._data_time = time.time()
         data = frame.dumps()
         return self._center.write(data)
