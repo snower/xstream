@@ -7,23 +7,41 @@ import struct
 from Crypto import Random
 from Crypto.Random import random
 from Crypto.Hash import SHA, MD5
-from Crypto.Cipher import AES, DES
+from .openssl import OpenSSLCrypto
 
 ALG_KEY_IV_LEN = {
-    'aes_128_cfb': (16, 16, AES, {"mode": AES.MODE_CFB, "IV": ""}),
-    'aes_192_cfb': (24, 16, AES, {"mode": AES.MODE_CFB, "IV": ""}),
-    'aes_256_cfb': (32, 16, AES, {"mode": AES.MODE_CFB, "IV": ""}),
-    'des_cfb': (8, 8, DES, {"mode": AES.MODE_CFB, "IV": ""}),
+    'aes_128_cfb': (16, 16, OpenSSLCrypto),
+    'aes_192_cfb': (24, 16, OpenSSLCrypto),
+    'aes_256_cfb': (32, 16, OpenSSLCrypto),
+    'aes_128_ofb': (16, 16, OpenSSLCrypto),
+    'aes_192_ofb': (24, 16, OpenSSLCrypto),
+    'aes_256_ofb': (32, 16, OpenSSLCrypto),
+    'aes_128_ctr': (16, 16, OpenSSLCrypto),
+    'aes_192_ctr': (24, 16, OpenSSLCrypto),
+    'aes_256_ctr': (32, 16, OpenSSLCrypto),
+    'aes_128_cfb8': (16, 16, OpenSSLCrypto),
+    'aes_192_cfb8': (24, 16, OpenSSLCrypto),
+    'aes_256_cfb8': (32, 16, OpenSSLCrypto),
+    'aes_128_cfb1': (16, 16, OpenSSLCrypto),
+    'aes_192_cfb1': (24, 16, OpenSSLCrypto),
+    'aes_256_cfb1': (32, 16, OpenSSLCrypto),
+    'bf_cfb': (16, 8, OpenSSLCrypto),
+    'camellia_128_cfb': (16, 16, OpenSSLCrypto),
+    'camellia_192_cfb': (24, 16, OpenSSLCrypto),
+    'camellia_256_cfb': (32, 16, OpenSSLCrypto),
+    'cast5_cfb': (16, 8, OpenSSLCrypto),
+    'des_cfb': (8, 8, OpenSSLCrypto),
+    'idea_cfb': (16, 8, OpenSSLCrypto),
+    'rc2_cfb': (16, 8, OpenSSLCrypto),
+    'rc4': (16, 0, OpenSSLCrypto),
+    'seed_cfb': (16, 16, OpenSSLCrypto),
 }
 
-def get_evp(alg_key, key, iv):
+def get_evp(alg_key, key, iv, op):
     if alg_key not in ALG_KEY_IV_LEN:
         return
     alg = ALG_KEY_IV_LEN[alg_key]
-    kwargs = alg[3]
-    if "IV" in kwargs:
-        kwargs["IV"] = iv[:alg[1]]
-    return alg[2].new(key[:alg[0]], **kwargs)
+    return alg[2](alg_key.replace("_", "-"), key, iv, op)
 
 def rand_string(length):
     return Random.new().read(length)
@@ -89,6 +107,7 @@ class Crypto(object):
             self._alg,
             self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
             self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
+            1,
         )
         return  "".join(self._ensecret)
 
@@ -101,13 +120,14 @@ class Crypto(object):
             self._alg,
             self.bytes_to_key(self._desecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
             self.bytes_to_key(self._desecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
+            0,
         )
 
     def encrypt(self, data):
-        return self._encipher.encrypt(data)
+        return self._encipher.update(data)
 
     def decrypt(self, data):
-        return self._decipher.decrypt(data)
+        return self._decipher.update(data)
     
     def bytes_to_key(self, salt, crypto_time, key_len):
         d1, d2 = (self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key), ''
