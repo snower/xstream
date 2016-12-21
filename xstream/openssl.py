@@ -33,6 +33,8 @@ def to_bytes(s):
     if bytes != str:
         if type(s) == str:
             return s.encode('utf-8')
+    elif type(s) == unicode:
+        return s.encode('utf-8')
     return s
 
 def find_library_nt(name):
