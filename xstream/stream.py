@@ -4,6 +4,7 @@
 
 import time
 import random
+import math
 from collections import deque
 from sevent import EventEmitter, current, Buffer
 from frame import StreamFrame
@@ -53,10 +54,11 @@ class Stream(EventEmitter):
         if self._priority != 0:
             return 0
 
+        t = time.time()
+        p = self._send_frame_count * 2.0 / (1 + math.sqrt(t - self._start_time))
         if self._send_is_set_ready:
-            return self._send_frame_count * 2.0 / (1 + time.time() - self._send_time)
-        else:
-            return self._send_frame_count * 2.0
+            return p / (1 + t - self._send_time)
+        return p
 
     @property
     def capped(self):
