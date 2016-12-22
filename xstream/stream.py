@@ -57,7 +57,9 @@ class Stream(EventEmitter):
         t = time.time()
         p = self._send_frame_count * 2.0 / (1 + math.sqrt(t - self._start_time))
         if self._send_is_set_ready:
-            return p / (1 + t - self._send_time)
+            if t - self._send_time > 30:
+                return 0
+            return p / ((1 + t - self._send_time) ** 2)
         return p
 
     @property
