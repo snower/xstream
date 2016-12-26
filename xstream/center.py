@@ -135,7 +135,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().timeout(max(10, math.sqrt(self.ttl / 2.0)), self.on_send_timeout_loop, send_frame)
+                            current().timeout(max(60, math.sqrt(self.ttl * 5)), self.on_send_timeout_loop, send_frame)
                             self.send_timeout_loop = True
                             break
             
@@ -266,7 +266,7 @@ class Center(EventEmitter):
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - send_frame.send_time)), 5), self.on_send_timeout_loop, send_frame)
+                    current().timeout(min(max(60, math.sqrt(self.ttl * 5) - (time.time() - send_frame.send_time)), 15), self.on_send_timeout_loop, send_frame)
                     self.send_timeout_loop = True
                     return
         self.send_timeout_loop = False
