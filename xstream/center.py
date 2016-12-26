@@ -136,7 +136,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().timeout(60, self.on_send_timeout_loop, send_frame)
+                            current().timeout(60, self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
             
@@ -252,8 +252,8 @@ class Center(EventEmitter):
         else:
             self.ack_timeout_loop = False
 
-    def on_send_timeout_loop(self, frame):
-        if frame.ack_time == 0 and self.send_frames:
+    def on_send_timeout_loop(self, frame, ack_index):
+        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
             for send_frame in self.send_frames:
                 if frame.connection == send_frame.connection:
                     bisect.insort(self.frames, send_frame)
@@ -261,13 +261,13 @@ class Center(EventEmitter):
             if frame.connection and frame.connection._connection:
                 connection = frame.connection._connection
                 connection.close()
-                logging.info("xstream session %s center %s %s send timeout close %s %s", self.session, self, connection, self.send_index, self.ack_index)
+                logging.info("xstream session %s center %s %s send timeout close %s %s %s", self.session, self, connection, frame.index, self.send_index, self.ack_index)
             current().async(self.write_frame)
 
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().timeout(60, self.on_send_timeout_loop, send_frame)
+                    current().timeout(15, self.on_send_timeout_loop, send_frame, self.ack_index)
                     self.send_timeout_loop = True
                     return
         self.send_timeout_loop = False

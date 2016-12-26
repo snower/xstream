@@ -241,7 +241,7 @@ class Stream(EventEmitter):
             logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", session, self,
                          self.format_data_len(self._send_data_len), self._send_frame_count,
                          self.format_data_len(self._recv_data_len), self._recv_frame_count,
-                         time.time() - self._start_time)
+                         (time.time() - self._start_time) * 1000)
 
         self.loop.async(do_close)
 
