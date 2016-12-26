@@ -223,7 +223,7 @@ class Center(EventEmitter):
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-            logging.info("stream session <%s, %s %s %s %s> center %s ttl %s", self.session, self, self.send_index, self.ack_index, len(self.frames), len(self.send_frames), self.ttl)
+            logging.info("stream session %s center <%s, %s %s %s %s> ttl %s", self.session, self, self.send_index, self.ack_index, len(self.frames), len(self.send_frames), self.ttl)
 
     def write_action(self, action, data='', index=None):
         data += rand_string(random.randint(1, 1024 - len(data)))
