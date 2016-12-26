@@ -15,6 +15,8 @@ class Frame(object):
         self.action = action
         self.data = data
         self.connection = connection
+        self.send_time = 0
+        self.ack_time = 0
 
     def dumps(self):
         return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])

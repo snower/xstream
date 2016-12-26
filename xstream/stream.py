@@ -5,6 +5,7 @@
 import time
 import random
 import math
+import logging
 from collections import deque
 from sevent import EventEmitter, current, Buffer
 from frame import StreamFrame
@@ -216,6 +217,14 @@ class Stream(EventEmitter):
         else:
             self.write_action(ACTION_CLIOSE)
 
+    def format_data_len(self, data_len):
+        if data_len < 1024:
+            return "%dB" % data_len
+        elif data_len < 1024 * 1024:
+            return "%.3fK" % (data_len / 1024.0)
+        elif data_len < 1024 * 1024 * 1024:
+            return "%.3fM" % (data_len / (1024.0 * 1024.0))
+
     def do_close(self):
         self._closed = True
         def do_close():
@@ -228,6 +237,10 @@ class Stream(EventEmitter):
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
+            logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", self.session, self,
+                         self.format_data_len(self._send_data_len), self._send_frame_count,
+                         self.format_data_len(self._recv_data_len), self._recv_frame_count,
+                         time.time() - self._start_time)
 
         self.loop.async(do_close)
 

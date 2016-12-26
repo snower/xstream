@@ -128,9 +128,12 @@ class Center(EventEmitter):
             connection.write(frame.dumps())
             if frame.index != 0:
                 frame.connection = connection
+                frame.send_time = time.time()
+                frame.ack_time = 0
                 bisect.insort(self.send_frames, frame)
+
                 if not self.send_timeout_loop:
-                    current().timeout(max(10, math.sqrt(self.ttl / 10.0) * 2), self.on_send_timeout_loop, self.send_frames[0])
+                    current().timeout(max(10, math.sqrt(self.ttl / 2.0)), self.on_send_timeout_loop, self.send_frames[0])
                     self.send_timeout_loop = True
             
         else:
@@ -180,7 +183,8 @@ class Center(EventEmitter):
         if action == ACTION_ACK:
             index, = struct.unpack("!I", data[:4])
             while self.send_frames and self.send_frames[0].index <= index:
-                self.send_frames.pop(0)
+                frame = self.send_frames.pop(0)
+                frame.ack_time = time.time()
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data[:8])
             logging.info("stream session %s center %s index resend action %s %s", self.session, self, index, recv_index)
@@ -245,16 +249,20 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
 
     def on_send_timeout_loop(self, frame):
-        if self.send_frames:
-            if frame == self.send_frames[0]:
-                bisect.insort(self.frames, frame)
-                self.send_frames.pop(0)
-                if frame.connection and frame.connection._connection:
-                    frame.connection._connection.close()
-                current().async(self.write_frame)
+        if frame.ack_time == 0 and self.send_frames:
+            for send_frame in self.send_frames:
+                if frame.connection == send_frame.connection:
+                    bisect.insort(self.frames, send_frame)
+                    self.send_frames.remove(send_frame)
+            if frame.connection and frame.connection._connection:
+                connection = frame.connection._connection
+                connection.close()
+                logging.info("xstream session %s center %s %s send timeout close", self.session, self, connection)
+            current().async(self.write_frame)
 
         if self.send_frames:
-            current().timeout(max(10, math.sqrt(self.ttl / 10.0) * 2), self.on_send_timeout_loop, self.send_frames[0])
+            frame = self.send_frames[0]
+            current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - frame.send_time), 5)), self.on_send_timeout_loop, frame)
         else:
             self.send_timeout_loop = False
 
