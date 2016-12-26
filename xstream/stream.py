@@ -232,12 +232,13 @@ class Stream(EventEmitter):
                 self._session.ready_write(self, False)
                 self._send_is_set_ready = False
 
+            session = self._session
             if self._session:
                 self.emit("close", self)
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
-            logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", self._session, self,
+            logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", session, self,
                          self.format_data_len(self._send_data_len), self._send_frame_count,
                          self.format_data_len(self._recv_data_len), self._recv_frame_count,
                          time.time() - self._start_time)
