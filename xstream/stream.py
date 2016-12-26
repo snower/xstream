@@ -237,7 +237,7 @@ class Stream(EventEmitter):
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
-            logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", self.session, self,
+            logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", self._session, self,
                          self.format_data_len(self._send_data_len), self._send_frame_count,
                          self.format_data_len(self._recv_data_len), self._recv_frame_count,
                          time.time() - self._start_time)
