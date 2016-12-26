@@ -138,6 +138,12 @@ class Session(EventEmitter):
         self._current_stream_id += 2
         if self._current_stream_id > 0xffff:
             self._current_stream_id = 1 if self._is_server else 2
+
+        while stream_id in self._streams:
+            stream_id = self._current_stream_id
+            self._current_stream_id += 2
+            if self._current_stream_id > 0xffff:
+                self._current_stream_id = 1 if self._is_server else 2
         return stream_id
 
     def create_stream(self, stream_id = None, **kwargs):
@@ -223,4 +229,4 @@ class Session(EventEmitter):
         self.close()
 
     def __str__(self):
-        return "<%s %s>" % (super(Session, self).__str__(), self._session_id)
+        return "<%s %s,%s>" % (super(Session, self).__str__(), self._session_id, len(self._streams))

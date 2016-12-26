@@ -136,7 +136,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().timeout(60, self.on_send_timeout_loop, send_frame, self.ack_index)
+                            current().timeout(max(60, math.sqrt(self.ttl * 5)), self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
             
@@ -223,7 +223,7 @@ class Center(EventEmitter):
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-            logging.info("stream session %s center %s ttl %s", self.session, self, self.ttl)
+            logging.info("stream session <%s, %s %s %s %s> center %s ttl %s", self.session, self, self.send_index, self.ack_index, len(self.frames), len(self.send_frames), self.ttl)
 
     def write_action(self, action, data='', index=None):
         data += rand_string(random.randint(1, 1024 - len(data)))
@@ -267,7 +267,7 @@ class Center(EventEmitter):
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().timeout(15, self.on_send_timeout_loop, send_frame, self.ack_index)
+                    current().timeout(min(max(60, math.sqrt(self.ttl * 5) - (time.time() - send_frame.send_time)), 5), self.on_send_timeout_loop, send_frame, self.ack_index)
                     self.send_timeout_loop = True
                     return
         self.send_timeout_loop = False
