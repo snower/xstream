@@ -133,8 +133,11 @@ class Center(EventEmitter):
                 bisect.insort(self.send_frames, frame)
 
                 if not self.send_timeout_loop:
-                    current().timeout(max(10, math.sqrt(self.ttl / 2.0)), self.on_send_timeout_loop, self.send_frames[0])
-                    self.send_timeout_loop = True
+                    for send_frame in self.send_frames:
+                        if send_frame.index != 0:
+                            current().timeout(max(10, math.sqrt(self.ttl / 2.0)), self.on_send_timeout_loop, send_frame)
+                            self.send_timeout_loop = True
+                            break
             
         else:
             self.drain_connections.append(connection)
@@ -261,10 +264,12 @@ class Center(EventEmitter):
             current().async(self.write_frame)
 
         if self.send_frames:
-            frame = self.send_frames[0]
-            current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - frame.send_time)), 5), self.on_send_timeout_loop, frame)
-        else:
-            self.send_timeout_loop = False
+            for send_frame in self.send_frames:
+                if send_frame.index != 0:
+                    current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - send_frame.send_time)), 5), self.on_send_timeout_loop, send_frame)
+                    self.send_timeout_loop = True
+                    return
+        self.send_timeout_loop = False
 
     def write_ttl(self):
         for i in range(1):
