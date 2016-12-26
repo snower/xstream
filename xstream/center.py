@@ -262,7 +262,7 @@ class Center(EventEmitter):
 
         if self.send_frames:
             frame = self.send_frames[0]
-            current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - frame.send_time), 5)), self.on_send_timeout_loop, frame)
+            current().timeout(min(max(10, math.sqrt(self.ttl / 2.0) - (time.time() - frame.send_time)), 5), self.on_send_timeout_loop, frame)
         else:
             self.send_timeout_loop = False
 
