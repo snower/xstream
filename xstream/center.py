@@ -32,6 +32,7 @@ class Center(EventEmitter):
         self.send_frames = []
         self.send_index = 1
         self.drain_connections = deque()
+        self.ack_index = 0
         self.ack_time = 0
         self.ack_loop = False
         self.ack_timeout_loop = False
@@ -135,7 +136,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().timeout(max(60, math.sqrt(self.ttl * 5)), self.on_send_timeout_loop, send_frame)
+                            current().timeout(60, self.on_send_timeout_loop, send_frame)
                             self.send_timeout_loop = True
                             break
             
@@ -184,8 +185,8 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            index, = struct.unpack("!I", data[:4])
-            while self.send_frames and self.send_frames[0].index <= index:
+            self.ack_index, = struct.unpack("!I", data[:4])
+            while self.send_frames and self.send_frames[0].index <= self.ack_index:
                 frame = self.send_frames.pop(0)
                 frame.ack_time = time.time()
         elif action == ACTION_RESEND:
@@ -260,13 +261,13 @@ class Center(EventEmitter):
             if frame.connection and frame.connection._connection:
                 connection = frame.connection._connection
                 connection.close()
-                logging.info("xstream session %s center %s %s send timeout close", self.session, self, connection)
+                logging.info("xstream session %s center %s %s send timeout close %s %s", self.session, self, connection, self.send_index, self.ack_index)
             current().async(self.write_frame)
 
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().timeout(min(max(60, math.sqrt(self.ttl * 5) - (time.time() - send_frame.send_time)), 15), self.on_send_timeout_loop, send_frame)
+                    current().timeout(60, self.on_send_timeout_loop, send_frame)
                     self.send_timeout_loop = True
                     return
         self.send_timeout_loop = False
