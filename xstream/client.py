@@ -70,7 +70,7 @@ class Client(EventEmitter):
         _, protecol_code = pack_protocel_code(crypto_time, 0)
         key = connection.crypto.init_encrypt(crypto_time)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
-        connection.write(protecol_code + key + auth + rand_string(random.randint(16, 512)))
+        connection.write(protecol_code + key + auth + rand_string(random.randint(16, 1024)))
         logging.info("xstream auth connection connect %s", connection)
 
     def on_data(self, connection, data):
@@ -128,7 +128,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt(crypto_time)
         session_crypto_key = rand_string(64)
         auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key)
-        obstruction_len = random.randint(1, 512)
+        obstruction_len = random.randint(16, 1024)
         obstruction = rand_string(obstruction_len)
 
         crypto = self._session.get_encrypt_crypto(crypto_time)
