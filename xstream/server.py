@@ -100,7 +100,7 @@ class Server(EventEmitter):
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
                     auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key)
-                    obstruction_len = random.randint(128, 4096)
+                    obstruction_len = random.randint(128, 1024)
                     obstruction = rand_string(obstruction_len)
 
                     crypto = session.get_encrypt_crypto(crypto_time)
