@@ -54,7 +54,7 @@ class Server(EventEmitter):
                 rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
                 session_id = xor_string(rand_code & 0xff, struct.pack("!H", session.id))
                 auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
-                connection.write(protocel_code + session_id + key + auth + rand_string(random.randint(1024, 4096)))
+                connection.write(protocel_code + session_id + key + auth + rand_string(random.randint(512, 4096)))
 
                 session.on("close", self.on_session_close)
                 self.emit("session", self, session)
@@ -100,7 +100,7 @@ class Server(EventEmitter):
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
                     auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key)
-                    obstruction_len = random.randint(1, 512)
+                    obstruction_len = random.randint(128, 4096)
                     obstruction = rand_string(obstruction_len)
 
                     crypto = session.get_encrypt_crypto(crypto_time)
