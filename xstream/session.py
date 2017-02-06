@@ -95,6 +95,8 @@ class Session(EventEmitter):
             connection = Connection(conn, self)
             self._connections.append(connection)
             self._center.add_connection(connection)
+            return connection
+        return None
 
     def remove_connection(self, conn):
         for connection in self._connections:

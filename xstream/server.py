@@ -110,9 +110,11 @@ class Server(EventEmitter):
 
                     session.current_crypto_key = (last_session_crypto_time, session_crypto_key)
 
-                    def add_connection():
-                        session.add_connection(connection)
-                    current().async(add_connection)
+                    def add_connection(conn):
+                        connection = session.add_connection(conn)
+                        if connection:
+                            connection.write_action(0x05, rand_string(random.randint(128, 32 * 1024)))
+                    current().async(add_connection, connection)
 
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)

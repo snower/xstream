@@ -33,8 +33,14 @@ class Client(EventEmitter):
         return struct.pack("!I", int(time.time())) + rand_string(12)
 
     def init_connection(self):
-        if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
-            self._connecting = self.fork_connection()
+        def do_init_connection():
+            if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
+                self._connecting = self.fork_connection()
+
+        if len(self._connections) < 1:
+            do_init_connection()
+        else:
+            current().timeout(random.randint(10, 300), do_init_connection)
 
     def open(self):
         self.opening = True

@@ -15,6 +15,7 @@ ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
 ACTION_CLOSE  = 0x03
 ACTION_CLOSE_ACK = 0x04
+ACTION_NOISE = 0x05
 
 class Connection(EventEmitter):
     def __init__(self, connection, session):
