@@ -68,9 +68,6 @@ class Connection(EventEmitter):
             if self._wait_head:
                 self._wait_head = False
                 self._data_len, = struct.unpack("!H", data)
-                if self._data_len > StreamFrame.FRAME_LEN + 20:
-                    logging.info("connection %s  data len error", self)
-                    return self._connection.close()
             else:
                 self._wait_head = True
                 self._data_len = 2
