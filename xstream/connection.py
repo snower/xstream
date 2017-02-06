@@ -92,7 +92,7 @@ class Connection(EventEmitter):
             return self._connection.write(data)
 
     def write_action(self, action, data=''):
-        data += rand_string(random.randint(1, 128 - len(data)))
+        data += rand_string(random.randint(1, 256))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
         return self._connection.write(data)
