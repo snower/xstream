@@ -40,7 +40,7 @@ class Client(EventEmitter):
         if len(self._connections) < 1:
             do_init_connection()
         else:
-            current().timeout(random.randint(10, 300), do_init_connection)
+            current().timeout(random.randint(5, 60), do_init_connection)
 
     def open(self):
         self.opening = True
