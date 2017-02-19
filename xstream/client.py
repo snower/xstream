@@ -18,6 +18,7 @@ class Client(EventEmitter):
 
         self._host = host
         self._port = port
+        self._host_index = 0
         self._max_connections = max_connections
         self._connections = []
         self._session = None
@@ -53,7 +54,10 @@ class Client(EventEmitter):
         connection.on("connect", self.on_connect)
         connection.on("data", self.on_data)
         connection.on("close", self.on_close)
-        connection.connect((self._host, self._port))
+        if isinstance(self._host, (tuple, list, set)):
+            connection.connect(tuple(self._host[0]))
+        else:
+            connection.connect((self._host, self._port))
         
         def on_timeout():
             connection.close()
@@ -117,7 +121,13 @@ class Client(EventEmitter):
         connection.once("connect", self.on_fork_connect)
         connection.once("close", self.on_fork_close)
         connection.once("data", self.on_fork_data)
-        connection.connect((self._host, self._port))
+        if isinstance(self._host, (tuple, list, set)):
+            connection.connect(tuple(self._host[self._host_index]))
+            self._host_index += 1
+            if self._host_index >= len(self._host):
+                self._host_index = 0
+        else:
+            connection.connect((self._host, self._port))
         self._connections.append(connection)
         
         def on_timeout():
