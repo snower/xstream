@@ -63,10 +63,10 @@ class Session(EventEmitter):
         self._current_crypto_key = value
         self._crypto_keys[value[0]] = value[1]
 
-        if len(self._crypto_keys) >= 5:
+        if len(self._crypto_keys) >= 15:
             now = time.time()
             for key_time in self._crypto_keys.keys():
-                if now - key_time > 2 * 60 * 60:
+                if now - key_time > 6 * 60 * 60:
                     del self._crypto_keys[key_time]
 
     def dumps(self):
@@ -145,7 +145,8 @@ class Session(EventEmitter):
                 def on_exit():
                     if not self._connections:
                         self.do_close()
-                current().timeout(300, on_exit)
+
+                current().async(on_exit)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
