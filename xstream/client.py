@@ -72,8 +72,11 @@ class Client(EventEmitter):
             fp.write(session)
 
     def init_connection(self):
+        if not self._session:
+            return 
+        
         def do_init_connection():
-            if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
+            if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
                 self._connecting = self.fork_connection()
 
         if len(self._connections) < 1:
