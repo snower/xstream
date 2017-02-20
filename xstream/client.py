@@ -270,6 +270,9 @@ class Client(EventEmitter):
     def on_session_close(self, session):
         if self._session == session:
             self._session = None
+            self._connections = []
+            self._connecting = None
+            self._reconnect_count = 0
             self.opening = False
             self.running = False
         logging.info("xstream client %s session close", self)
