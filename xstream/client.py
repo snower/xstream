@@ -116,8 +116,11 @@ class Client(EventEmitter):
         if callable(callback):
             self.once("session", callback)
         if not self.opening:
-            self.open()
-        logging.info("xstream client %s session reopen", self)
+            def do_open():
+                if not self.opening:
+                    self.open()
+                    logging.info("xstream client %s session reopen", self)
+            current().timeout(2, do_open)
 
     def close(self):
         for connection in self._connections:
