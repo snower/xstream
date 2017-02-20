@@ -120,7 +120,7 @@ class Client(EventEmitter):
             self.once("session", callback)
         if not self.opening:
             def do_open():
-                if not self.opening:
+                if not self.opening and not self.running:
                     self.open()
                     logging.info("xstream client %s session reopen", self)
             current().timeout(2, do_open)
