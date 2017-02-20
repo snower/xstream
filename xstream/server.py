@@ -2,11 +2,13 @@
 # 14/12/10
 # create by: snower
 
+import os
 import time
 import logging
 import struct
 import socket
 import random
+import hashlib
 from sevent import EventEmitter, tcp, current
 from session import Session
 from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
@@ -24,12 +26,51 @@ class Server(EventEmitter):
         self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
         self._crypto_alg = crypto_alg
 
+    def get_session_key(self, session_id):
+        return hashlib.md5("".join([str(self._host), str(self._port), self._crypto_key, self._crypto_alg, str(session_id)]).encode("utf-8")).hexdigest()
+
+    def get_session_path(self):
+        session_path = os.environ.get("SESSION_PATH")
+        if session_path:
+            return os.path.abspath(session_path)
+        return os.path.abspath("./session")
+
+    def load_session(self, session_id):
+        session_path = self.get_session_path()
+        try:
+            if not os.path.exists(session_path + "/"):
+                os.makedirs(session_path + "/")
+            session_key = self.get_session_key(session_id)
+            if os.path.exists(session_path + "/" + session_key):
+                with open(session_path + "/" + session_key) as fp:
+                    session = Session.loads(fp.read())
+                    if session:
+                        logging.info("xstream load session %s %s", self, session)
+                        return session
+        except Exception as e:
+            logging.error("xstream load session fail %s", self)
+        return None
+
+    def save_session(self, session):
+        session_path = self.get_session_path()
+        if not os.path.exists(session_path + "/"):
+            os.makedirs(session_path + "/")
+        session_key = self.get_session_key(session.id)
+        session = session.dumps()
+        with open(session_path + "/" + session_key, "w") as fp:
+            fp.write(session)
+
     def start(self):
         self._server.on("connection", self.on_connection)
         self._server.listen((self._host, self._port))
 
     def on_connection(self, server, connection):
         connection.once("data", self.on_data)
+        setattr(connection, "is_connected_session", False)
+        def on_timeout():
+            if not connection.is_connected_session:
+                connection.close()
+        current().timeout(random.randint(5, 30), on_timeout)
 
     def on_data(self, connection, data):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
@@ -79,7 +120,16 @@ class Server(EventEmitter):
     def on_fork_connection(self, connection, data, rand_code, crypto_time):
         session_id = ''
         if len(data) >= 148:
+            connection.is_connected_session = True
             session_id, = struct.unpack("!H", xor_string(rand_code & 0xff, data.read(2), False))
+            if session_id not in self._sessions:
+                session = self.load_session(session_id)
+                if session:
+                    self._sessions[session.id] = session
+                    session.on("close", self.on_session_close)
+                    self.emit("session", self, session)
+                    logging.info("xstream session open %s", session)
+
             if session_id in self._sessions:
                 session = self._sessions[session_id]
 
@@ -118,8 +168,10 @@ class Server(EventEmitter):
 
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)
+                        self.save_session(session)
                         logging.info("xstream connection close %s %s", session, connection)
                     connection.on("close", on_fork_connection_close)
+                    self.save_session(session)
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
         connection.close()

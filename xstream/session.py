@@ -4,11 +4,13 @@
 
 import time
 import logging
+import base64
+import pickle
 from sevent import EventEmitter, current
+from crypto import Crypto
 from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame
-from crypto import rand_string
 
 STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
@@ -66,6 +68,34 @@ class Session(EventEmitter):
             for key_time in self._crypto_keys.keys():
                 if now - key_time > 2 * 60 * 60:
                     del self._crypto_keys[key_time]
+
+    def dumps(self):
+        return base64.b64encode(pickle.dumps({
+            "session_id": self._session_id,
+            "is_server": self._is_server,
+            "auth_key": self._auth_key,
+            "crypto_key": self._crypto._key,
+            "crypto_alg": self._crypto._alg,
+            "crypto_ensecret": list(self._crypto_ensecret),
+            "crypto_desecret": list(self._crypto_desecret),
+            "crypto_keys": self._crypto_keys,
+            "current_crypto_key": self._current_crypto_key,
+            "mss": self._mss,
+        }))
+
+    @classmethod
+    def loads(cls, s):
+        try:
+            s = pickle.loads(base64.b64decode(s))
+            crypto = Crypto(s["crypto_key"], s["crypto_alg"])
+            crypto._ensecret = tuple(s["crypto_ensecret"])
+            crypto._desecret = tuple(s["crypto_desecret"])
+            session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
+            session._crypto_keys = s["crypto_keys"]
+            session.current_crypto_key = s["current_crypto_key"]
+        except:
+            return None
+        return session
 
     def get_crypto_key(self, crypto_time):
         if crypto_time not in self._crypto_keys:

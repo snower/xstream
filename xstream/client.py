@@ -2,11 +2,13 @@
 # 14/12/10
 # create by: snower
 
+import os
 import time
 import logging
 import struct
 import socket
 import random
+import hashlib
 from sevent import EventEmitter, current, tcp
 from session import Session
 from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
@@ -33,6 +35,42 @@ class Client(EventEmitter):
     def get_auth_key(self):
         return struct.pack("!I", int(time.time())) + rand_string(12)
 
+    def get_session_key(self):
+        return hashlib.md5("".join([str(self._host), str(self._port), self._crypto_key, self._crypto_alg]).encode("utf-8")).hexdigest()
+
+    def get_session_path(self):
+        session_path = os.environ.get("SESSION_PATH")
+        if session_path:
+            return os.path.abspath(session_path)
+        return os.path.abspath("./session")
+
+    def load_session(self):
+        session_path = self.get_session_path()
+        if not os.path.exists(session_path + "/"):
+            os.makedirs(session_path + "/")
+        session_key = self.get_session_key()
+
+        try:
+            if os.path.exists(session_path + "/" + session_key):
+                with open(session_path + "/" + session_key) as fp:
+                    session = Session.loads(fp.read())
+                    if session:
+                        self._auth_key = session.auth_key
+                        logging.info("xstream load session %s %s %s", self, session_key, session)
+                        return session
+        except Exception as e:
+            logging.error("xstream load session fail %s %s", self, session_key)
+        return None
+
+    def save_session(self):
+        session_path = self.get_session_path()
+        if not os.path.exists(session_path + "/"):
+            os.makedirs(session_path + "/")
+        session_key = self.get_session_key()
+        session = self._session.dumps()
+        with open(session_path + "/" + session_key, "w") as fp:
+            fp.write(session)
+
     def init_connection(self):
         def do_init_connection():
             if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
@@ -44,6 +82,17 @@ class Client(EventEmitter):
             current().timeout(random.randint(5, 60), do_init_connection)
 
     def open(self):
+        session = self.load_session()
+        if session:
+            self._session = session
+            self._session.on("close", self.on_session_close)
+            self.emit("session", self, self._session)
+
+            self.running = True
+            self.init_connection()
+            logging.info("xstream client %s session open", self)
+            return
+
         self.opening = True
         self._connections = []
         self._connecting = None
@@ -100,6 +149,7 @@ class Client(EventEmitter):
             self.running = True
             self.init_connection()
             connection.close()
+            self.save_session()
             logging.info("xstream client %s session open", self)
             return
         connection.close()
@@ -177,6 +227,7 @@ class Client(EventEmitter):
             self._reconnect_count = 0
             self.init_connection()
             connection.is_connected_session = True
+            self.save_session()
             logging.info("xstream connection ready %s", connection)
             return
         connection.close()
@@ -186,6 +237,7 @@ class Client(EventEmitter):
         if not self._session:
             return
         self._session.remove_connection(connection)
+        self.save_session()
         if connection in self._connections:
             self._connections.remove(connection)
         if self._connecting == connection:
