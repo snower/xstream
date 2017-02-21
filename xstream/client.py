@@ -72,12 +72,15 @@ class Client(EventEmitter):
             fp.write(session)
 
     def init_connection(self):
+        if not self._session:
+            return 
+        
         def do_init_connection():
-            if self._connecting is None and not self._session.closed and len(self._connections) < self._max_connections:
+            if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
                 self._connecting = self.fork_connection()
 
         if len(self._connections) < 1:
-            do_init_connection()
+            current().timeout(0.01, do_init_connection)
         else:
             current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
 
@@ -116,8 +119,11 @@ class Client(EventEmitter):
         if callable(callback):
             self.once("session", callback)
         if not self.opening:
-            self.open()
-        logging.info("xstream client %s session reopen", self)
+            def do_open():
+                if not self.opening and not self.running:
+                    self.open()
+                    logging.info("xstream client %s session reopen", self)
+            current().timeout(2, do_open)
 
     def close(self):
         for connection in self._connections:
@@ -264,6 +270,9 @@ class Client(EventEmitter):
     def on_session_close(self, session):
         if self._session == session:
             self._session = None
+            self._connections = []
+            self._connecting = None
+            self._reconnect_count = 0
             self.opening = False
             self.running = False
         logging.info("xstream client %s session close", self)
