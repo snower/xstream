@@ -9,6 +9,8 @@ import struct
 import socket
 import random
 import hashlib
+import pickle
+import base64
 from sevent import EventEmitter, tcp, current
 from session import Session
 from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
@@ -21,6 +23,7 @@ class Server(EventEmitter):
         self._host = host
         self._port = port
         self._server = tcp.Server()
+        self._used_session_ids = {}
         self._sessions = {}
         self._current_session_id = 1
         self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
@@ -34,6 +37,28 @@ class Server(EventEmitter):
         if session_path:
             return os.path.abspath(session_path)
         return os.path.abspath("./session")
+
+    def check_session(self):
+        session_path = self.get_session_path()
+        if not os.path.exists(session_path + "/"):
+            os.makedirs(session_path + "/")
+
+        now = time.time()
+        for filename in os.listdir(session_path + "/"):
+            try:
+                with open(session_path + "/" + filename) as fp:
+                    session = pickle.loads(base64.b64decode(fp.read()))
+                    if not session["is_server"]:
+                        continue
+
+                    if now - session["t"] > 7 * 24 * 60 * 60:
+                        os.remove(session_path + "/" + filename)
+                        logging.info("xstream check session remove %s %s", session["session_id"], filename)
+                    else:
+                        self._used_session_ids[session["session_id"]] = filename
+                        logging.info("xstream check session %s %s", session["session_id"], filename)
+            except Exception as e:
+                logging.info("xstream check session error %s %s", filename, e)
 
     def load_session(self, session_id):
         session_path = self.get_session_path()
@@ -61,6 +86,7 @@ class Server(EventEmitter):
             fp.write(session)
 
     def start(self):
+        self.check_session()
         self._server.on("connection", self.on_connection)
         self._server.listen((self._host, self._port))
 
@@ -99,6 +125,7 @@ class Server(EventEmitter):
 
                 session.on("close", self.on_session_close)
                 self.emit("session", self, session)
+                self.save_session(session)
                 logging.info("xstream session open %s", session)
                 return
         connection.close()
@@ -108,10 +135,11 @@ class Server(EventEmitter):
         mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 32, StreamFrame.FRAME_LEN)
         session = Session(self.get_session_id(), auth_key, True, crypto, mss)
         self._sessions[session.id] = session
+        self._used_session_ids[session.id] = self.get_session_key(session.id)
         return session
 
     def get_session_id(self):
-        while self._current_session_id in self._sessions:
+        while self._current_session_id in self._used_session_ids:
             self._current_session_id += 1
         session_id = self._current_session_id
         self._current_session_id += 1
@@ -133,8 +161,8 @@ class Server(EventEmitter):
             if session_id in self._sessions:
                 session = self._sessions[session_id]
 
-                last_session_crypto_time = crypto_time - struct.unpack("!h", data.read(2))[0]
-                crypto = session.get_decrypt_crypto(crypto_time, last_session_crypto_time)
+                last_session_crypto_id = struct.unpack("!H", data.read(2))[0]
+                crypto = session.get_decrypt_crypto(crypto_time, last_session_crypto_id)
                 decrypt_data = crypto.decrypt(data.read(146))
                 auth = decrypt_data[:16]
                 key = decrypt_data[16:80]
@@ -146,7 +174,8 @@ class Server(EventEmitter):
                     obstruction_len, = struct.unpack("!H", decrypt_data[144:146])
                     data.read(obstruction_len)
 
-                    crypto_time, last_session_crypto_time = get_crypto_time(), crypto_time
+                    crypto_time = get_crypto_time()
+                    session_crypto_id = random.randint(0, 0xFFFF)
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
                     auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key)
@@ -156,9 +185,9 @@ class Server(EventEmitter):
                     crypto = session.get_encrypt_crypto(crypto_time)
                     data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
 
-                    connection.write(protocel_code + struct.pack("!h", crypto_time - last_session_crypto_time) + data + obstruction)
+                    connection.write(protocel_code + struct.pack("!H", session_crypto_id) + data + obstruction)
 
-                    session.current_crypto_key = (last_session_crypto_time, session_crypto_key)
+                    session.current_crypto_key = (session_crypto_id, session_crypto_key)
 
                     def add_connection(conn):
                         connection = session.add_connection(conn)

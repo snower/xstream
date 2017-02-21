@@ -27,7 +27,7 @@ class Session(EventEmitter):
         self._crypto_desecret = crypto._desecret
         self._crypto = crypto
         self._crypto_keys = {}
-        self._current_crypto_key = {}
+        self._current_crypto_key = None
         self._mss = mss
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
@@ -61,13 +61,13 @@ class Session(EventEmitter):
     @current_crypto_key.setter
     def current_crypto_key(self, value):
         self._current_crypto_key = value
-        self._crypto_keys[value[0]] = value[1]
+        self._crypto_keys[value[0]] = (value[1], time.time())
 
         if len(self._crypto_keys) >= 15:
             now = time.time()
-            for key_time in self._crypto_keys.keys():
+            for crypto_id, (_, key_time) in self._crypto_keys.iteritems():
                 if now - key_time > 6 * 60 * 60:
-                    del self._crypto_keys[key_time]
+                    del self._crypto_keys[crypto_id]
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
@@ -81,6 +81,7 @@ class Session(EventEmitter):
             "crypto_keys": self._crypto_keys,
             "current_crypto_key": self._current_crypto_key,
             "mss": self._mss,
+            "t": time.time()
         }))
 
     @classmethod
@@ -97,10 +98,10 @@ class Session(EventEmitter):
             return None
         return session
 
-    def get_crypto_key(self, crypto_time):
-        if crypto_time not in self._crypto_keys:
+    def get_crypto_key(self, crypto_id):
+        if crypto_id not in self._crypto_keys:
             return None
-        return self._crypto_keys[crypto_time]
+        return self._crypto_keys[crypto_id][0]
 
     def get_encrypt_crypto(self, crypto_time):
         current_crypto_key = self.current_crypto_key
@@ -110,8 +111,8 @@ class Session(EventEmitter):
         self._crypto.init_encrypt(crypto_time, self._crypto_ensecret, current_crypto_key[1])
         return self._crypto
 
-    def get_decrypt_crypto(self, crypto_time, last_crypto_time):
-        current_crypto_key = self.get_crypto_key(last_crypto_time)
+    def get_decrypt_crypto(self, crypto_time, last_crypto_id):
+        current_crypto_key = self.get_crypto_key(last_crypto_id)
         if not current_crypto_key:
             current_crypto_key = '0' * 64
 
