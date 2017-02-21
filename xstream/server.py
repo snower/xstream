@@ -183,9 +183,9 @@ class Server(EventEmitter):
                     obstruction = rand_string(obstruction_len)
 
                     crypto = session.get_encrypt_crypto(crypto_time)
-                    data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
+                    data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!HH", session_crypto_id, obstruction_len))
 
-                    connection.write(protocel_code + struct.pack("!H", session_crypto_id) + data + obstruction)
+                    connection.write(protocel_code + data + obstruction)
 
                     session.current_crypto_key = (session_crypto_id, session_crypto_key)
 

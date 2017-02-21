@@ -212,16 +212,15 @@ class Client(EventEmitter):
 
     def on_fork_data(self, connection, data):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
-        session_crypto_id = struct.unpack("!H", data.read(2))[0]
         last_session_crypto_id, _ = self._session.current_crypto_key
         crypto = self._session.get_decrypt_crypto(crypto_time, last_session_crypto_id)
-        decrypt_data = crypto.decrypt(data.read(146))
+        decrypt_data = crypto.decrypt(data.read(148))
 
         key = decrypt_data[16:80]
         session_crypto_key = decrypt_data[80:144]
         if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key):
             connection.crypto.init_decrypt(crypto_time, key)
-            obstruction_len, = struct.unpack("!H", decrypt_data[144:146])
+            session_crypto_id, obstruction_len = struct.unpack("!HH", decrypt_data[144:148])
             data.read(obstruction_len)
 
             self._session.current_crypto_key = (session_crypto_id, session_crypto_key)
