@@ -39,6 +39,11 @@ class Server(EventEmitter):
         return os.path.abspath("./session")
 
     def check_session(self):
+        self._used_session_ids = {}
+
+        for session_id in self._sessions:
+            self._used_session_ids[session_id] = self.get_session_key(session_id)
+
         session_path = self.get_session_path()
         if not os.path.exists(session_path + "/"):
             os.makedirs(session_path + "/")
@@ -89,6 +94,7 @@ class Server(EventEmitter):
         self.check_session()
         self._server.on("connection", self.on_connection)
         self._server.listen((self._host, self._port))
+        current().timeout(6 * 60 * 60, self.check_session)
 
     def on_connection(self, server, connection):
         connection.once("data", self.on_data)

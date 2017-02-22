@@ -65,9 +65,13 @@ class Session(EventEmitter):
 
         if len(self._crypto_keys) >= 15:
             now = time.time()
-            for crypto_id, (_, key_time) in self._crypto_keys.iteritems():
-                if now - key_time > 6 * 60 * 60:
+            crypto_keys = [(crypto_id, key_time) for crypto_id, (_, key_time) in self._crypto_keys.iteritems()]
+            crypto_keys = sorted(crypto_keys, lambda a, y: cmp(a[0], y[0]))
+            for crypto_id, key_time in crypto_keys:
+                if now - key_time > 2 * 60 * 60:
                     del self._crypto_keys[crypto_id]
+                if len(self._crypto_keys) <= 5:
+                    break
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
