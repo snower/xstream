@@ -71,7 +71,7 @@ class Client(EventEmitter):
         with open(session_path + "/" + session_key, "w") as fp:
             fp.write(session)
 
-    def init_connection(self):
+    def init_connection(self, is_on_open = False):
         if not self._session:
             return 
         
@@ -79,7 +79,9 @@ class Client(EventEmitter):
             if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
                 self._connecting = self.fork_connection()
 
-        if len(self._connections) >= 1:
+        if is_on_open:
+            do_init_connection()
+        elif len(self._connections) >= 1:
             current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
 
     def open(self):
@@ -90,7 +92,7 @@ class Client(EventEmitter):
             self.emit("session", self, self._session)
 
             self.running = True
-            self.init_connection()
+            self.init_connection(True)
             logging.info("xstream client %s session open", self)
             return
 
@@ -151,7 +153,7 @@ class Client(EventEmitter):
             self.emit("session", self, self._session)
 
             self.running = True
-            self.init_connection()
+            self.init_connection(True)
             connection.close()
             self.save_session()
             logging.info("xstream client %s session open", self)
