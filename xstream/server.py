@@ -174,7 +174,7 @@ class Server(EventEmitter):
                 key = decrypt_data[16:80]
                 session_crypto_key = decrypt_data[80:144]
 
-                if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key):
+                if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id)):
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     connection.crypto.init_decrypt(crypto_time, key)
                     obstruction_len, = struct.unpack("!H", decrypt_data[144:146])
@@ -182,9 +182,12 @@ class Server(EventEmitter):
 
                     crypto_time = get_crypto_time()
                     session_crypto_id = random.randint(0, 0xFFFF)
+                    while session.get_crypto_key(session_crypto_id):
+                        session_crypto_id = random.randint(0, 0xFFFF)
+
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
-                    auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key)
+                    auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id))
                     obstruction_len = random.randint(128, 1024)
                     obstruction = rand_string(obstruction_len)
 

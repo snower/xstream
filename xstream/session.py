@@ -67,8 +67,11 @@ class Session(EventEmitter):
             now = time.time()
             crypto_keys = [(crypto_id, key_time) for crypto_id, (_, key_time) in self._crypto_keys.iteritems()]
             crypto_keys = sorted(crypto_keys, lambda x, y: cmp(x[1], y[1]))
-            for crypto_id, key_time in crypto_keys:
-                if now - key_time > 2 * 60 * 60:
+            for i in xrange(len(crypto_keys)):
+                crypto_id, key_time = crypto_keys[i]
+                if len(crypto_keys) >= 100 and i > 20 and i < len(crypto_keys) - 10:
+                    del self._crypto_keys[crypto_id]
+                elif now - key_time > 2 * 60 * 60:
                     del self._crypto_keys[crypto_id]
                 if len(self._crypto_keys) <= 5:
                     break

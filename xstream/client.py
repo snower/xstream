@@ -79,9 +79,7 @@ class Client(EventEmitter):
             if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
                 self._connecting = self.fork_connection()
 
-        if len(self._connections) < 1:
-            current().timeout(0.01, do_init_connection)
-        else:
+        if len(self._connections) >= 1:
             current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
 
     def open(self):
@@ -199,14 +197,14 @@ class Client(EventEmitter):
 
         key = connection.crypto.init_encrypt(crypto_time)
         session_crypto_key = rand_string(64)
-        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key)
+        last_session_crypto_id, _ = self._session.current_crypto_key
+        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id))
         obstruction_len = random.randint(16, 1024)
         obstruction = rand_string(obstruction_len)
 
         crypto = self._session.get_encrypt_crypto(crypto_time)
         data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
 
-        last_session_crypto_id, _ = self._session.current_crypto_key
         connection.write(protecol_code + session_id + struct.pack("!H", last_session_crypto_id) + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
@@ -218,7 +216,7 @@ class Client(EventEmitter):
 
         key = decrypt_data[16:80]
         session_crypto_key = decrypt_data[80:144]
-        if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key):
+        if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id)):
             connection.crypto.init_decrypt(crypto_time, key)
             session_crypto_id, obstruction_len = struct.unpack("!HH", decrypt_data[144:148])
             data.read(obstruction_len)
