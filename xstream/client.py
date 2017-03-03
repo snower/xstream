@@ -244,7 +244,6 @@ class Client(EventEmitter):
         if not self._session:
             return
         self._session.remove_connection(connection)
-        self.save_session()
         if connection in self._connections:
             self._connections.remove(connection)
         if self._connecting == connection:

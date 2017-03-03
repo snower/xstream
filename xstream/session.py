@@ -234,7 +234,7 @@ class Session(EventEmitter):
 
     def on_action(self, action, data):
         if action & 0x80 == 0:
-            self._center.on_action(action, data)
+            return self._center.on_action(action, data)
         else:
             action = action & 0x7f
 
