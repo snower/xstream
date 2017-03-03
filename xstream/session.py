@@ -16,6 +16,8 @@ STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
 STATUS_CLOSED = 0x03
 
+ACTION_OPENING = 0x01
+
 class Session(EventEmitter):
     def __init__(self, session_id, auth_key, is_server=False, crypto=None, mss=None):
         super(Session, self).__init__()
@@ -69,7 +71,7 @@ class Session(EventEmitter):
             crypto_keys = sorted(crypto_keys, lambda x, y: cmp(x[1], y[1]))
             for i in xrange(len(crypto_keys)):
                 crypto_id, key_time = crypto_keys[i]
-                if len(crypto_keys) >= 100 and i > 20 and i < len(crypto_keys) - 10:
+                if len(crypto_keys) >= 100 and i > 10 and i < len(crypto_keys) - 10:
                     del self._crypto_keys[crypto_id]
                 elif now - key_time > 2 * 60 * 60:
                     del self._crypto_keys[crypto_id]
@@ -161,6 +163,9 @@ class Session(EventEmitter):
         if frame.action == 0:
             if not frame.data:
                 return
+            if self._status == STATUS_CLOSED:
+                return
+
             stream_frame = StreamFrame.loads(frame.data)
             if stream_frame.action == 0x01:
                 priority, capped = 0, False
@@ -230,6 +235,19 @@ class Session(EventEmitter):
     def on_action(self, action, data):
         if action & 0x8000 == 0:
             self._center.on_action(action, data)
+        else:
+            action = action & 0x7fff
+
+        if action == ACTION_OPENING:
+            if self._status != STATUS_INITED:
+                self.close()
+            else:
+                self._status = STATUS_OPENING
+
+    def write_action(self, action, data='', index=None):
+        if self._status == STATUS_CLOSED:
+            return
+        self._center.write_action(action | 0x8000, data, index)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:
@@ -246,10 +264,7 @@ class Session(EventEmitter):
             return self.do_close()
             
         for stream_id, stream in self._streams.items():
-            if self._connections:
-                stream.close()
-            else:
-                stream.do_close()
+            stream.do_close()
 
     def do_close(self):
         if self._center is None:

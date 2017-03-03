@@ -154,6 +154,7 @@ class Server(EventEmitter):
     def on_fork_connection(self, connection, data, rand_code, crypto_time):
         session_id = ''
         if len(data) >= 148:
+            is_loaded_session = False
             connection.is_connected_session = True
             session_id, = struct.unpack("!H", xor_string(rand_code & 0xff, data.read(2), False))
             if session_id not in self._sessions:
@@ -162,10 +163,14 @@ class Server(EventEmitter):
                     self._sessions[session.id] = session
                     session.on("close", self.on_session_close)
                     self.emit("session", self, session)
+                    is_loaded_session = True
                     logging.info("xstream session open %s", session)
 
             if session_id in self._sessions:
                 session = self._sessions[session_id]
+                if session.closed:
+                    logging.info("xstream connection refuse session closed %s %s %s %s", session_id, connection, time.time())
+                    return
 
                 last_session_crypto_id = struct.unpack("!H", data.read(2))[0]
                 crypto = session.get_decrypt_crypto(crypto_time, last_session_crypto_id)
@@ -181,9 +186,9 @@ class Server(EventEmitter):
                     data.read(obstruction_len)
 
                     crypto_time = get_crypto_time()
-                    session_crypto_id = random.randint(0, 0xFFFF)
+                    session_crypto_id = random.randint(1, 0xFFFF)
                     while session.get_crypto_key(session_crypto_id):
-                        session_crypto_id = random.randint(0, 0xFFFF)
+                        session_crypto_id = random.randint(1, 0xFFFF)
 
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
@@ -202,6 +207,8 @@ class Server(EventEmitter):
                         connection = session.add_connection(conn)
                         if connection:
                             connection.write_action(0x05, rand_string(random.randint(2 * 1024, 32 * 1024)))
+                            if is_loaded_session:
+                                session.write_action(0x01)
                     current().async(add_connection, connection)
 
                     def on_fork_connection_close(connection):

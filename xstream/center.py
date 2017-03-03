@@ -192,7 +192,7 @@ class Center(EventEmitter):
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data[:8])
             logging.info("stream session %s center %s index resend action %s %s", self.session, self, index, recv_index)
-            recv_index = index + int((recv_index - index) * 0.8)
+            recv_index = index + int(recv_index - index)
             while self.send_frames and self.send_frames[0].index <= recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
@@ -240,15 +240,13 @@ class Center(EventEmitter):
         self.ack_time = time.time()
         self.ack_loop = False
 
-    def on_ack_timeout_loop(self, recv_index, retry_rate = 2):
+    def on_ack_timeout_loop(self, recv_index):
         if self.recv_frames and recv_index == self.recv_index:
             data = struct.pack("!II", recv_index, self.recv_frames[0].index)
             self.write_action(ACTION_RESEND, data, index=0)
-        else:
-            retry_rate = 2
             
         if self.recv_frames and not self.closed:
-            current().timeout(self.ttl * retry_rate / 1000, self.on_ack_timeout_loop, self.recv_index, retry_rate * 3)
+            current().timeout(self.ttl * 1.5 / 1000, self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 

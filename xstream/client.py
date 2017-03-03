@@ -93,6 +93,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(True)
+            self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
 
@@ -156,6 +157,7 @@ class Client(EventEmitter):
             self.init_connection(True)
             connection.close()
             self.save_session()
+            self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
         connection.close()
