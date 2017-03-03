@@ -233,10 +233,10 @@ class Session(EventEmitter):
         return self._center.write(data)
 
     def on_action(self, action, data):
-        if action & 0x8000 == 0:
+        if action & 0x80 == 0:
             self._center.on_action(action, data)
         else:
-            action = action & 0x7fff
+            action = action & 0x7f
 
         if action == ACTION_OPENING:
             if self._status != STATUS_INITED:
@@ -247,7 +247,7 @@ class Session(EventEmitter):
     def write_action(self, action, data='', index=None):
         if self._status == STATUS_CLOSED:
             return
-        self._center.write_action(action | 0x8000, data, index)
+        self._center.write_action(action | 0x80, data, index)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:
