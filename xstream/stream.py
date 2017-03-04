@@ -17,7 +17,7 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False):
+    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False, expried_time = 1800):
         super(Stream, self).__init__()
 
         self.loop = current()
@@ -28,6 +28,7 @@ class Stream(EventEmitter):
         self._priority = priority
         self._capped = capped
         self._closed = False
+        self._expried_time = expried_time
         self._start_time = time.time()
         self._data_time = time.time()
 
@@ -44,7 +45,8 @@ class Stream(EventEmitter):
         self._recv_time = time.time()
         self._recv_wait_emit = False
 
-        self.loop.timeout(300, self.on_time_out_loop)
+        if self._expried_time:
+            self.loop.timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     @property
     def id(self):
@@ -247,10 +249,10 @@ class Stream(EventEmitter):
 
     def on_time_out_loop(self):
         if not self._closed:
-            if time.time() - self._data_time > 1800:
+            if time.time() - self._data_time > self._expried_time:
                 self.close()
             else:
-                self.loop.timeout(300, self.on_time_out_loop)
+                self.loop.timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     def __del__(self):
         self.close()
