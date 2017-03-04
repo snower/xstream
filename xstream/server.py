@@ -130,6 +130,7 @@ class Server(EventEmitter):
                 connection.write(protocel_code + session_id + key + auth + rand_string(random.randint(512, 4096)))
 
                 session.on("close", self.on_session_close)
+                session.on("keychange", self.save_session)
                 self.emit("session", self, session)
                 self.save_session(session)
                 logging.info("xstream session open %s", session)
@@ -162,6 +163,7 @@ class Server(EventEmitter):
                 if session:
                     self._sessions[session.id] = session
                     session.on("close", self.on_session_close)
+                    session.on("keychange", self.save_session)
                     self.emit("session", self, session)
                     is_loaded_session = True
                     logging.info("xstream session open %s", session)
@@ -172,36 +174,29 @@ class Server(EventEmitter):
                     logging.info("xstream connection refuse session closed %s %s %s %s", session_id, connection, time.time())
                     return
 
-                last_session_crypto_id = struct.unpack("!H", data.read(2))[0]
-                crypto = session.get_decrypt_crypto(crypto_time, last_session_crypto_id)
-                decrypt_data = crypto.decrypt(data.read(146))
+                crypto = session.get_decrypt_crypto(crypto_time)
+                decrypt_data = crypto.decrypt(data.read(82))
                 auth = decrypt_data[:16]
                 key = decrypt_data[16:80]
-                session_crypto_key = decrypt_data[80:144]
 
-                if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id)):
+                if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     connection.crypto.init_decrypt(crypto_time, key)
-                    obstruction_len, = struct.unpack("!H", decrypt_data[144:146])
+                    obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
                     data.read(obstruction_len)
 
                     crypto_time = get_crypto_time()
-                    session_crypto_id = random.randint(1, 0xFFFF)
-                    while session.get_crypto_key(session_crypto_id):
-                        session_crypto_id = random.randint(1, 0xFFFF)
 
                     key = connection.crypto.init_encrypt(crypto_time)
                     rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
-                    auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id))
+                    auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time))
                     obstruction_len = random.randint(128, 1024)
                     obstruction = rand_string(obstruction_len)
 
                     crypto = session.get_encrypt_crypto(crypto_time)
-                    data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!HH", session_crypto_id, obstruction_len))
+                    data = crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
 
                     connection.write(protocel_code + data + obstruction)
-
-                    session.current_crypto_key = (session_crypto_id, session_crypto_key)
 
                     def add_connection(conn):
                         connection = session.add_connection(conn)
@@ -213,10 +208,8 @@ class Server(EventEmitter):
 
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)
-                        self.save_session(session)
                         logging.info("xstream connection close %s %s", session, connection)
                     connection.on("close", on_fork_connection_close)
-                    self.save_session(session)
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
         connection.close()

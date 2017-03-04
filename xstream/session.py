@@ -7,7 +7,7 @@ import logging
 import base64
 import pickle
 from sevent import EventEmitter, current
-from crypto import Crypto
+from crypto import Crypto, rand_string
 from connection import Connection
 from center import Center
 from stream import Stream, StreamFrame
@@ -17,6 +17,7 @@ STATUS_OPENING = 0x02
 STATUS_CLOSED = 0x03
 
 ACTION_OPENING = 0x01
+ACTION_KEYCHANGE = 0x02
 
 class Session(EventEmitter):
     def __init__(self, session_id, auth_key, is_server=False, crypto=None, mss=None):
@@ -28,15 +29,17 @@ class Session(EventEmitter):
         self._crypto_ensecret = crypto._ensecret
         self._crypto_desecret = crypto._desecret
         self._crypto = crypto
-        self._crypto_keys = {}
-        self._current_crypto_key = None
+        self._current_crypto_key =  '0' * 64
         self._mss = mss
+        self._key_change = 2
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
         self._center = Center(self)
         self._data_time = time.time()
         self._status = STATUS_INITED
+        self._controll_stream = self.create_stream(0, priority = 1, capped = True)
+        self._controll_stream.on("data", self.on_controll_data)
 
         self._center.on("frame", self.on_frame)
         if not self._is_server:
@@ -55,28 +58,8 @@ class Session(EventEmitter):
         return self._status == STATUS_CLOSED
 
     @property
-    def current_crypto_key(self):
-        if not self._current_crypto_key:
-            return (0, '0' * 64)
-        return self._current_crypto_key
-
-    @current_crypto_key.setter
-    def current_crypto_key(self, value):
-        self._current_crypto_key = value
-        self._crypto_keys[value[0]] = (value[1], time.time())
-
-        if len(self._crypto_keys) >= 15:
-            now = time.time()
-            crypto_keys = [(crypto_id, key_time) for crypto_id, (_, key_time) in self._crypto_keys.iteritems()]
-            crypto_keys = sorted(crypto_keys, lambda x, y: cmp(x[1], y[1]))
-            for i in xrange(len(crypto_keys)):
-                crypto_id, key_time = crypto_keys[i]
-                if len(crypto_keys) >= 100 and i > 10 and i < len(crypto_keys) - 10:
-                    del self._crypto_keys[crypto_id]
-                elif now - key_time > 2 * 60 * 60:
-                    del self._crypto_keys[crypto_id]
-                if len(self._crypto_keys) <= 5:
-                    break
+    def key_change(self):
+        return self._key_change < 2
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
@@ -87,8 +70,8 @@ class Session(EventEmitter):
             "crypto_alg": self._crypto._alg,
             "crypto_ensecret": list(self._crypto_ensecret),
             "crypto_desecret": list(self._crypto_desecret),
-            "crypto_keys": self._crypto_keys,
             "current_crypto_key": self._current_crypto_key,
+            "key_change": self._key_change,
             "mss": self._mss,
             "t": time.time()
         }))
@@ -101,31 +84,20 @@ class Session(EventEmitter):
             crypto._ensecret = tuple(s["crypto_ensecret"])
             crypto._desecret = tuple(s["crypto_desecret"])
             session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
-            session._crypto_keys = s["crypto_keys"]
-            session.current_crypto_key = s["current_crypto_key"]
+            session._current_crypto_key = s["current_crypto_key"]
+            session._key_change = s["key_change"]
+            if session._key_change != 2:
+                return None
         except:
             return None
         return session
 
-    def get_crypto_key(self, crypto_id):
-        if crypto_id not in self._crypto_keys:
-            return None
-        return self._crypto_keys[crypto_id][0]
-
     def get_encrypt_crypto(self, crypto_time):
-        current_crypto_key = self.current_crypto_key
-        if not current_crypto_key:
-            current_crypto_key = (0, '0' * 64)
-
-        self._crypto.init_encrypt(crypto_time, self._crypto_ensecret, current_crypto_key[1])
+        self._crypto.init_encrypt(crypto_time, self._crypto_ensecret, self._current_crypto_key)
         return self._crypto
 
-    def get_decrypt_crypto(self, crypto_time, last_crypto_id):
-        current_crypto_key = self.get_crypto_key(last_crypto_id)
-        if not current_crypto_key:
-            current_crypto_key = '0' * 64
-
-        self._crypto.init_decrypt(crypto_time, self._crypto_desecret, current_crypto_key)
+    def get_decrypt_crypto(self, crypto_time):
+        self._crypto.init_decrypt(crypto_time, self._crypto_desecret, self._current_crypto_key)
         return self._crypto
 
     def add_connection(self, conn):
@@ -178,6 +150,12 @@ class Session(EventEmitter):
                 self._streams[stream_frame.stream_id].on_frame(stream_frame)
         else:
             self.on_action(frame.action, frame.data)
+
+    def on_controll_data(self, stream, buffer):
+        data = buffer.next()
+        while data:
+            self.on_action(ord(data[0]), data[1:])
+            data = buffer.next()
 
     def get_stream_id(self):
         stream_id = self._current_stream_id
@@ -243,11 +221,40 @@ class Session(EventEmitter):
                 self.close()
             else:
                 self._status = STATUS_OPENING
+        elif action == ACTION_KEYCHANGE:
+            if self._is_server:
+                if self._key_change == 2:
+                    self._current_crypto_key = data[:64]
+                    self.write_action(ACTION_KEYCHANGE, data, True)
+                    self._key_change = 0
+                else:
+                    self.write_action(ACTION_KEYCHANGE, '', True)
+                    self._key_change += 1
+                    if self._key_change == 2:
+                        self.emit("keychange", self)
+                        logging.info("xstream session %s key change", self)
+            else:
+                if self._key_change == 0:
+                    self._current_crypto_key = data[:64]
+                if self._key_change < 2:
+                    self.write_action(ACTION_KEYCHANGE, '', True)
+                    self._key_change += 1
+                    if self._key_change == 2:
+                        self.emit("keychange", self)
+                        logging.info("xstream session %s key change", self)
 
     def write_action(self, action, data='', index=None):
         if self._status == STATUS_CLOSED:
             return
-        self._center.write_action(action | 0x80, data, index)
+        if index:
+            self._center.write_action(action | 0x80, data)
+        else:
+            self._controll_stream.write(chr(action | 0x80) + data)
+
+    def start_key_change(self):
+        self._key_change = 0
+        key = rand_string(64)
+        self.write_action(ACTION_KEYCHANGE, key, True)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:

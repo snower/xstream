@@ -70,10 +70,14 @@ class Client(EventEmitter):
         session = self._session.dumps()
         with open(session_path + "/" + session_key, "w") as fp:
             fp.write(session)
+        self.init_connection()
 
     def init_connection(self, is_on_open = False):
         if not self._session:
-            return 
+            return
+
+        if self._session.key_change:
+            return
         
         def do_init_connection():
             if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
@@ -89,6 +93,7 @@ class Client(EventEmitter):
         if session:
             self._session = session
             self._session.on("close", self.on_session_close)
+            self._session.on("keychange", lambda session: self.save_session())
             self.emit("session", self, self._session)
 
             self.running = True
@@ -151,6 +156,7 @@ class Client(EventEmitter):
             mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 32, StreamFrame.FRAME_LEN)
             self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
             self._session.on("close", self.on_session_close)
+            self._session.on("keychange", lambda session: self.save_session())
             self.emit("session", self, self._session)
 
             self.running = True
@@ -200,41 +206,37 @@ class Client(EventEmitter):
         session_id = xor_string(rand_code & 0xff, struct.pack("!H", self._session.id))
 
         key = connection.crypto.init_encrypt(crypto_time)
-        session_crypto_key = rand_string(64)
-        last_session_crypto_id, _ = self._session.current_crypto_key
-        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id))
+        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
         obstruction_len = random.randint(16, 1024)
         obstruction = rand_string(obstruction_len)
 
         crypto = self._session.get_encrypt_crypto(crypto_time)
-        data = crypto.encrypt(auth + key + session_crypto_key + struct.pack("!H", obstruction_len))
+        data = crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
 
-        connection.write(protecol_code + session_id + struct.pack("!H", last_session_crypto_id) + data + obstruction)
+        connection.write(protecol_code + session_id + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
-        last_session_crypto_id, _ = self._session.current_crypto_key
-        crypto = self._session.get_decrypt_crypto(crypto_time, last_session_crypto_id)
-        decrypt_data = crypto.decrypt(data.read(148))
+        crypto = self._session.get_decrypt_crypto(crypto_time)
+        decrypt_data = crypto.decrypt(data.read(82))
 
         key = decrypt_data[16:80]
-        session_crypto_key = decrypt_data[80:144]
-        if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time) + session_crypto_key + str(last_session_crypto_id)):
+        if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
             connection.crypto.init_decrypt(crypto_time, key)
-            session_crypto_id, obstruction_len = struct.unpack("!HH", decrypt_data[144:148])
+            obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
             data.read(obstruction_len)
-
-            self._session.current_crypto_key = (session_crypto_id, session_crypto_key)
 
             def add_connection():
                 self._session.add_connection(connection)
             current().async(add_connection)
             self._connecting = None
             self._reconnect_count = 0
-            self.init_connection()
+            if len(self._connections) >= 2:
+                self._session.start_key_change()
+            else:
+                self.init_connection()
             connection.is_connected_session = True
-            self.save_session()
             logging.info("xstream connection ready %s", connection)
             return
         connection.close()
