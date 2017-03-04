@@ -38,7 +38,7 @@ class Session(EventEmitter):
         self._center = Center(self)
         self._data_time = time.time()
         self._status = STATUS_INITED
-        self._controll_stream = self.create_stream(0, priority = 1, capped = True)
+        self._controll_stream = self.create_stream(0, priority = 1, capped = True, expried_time = 0)
         self._controll_stream.on("data", self.on_controll_data)
 
         self._center.on("frame", self.on_frame)
