@@ -17,7 +17,7 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False, expried_time = 1800):
+    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False, expried_time = 900):
         super(Stream, self).__init__()
 
         self.loop = current()
@@ -218,6 +218,7 @@ class Stream(EventEmitter):
                     self.do_close()
         else:
             self.write_action(ACTION_CLIOSE)
+        self.loop.timeout(5, self.do_close)
 
     def format_data_len(self, data_len):
         if data_len < 1024:
@@ -228,6 +229,9 @@ class Stream(EventEmitter):
             return "%.3fM" % (data_len / (1024.0 * 1024.0))
 
     def do_close(self):
+        if not self._session:
+            return
+        
         self._closed = True
         def do_close():
             if self._send_is_set_ready:
