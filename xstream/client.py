@@ -80,8 +80,16 @@ class Client(EventEmitter):
             return
         
         def do_init_connection():
-            if self._connecting is None and self._session and not self._session.closed and len(self._connections) < self._max_connections:
-                self._connecting = self.fork_connection()
+            if self._connecting is not None:
+                return
+            
+            if not self._session or self._session.closed or self._session.key_change:
+                return
+            
+            if len(self._connections) >= self._max_connections:
+                return
+            
+            self._connecting = self.fork_connection()
 
         if is_on_open:
             do_init_connection()
