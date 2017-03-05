@@ -3,6 +3,7 @@
 # create by: snower
 
 import time
+import random
 import logging
 import base64
 import pickle
@@ -139,13 +140,18 @@ class Session(EventEmitter):
                 return
 
             stream_frame = StreamFrame.loads(frame.data)
-            if stream_frame.action == 0x01:
-                priority, capped = 0, False
-                if stream_frame.flag & 0x02:
-                    priority = 1
-                if stream_frame.flag & 0x04:
-                    capped = True
-                self.create_stream(stream_frame.stream_id, priority = priority, capped = capped)
+            if stream_frame.stream_id not in self._streams:
+                if stream_frame.action == 0x01:
+                    priority, capped = 0, False
+                    if stream_frame.flag & 0x02:
+                        priority = 1
+                    if stream_frame.flag & 0x04:
+                        capped = True
+                    self.create_stream(stream_frame.stream_id, priority = priority, capped = capped)
+                elif stream_frame.action == 0x03:
+                    data = rand_string(random.randint(1, 256))
+                    frame = StreamFrame(stream_frame.stream_id, 0, 0x04, data)
+                    self.write(frame)
             if stream_frame.stream_id in self._streams:
                 self._streams[stream_frame.stream_id].on_frame(stream_frame)
         else:
@@ -243,13 +249,16 @@ class Session(EventEmitter):
                         self.emit("keychange", self)
                         logging.info("xstream session %s key change", self)
 
-    def write_action(self, action, data='', index=None):
+    def write_action(self, action, data='', index=None, center = False):
         if self._status == STATUS_CLOSED:
             return
-        if index:
+
+        if not index:
             self._center.write_action(action | 0x80, data)
         else:
-            self._controll_stream.write(chr(action | 0x80) + data)
+            data += rand_string(random.randint(1, 256))
+            action = chr(action) if center else chr(action | 0x80)
+            self._controll_stream.write(action + data)
 
     def start_key_change(self):
         self._key_change = 0

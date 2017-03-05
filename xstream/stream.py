@@ -218,7 +218,7 @@ class Stream(EventEmitter):
                     self.do_close()
         else:
             self.write_action(ACTION_CLIOSE)
-        self.loop.timeout(5, self.do_close)
+        self.loop.timeout(self._expried_time, self.do_close)
 
     def format_data_len(self, data_len):
         if data_len < 1024:

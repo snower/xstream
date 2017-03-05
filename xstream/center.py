@@ -232,13 +232,16 @@ class Center(EventEmitter):
             logging.info("stream session %s center <%s, %s %s %s %s> ttl %s", self.session, self, self.send_index, self.ack_index, len(self.frames), len(self.send_frames), self.ttl)
 
     def write_action(self, action, data='', index=None):
-        data += rand_string(random.randint(1, 1024 - len(data)))
-        frame = self.create_frame(data, action = action, index = index)
-        if self.wait_reset_frames is None:
-            bisect.insort(self.frames, frame)
-            self.write_frame()
+        if index is True:
+            self.session.write_action(action, data, index, True)
         else:
-            bisect.insort(self.wait_reset_frames, frame)
+            data += rand_string(random.randint(1, 256))
+            frame = self.create_frame(data, action = action, index = index)
+            if self.wait_reset_frames is None:
+                bisect.insort(self.frames, frame)
+                self.write_frame()
+            else:
+                bisect.insort(self.wait_reset_frames, frame)
 
     def on_ack_loop(self):
         data = struct.pack("!I", self.recv_index - 1)
