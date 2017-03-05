@@ -152,6 +152,10 @@ class Session(EventEmitter):
                     data = rand_string(random.randint(1, 256))
                     frame = StreamFrame(stream_frame.stream_id, 0, 0x04, data)
                     self.write(frame)
+            else:
+                if stream_frame.action == 0x01:
+                    return self._streams[stream_frame.stream_id].close()
+
             if stream_frame.stream_id in self._streams:
                 self._streams[stream_frame.stream_id].on_frame(stream_frame)
         else:
