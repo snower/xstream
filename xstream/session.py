@@ -239,7 +239,7 @@ class Session(EventEmitter):
             if self._is_server:
                 if self._key_change == 2:
                     self._current_crypto_key = data[:64]
-                    self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
+                    self.write_action(ACTION_KEYCHANGE, self._current_crypto_key, True)
                     self._key_change = 0
                 else:
                     self.write_action(ACTION_KEYCHANGE, '', True)
