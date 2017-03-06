@@ -105,6 +105,10 @@ class Session(EventEmitter):
         if self._status == STATUS_CLOSED:
             conn.close()
         else:
+            for connection in self._connections:
+                if conn.crypto_time == connection._connection.crypto_time:
+                    return None
+
             connection = Connection(conn, self)
             self._connections.append(connection)
             self._center.add_connection(connection)
@@ -235,7 +239,7 @@ class Session(EventEmitter):
             if self._is_server:
                 if self._key_change == 2:
                     self._current_crypto_key = data[:64]
-                    self.write_action(ACTION_KEYCHANGE, data, True)
+                    self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
                     self._key_change = 0
                 else:
                     self.write_action(ACTION_KEYCHANGE, '', True)
@@ -266,8 +270,7 @@ class Session(EventEmitter):
 
     def start_key_change(self):
         self._key_change = 0
-        key = rand_string(64)
-        self.write_action(ACTION_KEYCHANGE, key, True)
+        self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:

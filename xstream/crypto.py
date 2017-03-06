@@ -37,11 +37,12 @@ def xor_string(key, data, encrypt=True):
     return "".join(result)
 
 def sign_string(data):
+    d = ''
     for t in ("md5", "sha1", "md5"):
         s=EVP.MessageDigest(t)
-        s.update(data)
-        data=s.digest()
-    return data
+        s.update(data + d)
+        d=s.digest()
+    return d
 
 def get_crypto_time(t = None):
     if t is None:

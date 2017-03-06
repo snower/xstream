@@ -231,12 +231,15 @@ class Client(EventEmitter):
 
         key = decrypt_data[16:80]
         if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
+            setattr(connection, "crypto_time", crypto_time)
             connection.crypto.init_decrypt(crypto_time, key)
             obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
             data.read(obstruction_len)
 
             def add_connection():
-                self._session.add_connection(connection)
+                if not self._session.add_connection(connection):
+                    connection.close()
+
             current().async(add_connection)
             self._connecting = None
             self._reconnect_count = 0

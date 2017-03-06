@@ -105,13 +105,14 @@ class Server(EventEmitter):
         current().timeout(random.randint(5, 30), on_timeout)
 
     def on_data(self, connection, data):
+        datas = str(data)
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
         if action == 0:
-            self.on_open_session(connection, data, crypto_time)
+            self.on_open_session(connection, data, crypto_time, datas)
         else:
-            self.on_fork_connection(connection, data, rand_code, crypto_time)
+            self.on_fork_connection(connection, data, rand_code, crypto_time, datas)
 
-    def on_open_session(self, connection, data, crypto_time):
+    def on_open_session(self, connection, data, crypto_time, datas):
         if len(data) >= 96:
             key = data.read(64)
             crypto = Crypto(self._crypto_key, self._crypto_alg)
@@ -135,7 +136,8 @@ class Server(EventEmitter):
                 self.save_session(session)
                 logging.info("xstream session open %s", session)
                 return
-        connection.close()
+
+        self.emit("connection", self, connection, datas)
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
@@ -152,7 +154,7 @@ class Server(EventEmitter):
         self._current_session_id += 1
         return session_id
 
-    def on_fork_connection(self, connection, data, rand_code, crypto_time):
+    def on_fork_connection(self, connection, data, rand_code, crypto_time, datas):
         session_id = ''
         if len(data) >= 148:
             is_loaded_session = False
@@ -172,6 +174,7 @@ class Server(EventEmitter):
                 session = self._sessions[session_id]
                 if session.closed:
                     logging.info("xstream connection refuse session closed %s %s %s %s", session_id, connection, time.time())
+                    self.emit("connection", self, connection, datas)
                     return
 
                 crypto = session.get_decrypt_crypto(crypto_time)
@@ -181,6 +184,7 @@ class Server(EventEmitter):
 
                 if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
+                    setattr(connection, "crypto_time", crypto_time)
                     connection.crypto.init_decrypt(crypto_time, key)
                     obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
                     data.read(obstruction_len)
@@ -204,6 +208,9 @@ class Server(EventEmitter):
                             connection.write_action(0x05, rand_string(random.randint(2 * 1024, 32 * 1024)))
                             if is_loaded_session:
                                 session.write_action(0x01)
+                        else:
+                            self.emit("connection", self, conn, datas)
+
                     current().async(add_connection, connection)
 
                     def on_fork_connection_close(connection):
@@ -212,7 +219,7 @@ class Server(EventEmitter):
                     connection.on("close", on_fork_connection_close)
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
-        connection.close()
+        self.emit("connection", self, connection, datas)
         logging.info("xstream connection refuse %s %s %s %s", session_id, connection, time.time(), crypto_time)
 
     def on_session_close(self, session):
