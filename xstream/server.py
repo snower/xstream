@@ -148,11 +148,10 @@ class Server(EventEmitter):
         return session
 
     def get_session_id(self):
+        self._current_session_id = random.randint(0x0001, 0xffff)
         while self._current_session_id in self._used_session_ids:
-            self._current_session_id += 1
-        session_id = self._current_session_id
-        self._current_session_id += 1
-        return session_id
+            self._current_session_id = random.randint(0x0001, 0xffff)
+        return self._current_session_id
 
     def on_fork_connection(self, connection, data, rand_code, crypto_time, datas):
         session_id = ''

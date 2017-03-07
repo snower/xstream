@@ -30,10 +30,17 @@ def xor_string(key, data, encrypt=True):
     if isinstance(key, basestring):
         key = ord(key[0])
     result = []
-    for c in data:
-        r = ord(c) ^ key
-        result.append(chr(r))
-        key = ord(c) if encrypt else r
+    iv = 0
+    if encrypt:
+        for c in data:
+            r = (ord(c) ^ iv) ^ key
+            result.append(chr(r))
+            iv = ord(c)
+    else:
+        for c in data:
+            r = (ord(c) ^ key) ^ iv
+            result.append(chr(r))
+            iv = r
     return "".join(result)
 
 def sign_string(data):
