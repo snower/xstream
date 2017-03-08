@@ -175,7 +175,7 @@ class Center(EventEmitter):
             bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().timeout(self.ttl * 1.5 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -229,7 +229,10 @@ class Center(EventEmitter):
                 self.ttls.pop(0)
             self.ttls.append((int(time.time() * 1000) & 0xffffffff) - start_time)
             self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-            logging.info("stream session %s center <%s, %s %s %s %s> ttl %s", self.session, self, self.send_index, self.ack_index, len(self.frames), len(self.send_frames), self.ttl)
+            logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) > ttl %s", self.session, self,
+                         self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
+                         self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0, self.recv_frames[-1].index if self.recv_frames else 0,
+                         self.ttl)
 
     def write_action(self, action, data='', index=None):
         if index is True:
@@ -255,7 +258,7 @@ class Center(EventEmitter):
             self.write_action(ACTION_RESEND, data, index=0)
             
         if self.recv_frames and not self.closed:
-            current().timeout(self.ttl * 1.5 / 1000, self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
