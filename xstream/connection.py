@@ -87,7 +87,8 @@ class Connection(EventEmitter):
 
     def do_write(self):
         if not self._closed:
-            self._connection.write("".join(self._wbuffer))
+            data = self._crypto.encrypt("".join(self._wbuffer))
+            self._connection.write(data)
             self._wbuffer.clear()
             self._wdata_len = 0
             self._wait_write = False
@@ -95,7 +96,6 @@ class Connection(EventEmitter):
     def write(self, data):
         if not self._closed:
             data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
-            data = self._crypto.encrypt(data)
             self._wbuffer.append(data)
             self._wdata_len += len(data)
             if not self._wait_write:
