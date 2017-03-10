@@ -59,8 +59,7 @@ class Center(EventEmitter):
             while not self.frames and self.wait_reset_frames is None and self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    if self.ready_streams and stream == self.ready_streams[0]:
-                        self.ready_streams.pop(0)
+                    self.ready_streams.pop(0)
 
             if self.frames:
                 self.writing_connection = connection
@@ -115,8 +114,7 @@ class Center(EventEmitter):
             if self.drain_connections and self.wait_reset_frames is None:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    if self.ready_streams and stream == self.ready_streams[0]:
-                        self.ready_streams.pop(0)
+                    self.ready_streams.pop(0)
         current().async(do_stream_write)
         return True
 
@@ -124,10 +122,8 @@ class Center(EventEmitter):
         frame = self.create_frame(data)
         if self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
-            if self.writing_connection:
-                self.write_next(self.writing_connection, True)
-            else:
-                self.write_frame()
+            if not self.writing_connection:
+                current().async(self.write_frame)
         else:
             bisect.insort(self.wait_reset_frames, frame)
         return frame
@@ -145,7 +141,7 @@ class Center(EventEmitter):
                 finally:
                     self.writing_connection = None
 
-    def write_next(self, connection, first_write = False):
+    def write_next(self, connection, first_write = True):
         frame = self.frames.pop(0)
         if connection == frame.connection:
             frames = []
@@ -169,16 +165,14 @@ class Center(EventEmitter):
                             self.send_timeout_loop = True
                             break
             if connection.write(frame.dumps()):
+                while not self.frames and self.ready_streams and self.wait_reset_frames is None:
+                    stream = self.ready_streams[0]
+                    if not stream.do_write():
+                        self.ready_streams.pop(0)
                 if self.frames:
-                    self.write_next(connection, True)
-                else:
-                    if self.ready_streams and self.wait_reset_frames is None:
-                        stream = self.ready_streams[0]
-                        if not stream.do_write():
-                            if self.ready_streams and stream == self.ready_streams[0]:
-                                self.ready_streams.pop(0)
+                    self.write_next(connection, False)
             
-        elif not first_write:
+        elif first_write:
             self.drain_connections.append(connection)
         return frame
 
@@ -214,8 +208,7 @@ class Center(EventEmitter):
         while not self.frames and self.wait_reset_frames is None and self.ready_streams:
             stream = self.ready_streams[0]
             if not stream.do_write():
-                if self.ready_streams and stream == self.ready_streams[0]:
-                    self.ready_streams.pop(0)
+                self.ready_streams.pop(0)
 
         if self.frames:
             self.writing_connection = connection
@@ -253,8 +246,7 @@ class Center(EventEmitter):
             if self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    if self.ready_streams and stream == self.ready_streams[0]:
-                        self.ready_streams.pop(0)
+                    self.ready_streams.pop(0)
 
             if self.frames:
                 self.write_frame()
