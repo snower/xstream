@@ -59,7 +59,8 @@ class Center(EventEmitter):
             while not self.frames and self.wait_reset_frames is None and self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    self.ready_streams.pop(0)
+                    if self.ready_streams and stream == self.ready_streams[0]:
+                        self.ready_streams.pop(0)
 
             if self.frames:
                 self.writing_connection = connection
@@ -114,7 +115,8 @@ class Center(EventEmitter):
             if self.drain_connections and self.wait_reset_frames is None:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    self.ready_streams.pop(0)
+                    if self.ready_streams and stream == self.ready_streams[0]:
+                        self.ready_streams.pop(0)
         current().async(do_stream_write)
         return True
 
@@ -173,7 +175,8 @@ class Center(EventEmitter):
                     if self.ready_streams and self.wait_reset_frames is None:
                         stream = self.ready_streams[0]
                         if not stream.do_write():
-                            self.ready_streams.pop(0)
+                            if self.ready_streams and stream == self.ready_streams[0]:
+                                self.ready_streams.pop(0)
             
         elif not first_write:
             self.drain_connections.append(connection)
@@ -211,7 +214,8 @@ class Center(EventEmitter):
         while not self.frames and self.wait_reset_frames is None and self.ready_streams:
             stream = self.ready_streams[0]
             if not stream.do_write():
-                self.ready_streams.pop(0)
+                if self.ready_streams and stream == self.ready_streams[0]:
+                    self.ready_streams.pop(0)
 
         if self.frames:
             self.writing_connection = connection
@@ -249,7 +253,8 @@ class Center(EventEmitter):
             if self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
-                    self.ready_streams.pop(0)
+                    if self.ready_streams and stream == self.ready_streams[0]:
+                        self.ready_streams.pop(0)
 
             if self.frames:
                 self.write_frame()
