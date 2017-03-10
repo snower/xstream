@@ -41,6 +41,7 @@ class Center(EventEmitter):
         self.ttl = 1000
         self.wait_reset_frames = None
         self.closed = False
+        self.writing_connection = None
 
         self.write_ttl()
         current().timeout(2, self.on_ready_streams_lookup)
@@ -49,7 +50,11 @@ class Center(EventEmitter):
         connection.on("frame", self.on_frame)
         connection.on("drain", self.on_drain)
         if self.frames:
-            self.write_next(connection)
+            self.writing_connection = connection
+            try:
+                self.write_next(connection)
+            finally:
+                self.writing_connection = None
         else:
             while not self.frames and self.wait_reset_frames is None and self.ready_streams:
                 stream = self.ready_streams[0]
@@ -57,7 +62,11 @@ class Center(EventEmitter):
                     self.ready_streams.pop(0)
 
             if self.frames:
-                self.write_next(connection)
+                self.writing_connection = connection
+                try:
+                    self.write_next(connection)
+                finally:
+                    self.writing_connection = None
             else:
                 self.drain_connections.append(connection)
 
@@ -95,19 +104,28 @@ class Center(EventEmitter):
 
         if stream not in self.ready_streams:
             self.ready_streams.append(stream)
+
+        def do_stream_write():
+            if not self.ready_streams:
+                return
+
             self.ready_streams = sorted(self.ready_streams)
 
-        if self.drain_connections and self.wait_reset_frames is None:
-            stream = self.ready_streams[0]
-            if not stream.do_write():
-                self.ready_streams.pop(0)
+            if self.drain_connections and self.wait_reset_frames is None:
+                stream = self.ready_streams[0]
+                if not stream.do_write():
+                    self.ready_streams.pop(0)
+        current().async(do_stream_write)
         return True
 
     def write(self, data):
         frame = self.create_frame(data)
         if self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
-            self.write_frame()
+            if self.writing_connection:
+                self.write_next(self.writing_connection, True)
+            else:
+                self.write_frame()
         else:
             bisect.insort(self.wait_reset_frames, frame)
         return frame
@@ -119,9 +137,13 @@ class Center(EventEmitter):
             
             connection = self.drain_connections.popleft()
             if not connection._closed:
-                self.write_next(connection)
+                self.writing_connection = connection
+                try:
+                    self.write_next(connection)
+                finally:
+                    self.writing_connection = None
 
-    def write_next(self, connection):
+    def write_next(self, connection, first_write = False):
         frame = self.frames.pop(0)
         if connection == frame.connection:
             frames = []
@@ -144,9 +166,16 @@ class Center(EventEmitter):
                             current().timeout(max(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
-            connection.write(frame.dumps())
+            if connection.write(frame.dumps()):
+                if self.frames:
+                    self.write_next(connection, True)
+                else:
+                    if self.ready_streams and self.wait_reset_frames is None:
+                        stream = self.ready_streams[0]
+                        if not stream.do_write():
+                            self.ready_streams.pop(0)
             
-        else:
+        elif not first_write:
             self.drain_connections.append(connection)
         return frame
 
@@ -185,7 +214,11 @@ class Center(EventEmitter):
                 self.ready_streams.pop(0)
 
         if self.frames:
-            self.write_next(connection)
+            self.writing_connection = connection
+            try:
+                self.write_next(connection)
+            finally:
+                self.writing_connection = None
         else:
             self.drain_connections.append(connection)
 

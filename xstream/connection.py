@@ -7,8 +7,8 @@ import logging
 import random
 import struct
 import socket
+from collections import deque
 from sevent import EventEmitter, current, Buffer
-from frame import StreamFrame
 from crypto import rand_string
 
 ACTION_PING = 0x01
@@ -18,11 +18,12 @@ ACTION_CLOSE_ACK = 0x04
 ACTION_NOISE = 0x05
 
 class Connection(EventEmitter):
-    def __init__(self, connection, session):
+    def __init__(self, connection, session, mss):
         super(Connection,self).__init__()
         self._connection = connection
         self._session = session
         self._crypto = connection.crypto
+        self._mss = mss
 
         connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         try:
@@ -35,7 +36,10 @@ class Connection(EventEmitter):
 
         self._data_len = 2
         self._buffer = Buffer()
+        self._wdata_len = 0
+        self._wbuffer = deque()
         self._wait_head = True
+        self._wait_write = False
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
@@ -81,11 +85,23 @@ class Connection(EventEmitter):
                 else:
                     self.on_action(action, data[1:-2])
 
+    def do_write(self):
+        if not self._closed:
+            self._connection.write("".join(self._wbuffer))
+            self._wbuffer.clear()
+            self._wdata_len = 0
+            self._wait_write = False
+
     def write(self, data):
         if not self._closed:
             data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
             data = self._crypto.encrypt(data)
-            return self._connection.write(data)
+            self._wbuffer.append(data)
+            self._wdata_len += len(data)
+            if not self._wait_write:
+                current().async(self.do_write)
+                self._wait_write = True
+            return self._wdata_len < self._mss * 2.4
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 256))
