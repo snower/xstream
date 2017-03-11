@@ -100,7 +100,7 @@ class Stream(EventEmitter):
         self._send_buffer = None
 
     def do_write(self):
-        if not self._send_frames and self._send_buffer:
+        if len(self._send_frames) <= 1 and self._send_buffer:
             if not self._closed:
                 self.flush()
 
@@ -149,8 +149,6 @@ class Stream(EventEmitter):
     def on_write(self):
         if self._send_is_set_ready and self._send_frames:
             return
-        
-        self.flush()
 
         if not self._send_is_set_ready and self._send_frames:
             self._send_time = time.time()
