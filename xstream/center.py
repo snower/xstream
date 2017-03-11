@@ -93,6 +93,14 @@ class Center(EventEmitter):
             frame = Frame(1, self.session.id, flag, index, None, action, data)
         return frame
 
+    def sort_stream(self):
+        def cmp_stream(x, y):
+            c = cmp(x.priority, y.priority)
+            if c == 0:
+                c = cmp(x._start_time, y._start_time)
+            return c
+        self.ready_streams = sorted(self.ready_streams, cmp_stream)
+
     def ready_write(self, stream, is_ready=True):
         if self.closed:
             return False
@@ -109,7 +117,7 @@ class Center(EventEmitter):
             if not self.ready_streams:
                 return
 
-            self.ready_streams = sorted(self.ready_streams)
+            self.sort_stream()
 
             if self.drain_connections and self.wait_reset_frames is None:
                 stream = self.ready_streams[0]
@@ -320,7 +328,7 @@ class Center(EventEmitter):
             current().timeout(60, self.write_ttl)
 
     def on_ready_streams_lookup(self):
-        self.ready_streams = sorted(self.ready_streams)
+        self.sort_stream()
         if not self.closed:
             current().timeout(1, self.on_ready_streams_lookup)
 

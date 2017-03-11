@@ -25,8 +25,8 @@ class Connection(EventEmitter):
         self._crypto = connection.crypto
         self._mss = mss
 
-        connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         try:
+            connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
         except: pass
 
@@ -43,10 +43,6 @@ class Connection(EventEmitter):
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
-
-        if not self._session._is_server:
-            current().timeout(random.randint(180, 1800), self.on_expried)
-            current().timeout(30, self.on_ping_loop)
 
     def on_data(self, connection, data):
         self._data_time = time.time()

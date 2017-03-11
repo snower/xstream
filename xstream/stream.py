@@ -100,6 +100,10 @@ class Stream(EventEmitter):
         self._send_buffer = None
 
     def do_write(self):
+        if not self._send_frames and self._send_buffer:
+            if not self._closed:
+                self.flush()
+
         if self._send_frames:
             frame = self._send_frames.popleft()
             if self._send_frame_count == 0 and frame.action == 0 and not self._is_server:
@@ -113,10 +117,6 @@ class Stream(EventEmitter):
             self._send_frame_count += 1
             self._send_data_len += len(frame)
             self._send_time = time.time()
-
-        if not self._send_frames and self._send_buffer:
-            if not self._closed:
-                self.flush()
 
         self._send_is_set_ready = bool(self._send_frames)
         return self._send_is_set_ready
@@ -267,9 +267,3 @@ class Stream(EventEmitter):
 
     def __str__(self):
         return "<%s %s>" % (super(Stream, self).__str__(), self._stream_id)
-
-    def __cmp__(self, other):
-        c = cmp(self.priority, other.priority)
-        if c == 0:
-            c = cmp(self._start_time, other._start_time)
-        return c

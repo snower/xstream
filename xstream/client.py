@@ -72,7 +72,7 @@ class Client(EventEmitter):
             fp.write(session)
         self.init_connection()
 
-    def init_connection(self, is_on_open = False):
+    def init_connection(self, is_delay = True):
         if not self._session:
             return
 
@@ -91,7 +91,7 @@ class Client(EventEmitter):
             
             self._connecting = self.fork_connection()
 
-        if is_on_open:
+        if not is_delay:
             do_init_connection()
         elif len(self._connections) >= 1:
             current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
@@ -105,7 +105,7 @@ class Client(EventEmitter):
             self.emit("session", self, self._session)
 
             self.running = True
-            self.init_connection(True)
+            self.init_connection(False)
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
@@ -168,7 +168,7 @@ class Client(EventEmitter):
             self.emit("session", self, self._session)
 
             self.running = True
-            self.init_connection(True)
+            self.init_connection(False)
             connection.close()
             self.save_session()
             self._session.write_action(0x01)
@@ -236,11 +236,21 @@ class Client(EventEmitter):
             obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
             data.read(obstruction_len)
 
-            def add_connection():
-                if not self._session.add_connection(connection):
-                    connection.close()
+            def add_connection(conn):
+                connection = self._session.add_connection(conn)
+                if not connection:
+                    conn.close()
+                else:
+                    def on_expried(is_close = False):
+                        if not is_close and len(self._connections) <= 1:
+                            self.init_connection(False)
+                            current().timeout(5, on_expried, True)
+                        else:
+                            connection.on_expried()
+                    current().timeout(random.randint(180, 1800), on_expried)
+                    current().timeout(30, connection.on_ping_loop)
 
-            current().async(add_connection)
+            current().async(add_connection, connection)
             self._connecting = None
             self._reconnect_count = 0
             if len(self._connections) >= 2:
