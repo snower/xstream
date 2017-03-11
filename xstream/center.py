@@ -177,7 +177,7 @@ class Center(EventEmitter):
                     stream = self.ready_streams[0]
                     if not stream.do_write():
                         self.ready_streams.pop(0)
-                if self.frames:
+                if self.frames and len(self.frames[0].data) + 11 <= connection._mss * 2:
                     self.write_next(connection, False)
             
         elif first_write:
