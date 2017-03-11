@@ -97,7 +97,7 @@ class Connection(EventEmitter):
             if not self._wait_write:
                 current().async(self.do_write)
                 self._wait_write = True
-            return self._wdata_len < self._mss * 2 - 128
+            return self._wdata_len < self._mss - 236
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 256))
