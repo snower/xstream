@@ -147,10 +147,10 @@ class Stream(EventEmitter):
                     break
             
     def on_write(self):
-        if self._send_is_set_ready and self._send_frames:
+        if self._send_is_set_ready:
             return
 
-        if not self._send_is_set_ready and self._send_frames:
+        if not self._send_is_set_ready and self._send_buffer:
             self._send_time = time.time()
             self._send_is_set_ready = True
             if not self._session.ready_write(self):
