@@ -138,7 +138,7 @@ class Stream(EventEmitter):
                 if blen > self._mss:
                     frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
                     self._send_frames.append(frame)
-                elif blen > 0:
+                elif len(self._send_frames) < 2 and blen > 0:
                     frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
                     self._send_frames.append(frame)
                     self._send_buffer = None
