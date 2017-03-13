@@ -63,10 +63,10 @@ class Connection(EventEmitter):
     def on_close(self, connection):
         self.emit("close",self)
         self._closed = True
-        self._session = None
+        self._session, session = None, self._session
         self.remove_all_listeners()
-        logging.info("xstream session %s connection %s close %.2f %s %s", self._session, self,
-                     (time.time() - self._start_time) * 1000, format_data_len(self._rdata_count), format_data_len(self._wdata_count))
+        logging.info("xstream session %s connection %s close %.2fs %s %s", session, self,
+                     time.time() - self._start_time, format_data_len(self._rdata_count), format_data_len(self._wdata_count))
 
     def read(self):
         while len(self._buffer) >= self._data_len:
