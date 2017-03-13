@@ -102,7 +102,7 @@ class Server(EventEmitter):
         if isinstance(self._server, list):
             for i in range(len(self._server)):
                 self._server[i].on("connection", self.on_connection)
-                self._server[i].listen((self._host[i][0], self._port[i][1]))
+                self._server[i].listen((self._host[i][0], self._host[i][1]))
         else:
             self._server.on("connection", self.on_connection)
             self._server.listen((self._host, self._port))
