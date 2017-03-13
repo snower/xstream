@@ -10,6 +10,7 @@ import socket
 from collections import deque
 from sevent import EventEmitter, current, Buffer
 from crypto import rand_string
+from utils import format_data_len
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
@@ -34,6 +35,7 @@ class Connection(EventEmitter):
         self._connection.on("data",self.on_data)
         self._connection.on("drain",self.on_drain)
 
+        self._start_time = time.time()
         self._data_len = 2
         self._buffer = Buffer()
         self._wdata_len = 0
@@ -43,11 +45,14 @@ class Connection(EventEmitter):
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
+        self._rdata_count = 0
+        self._wdata_count = 0
 
     def on_data(self, connection, data):
         self._data_time = time.time()
         if self._buffer._len + data._len >= self._data_len:
             data = self._crypto.decrypt(data.read(-1))
+            self._rdata_count += len(data)
             self._buffer.write(data)
             self.read()
 
@@ -60,6 +65,8 @@ class Connection(EventEmitter):
         self._closed = True
         self._session = None
         self.remove_all_listeners()
+        logging.info("xstream session %s connection %s close %.2f %s %s", self._session, self,
+                     (time.time() - self._start_time) * 1000, format_data_len(self._rdata_count), format_data_len(self._wdata_count))
 
     def read(self):
         while len(self._buffer) >= self._data_len:
@@ -72,7 +79,7 @@ class Connection(EventEmitter):
                 self._data_len = 2
 
                 if data[-2:] != '\x0f\x0f':
-                    logging.info("connection %s verify error", self)
+                    logging.info("xstream session %s connection %s verify error", self._session, self)
                     return self._connection.close()
 
                 action = ord(data[0])
@@ -84,6 +91,7 @@ class Connection(EventEmitter):
     def do_write(self):
         if not self._closed:
             data = self._crypto.encrypt("".join(self._wbuffer))
+            self._wdata_count += len(data)
             self._connection.write(data)
             self._wbuffer.clear()
             self._wdata_len = 0
@@ -103,6 +111,7 @@ class Connection(EventEmitter):
         data += rand_string(random.randint(1, 256))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
+        self._wdata_count += len(data)
         return self._connection.write(data)
 
     def on_action(self, action, data):
@@ -121,7 +130,7 @@ class Connection(EventEmitter):
     def on_expried(self):
         if not self._closed:
             self.close()
-            logging.info("connection %s expried timeout", self)
+            logging.info("xstream connection session %s expried timeout", self._session, self)
 
     def on_ping_loop(self):
         if not self._closed:
@@ -137,7 +146,7 @@ class Connection(EventEmitter):
             if self._ping_time == 0:
                 self._closed = True
                 self._connection.close()
-                logging.info("connection %s ping timeout", self)
+                logging.info("xstream session connection %s ping timeout", self._session, self)
             else:
                 current().timeout(5, self.on_ping_loop)
 

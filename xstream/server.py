@@ -22,7 +22,10 @@ class Server(EventEmitter):
 
         self._host = host
         self._port = port
-        self._server = tcp.Server()
+        if isinstance(self._host, (tuple, list)):
+            self._server = [tcp.Server() for _ in range(len(self._host))]
+        else:
+            self._server = tcp.Server()
         self._used_session_ids = {}
         self._sessions = {}
         self._current_session_id = 1
@@ -56,9 +59,13 @@ class Server(EventEmitter):
                     if not session["is_server"]:
                         continue
 
+                    if self.get_session_key(session.id) != filename:
+                        os.remove(session_path + "/" + filename)
+                        logging.info("xstream check session config change remove %s %s", session["session_id"], filename)
+
                     if now - session["t"] > 7 * 24 * 60 * 60:
                         os.remove(session_path + "/" + filename)
-                        logging.info("xstream check session remove %s %s", session["session_id"], filename)
+                        logging.info("xstream check session expried remove %s %s", session["session_id"], filename)
                     else:
                         self._used_session_ids[session["session_id"]] = filename
                         logging.info("xstream check session %s %s", session["session_id"], filename)
@@ -92,8 +99,13 @@ class Server(EventEmitter):
 
     def start(self):
         self.check_session()
-        self._server.on("connection", self.on_connection)
-        self._server.listen((self._host, self._port))
+        if isinstance(self._server, list):
+            for i in range(len(self._server)):
+                self._server[i].on("connection", self.on_connection)
+                self._server[i].listen((self._host[i][0], self._port[i][1]))
+        else:
+            self._server.on("connection", self.on_connection)
+            self._server.listen((self._host, self._port))
         current().timeout(6 * 60 * 60, self.check_session)
 
     def on_connection(self, server, connection):

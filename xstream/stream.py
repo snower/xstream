@@ -10,6 +10,7 @@ from collections import deque
 from sevent import EventEmitter, current, Buffer
 from frame import StreamFrame
 from crypto import  rand_string
+from utils import format_data_len
 
 ACTION_OPEN  = 1
 ACTION_OPENED = 2
@@ -222,14 +223,6 @@ class Stream(EventEmitter):
                 self.loop.timeout(self._expried_time, self.do_close)
         self.loop.timeout(5, do_colse_timeout)
 
-    def format_data_len(self, data_len):
-        if data_len < 1024:
-            return "%dB" % data_len
-        elif data_len < 1024 * 1024:
-            return "%.3fK" % (data_len / 1024.0)
-        elif data_len < 1024 * 1024 * 1024:
-            return "%.3fM" % (data_len / (1024.0 * 1024.0))
-
     def do_close(self):
         if not self._session:
             return
@@ -247,8 +240,8 @@ class Stream(EventEmitter):
                 self.remove_all_listeners()
                 self._session = None
             logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", session, self,
-                         self.format_data_len(self._send_data_len), self._send_frame_count,
-                         self.format_data_len(self._recv_data_len), self._recv_frame_count,
+                         format_data_len(self._send_data_len), self._send_frame_count,
+                         format_data_len(self._recv_data_len), self._recv_frame_count,
                          (time.time() - self._start_time) * 1000)
 
         self.loop.async(do_close)
