@@ -130,7 +130,7 @@ class Connection(EventEmitter):
     def on_expried(self):
         if not self._closed:
             self.close()
-            logging.info("xstream connection session %s expried timeout", self._session, self)
+            logging.info("xstream session %s connection %s expried timeout", self._session, self)
 
     def on_ping_loop(self):
         if not self._closed:
@@ -146,7 +146,7 @@ class Connection(EventEmitter):
             if self._ping_time == 0:
                 self._closed = True
                 self._connection.close()
-                logging.info("xstream session connection %s ping timeout", self._session, self)
+                logging.info("xstream session %s connection %s ping timeout", self._session, self)
             else:
                 current().timeout(5, self.on_ping_loop)
 
