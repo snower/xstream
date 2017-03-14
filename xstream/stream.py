@@ -200,7 +200,11 @@ class Stream(EventEmitter):
     def close(self):
         if self._closed:
             return
+
         self._closed = True
+
+        if self._session.closed:
+            return self.do_close()
 
         while self._send_buffer:
             self.flush()
