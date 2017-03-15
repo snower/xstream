@@ -118,16 +118,18 @@ class Session(EventEmitter):
     def remove_connection(self, conn):
         for connection in self._connections:
             if connection._connection == conn:
-                self._center.remove_connection(connection)
+                if self._center:
+                    self._center.remove_connection(connection)
                 self._connections.remove(connection)
                 break
 
         if not self._connections:
             if self._status == STATUS_CLOSED:
-                self._center.close()
-                self._center = None
-                self.emit("close", self)
-                self.remove_all_listeners()
+                if self._center:
+                    self._center.close()
+                    self._center = None
+                    self.emit("close", self)
+                    self.remove_all_listeners()
             else:
                 def on_exit():
                     if not self._connections:
@@ -204,8 +206,9 @@ class Session(EventEmitter):
     def close_stream(self, stream):
         if stream.id in self._streams:
             self._streams.pop(stream.id)
-        if self._status == STATUS_CLOSED and not self._streams:
-            self.do_close()
+        if self._status == STATUS_CLOSED:
+            if not self._streams and self._center:
+                self.do_close()
 
     def ready_write(self, stream, is_ready=True):
         if self._status == STATUS_CLOSED:
