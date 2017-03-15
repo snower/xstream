@@ -122,7 +122,7 @@ class Stream(EventEmitter):
         self._send_is_set_ready = bool(self._send_frames)
         return self._send_is_set_ready
         
-    def flush(self):
+    def flush(self, flush_all = False):
         if not self._send_buffer:
             return 
 
@@ -139,7 +139,7 @@ class Stream(EventEmitter):
                 if blen > self._mss:
                     frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
                     self._send_frames.append(frame)
-                elif len(self._send_frames) < 2 and blen > 0:
+                elif blen > 0 and (flush_all or len(self._send_frames) < 2):
                     frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
                     self._send_frames.append(frame)
                     self._send_buffer = None
@@ -207,7 +207,7 @@ class Stream(EventEmitter):
             return self.do_close()
 
         while self._send_buffer:
-            self.flush()
+            self.flush(True)
 
         if self._send_frames:
             frame = self._send_frames[-1]
