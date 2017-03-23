@@ -7,7 +7,7 @@ import random
 import logging
 import base64
 import pickle
-from sevent import EventEmitter, current
+from sevent import EventEmitter, current, tcp
 from crypto import Crypto, rand_string
 from connection import Connection
 from center import Center
@@ -265,7 +265,7 @@ class Session(EventEmitter):
             return
 
         if not index:
-            self._center.write_action(action | 0x80, data)
+            self._center.write_action(action | 0x80, data, 0)
         else:
             data += rand_string(random.randint(1, 256))
             action = chr(action) if center else chr(action | 0x80)
@@ -299,7 +299,10 @@ class Session(EventEmitter):
         self._status = STATUS_CLOSED
         if self._connections:
             for connection in self._connections:
-                connection.close()
+                if connection._connection and connection._connection._state == tcp.STATE_CLOSED:
+                    current().async(self.remove_connection, connection._connection)
+                else:
+                    connection.close()
         else:
             self._center.close()
             self._center = None

@@ -59,11 +59,11 @@ class Server(EventEmitter):
                     if not session["is_server"]:
                         continue
 
-                    if self.get_session_key(session.id) != filename:
+                    if self.get_session_key(session["session_id"]) != filename:
                         os.remove(session_path + "/" + filename)
                         logging.info("xstream check session config change remove %s %s", session["session_id"], filename)
 
-                    if now - session["t"] > 7 * 24 * 60 * 60:
+                    elif now - session["t"] > 7 * 24 * 60 * 60:
                         os.remove(session_path + "/" + filename)
                         logging.info("xstream check session expried remove %s %s", session["session_id"], filename)
                     else:
