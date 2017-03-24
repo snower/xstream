@@ -32,7 +32,7 @@ class Session(EventEmitter):
         self._crypto = crypto
         self._current_crypto_key =  '0' * 64
         self._mss = mss
-        self._key_change = 2
+        self._key_change = 1
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -60,7 +60,7 @@ class Session(EventEmitter):
 
     @property
     def key_change(self):
-        return self._key_change < 2
+        return self._key_change < 1
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
@@ -240,25 +240,23 @@ class Session(EventEmitter):
                 self._status = STATUS_OPENING
         elif action == ACTION_KEYCHANGE:
             if self._is_server:
-                if self._key_change == 2:
+                if self._key_change == 1:
                     self._current_crypto_key = data[:64]
                     self.write_action(ACTION_KEYCHANGE, self._current_crypto_key, True)
                     self._key_change = 0
                 else:
                     self.write_action(ACTION_KEYCHANGE, '', True)
-                    self._key_change += 1
-                    if self._key_change == 2:
-                        self.emit("keychange", self)
-                        logging.info("xstream session %s key change", self)
+                    self._key_change = 1
+                    self.emit("keychange", self)
+                    logging.info("xstream session %s key change", self)
             else:
                 if self._key_change == 0:
                     self._current_crypto_key = data[:64]
-                if self._key_change < 2:
                     self.write_action(ACTION_KEYCHANGE, '', True)
-                    self._key_change += 1
-                    if self._key_change == 2:
-                        self.emit("keychange", self)
-                        logging.info("xstream session %s key change", self)
+                    self._key_change = 1
+                else:
+                    self.emit("keychange", self)
+                    logging.info("xstream session %s key change", self)
 
     def write_action(self, action, data='', index=None, center = False):
         if self._status == STATUS_CLOSED:
