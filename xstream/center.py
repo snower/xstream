@@ -182,6 +182,13 @@ class Center(EventEmitter):
             
         elif first_write:
             self.drain_connections.append(connection)
+            if self.ready_streams:
+                def on_write_next():
+                    while self.ready_streams and self.wait_reset_frames is None:
+                        stream = self.ready_streams[0]
+                        if not stream.do_write():
+                            self.ready_streams.pop(0)
+                current().async(on_write_next)
         return frame
 
     def on_frame(self, connection, data):
@@ -236,12 +243,17 @@ class Center(EventEmitter):
         elif action == ACTION_RESEND:
             index, recv_index = struct.unpack("!II", data[:8])
             logging.info("stream session %s center %s index resend action %s %s", self.session, self, index, recv_index)
-            recv_index = index + int(recv_index - index)
+            waiting_frames = []
             while self.send_frames and self.send_frames[0].index <= recv_index:
                 frame = self.send_frames.pop(0)
                 if frame.index >= index:
-                    bisect.insort(self.frames, frame)
-                    self.write_frame()
+                    if time.time() - frame.send_time < self.ttl / 1000.0:
+                        waiting_frames.append(frame)
+                    else:
+                        bisect.insort(self.frames, frame)
+                        self.write_frame()
+            if waiting_frames:
+                self.send_frames = waiting_frames + self.send_frames
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET_ACK)
             self.recv_index = 0
