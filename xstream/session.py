@@ -135,7 +135,7 @@ class Session(EventEmitter):
                     if not self._connections:
                         self.do_close()
 
-                current().async(on_exit)
+                current().timeout(5, on_exit)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
@@ -270,6 +270,8 @@ class Session(EventEmitter):
             self._controll_stream.write(action + data)
 
     def start_key_change(self):
+        if self._key_change == 0:
+            return
         self._key_change = 0
         self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
 
