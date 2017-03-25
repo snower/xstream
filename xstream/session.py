@@ -87,7 +87,7 @@ class Session(EventEmitter):
             session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
             session._current_crypto_key = s["current_crypto_key"]
             session._key_change = s["key_change"]
-            if not s["is_server"] and session._key_change != 2:
+            if not s["is_server"] and session._key_change != 1:
                 return None
         except:
             return None
