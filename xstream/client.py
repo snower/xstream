@@ -91,7 +91,7 @@ class Client(EventEmitter):
             
             self._connecting = self.fork_connection()
 
-        if not is_delay:
+        if not is_delay or not self._connections:
             do_init_connection()
         elif len(self._connections) >= 1:
             current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
