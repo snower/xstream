@@ -135,7 +135,10 @@ class Session(EventEmitter):
                     if not self._connections:
                         self.do_close()
 
-                current().timeout(5, on_exit)
+                if self._status == STATUS_OPENING:
+                    current().timeout(5, on_exit)
+                else:
+                    current().async(on_exit)
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
