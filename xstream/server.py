@@ -191,6 +191,11 @@ class Server(EventEmitter):
                     self.emit("connection", self, connection, datas)
                     return
 
+                if session.key_change:
+                    logging.info("xstream connection key_change refuse session closed %s %s %s %s", session_id, connection, time.time())
+                    self.emit("connection", self, connection, datas)
+                    return
+
                 crypto = session.get_decrypt_crypto(crypto_time)
                 decrypt_data = crypto.decrypt(data.read(82))
                 auth = decrypt_data[:16]
@@ -225,6 +230,8 @@ class Server(EventEmitter):
                             connection.write_action(0x05, rand_string(random.randint(2 * 1024, 32 * 1024)))
                             if is_loaded_session:
                                 session.write_action(0x01)
+                                if len(session._connections) >= 2:
+                                    session.start_key_change()
                         else:
                             self.emit("connection", self, conn, datas)
 
@@ -240,5 +247,7 @@ class Server(EventEmitter):
         logging.info("xstream connection refuse %s %s %s %s", session_id, connection, time.time(), crypto_time)
 
     def on_session_close(self, session):
-        session = self._sessions.pop(session.id)
-        logging.info("xstream session close %s", session)
+        if session.id in self._sessions:
+            self.save_session(session)
+            self._sessions.pop(session.id)
+            logging.info("xstream session close %s", session)

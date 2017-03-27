@@ -87,7 +87,7 @@ class Session(EventEmitter):
             session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
             session._current_crypto_key = s["current_crypto_key"]
             session._key_change = s["key_change"]
-            if not s["is_server"] and session._key_change != 1:
+            if not s["is_server"] and session._key_change < 1:
                 return None
         except:
             return None
@@ -243,21 +243,15 @@ class Session(EventEmitter):
                 self._status = STATUS_OPENING
         elif action == ACTION_KEYCHANGE:
             if self._is_server:
-                if self._key_change == 1:
-                    self._current_crypto_key = data[:64]
-                    self.write_action(ACTION_KEYCHANGE, self._current_crypto_key, True)
-                    self._key_change = 0
-                else:
-                    self.write_action(ACTION_KEYCHANGE, '', True)
-                    self._key_change = 1
-                    self.emit("keychange", self)
-                    logging.info("xstream session %s key change", self)
+                self._current_crypto_key = data[:64]
+                self.write_action(ACTION_KEYCHANGE, self._current_crypto_key, True)
+                self._key_change += 1
+                self.emit("keychange", self)
+                logging.info("xstream session %s key change", self)
             else:
-                if self._key_change == 0:
+                if self._key_change < 1:
                     self._current_crypto_key = data[:64]
-                    self.write_action(ACTION_KEYCHANGE, '', True)
-                    self._key_change = 1
-                else:
+                    self._key_change += 1
                     self.emit("keychange", self)
                     logging.info("xstream session %s key change", self)
 
@@ -273,10 +267,12 @@ class Session(EventEmitter):
             self._controll_stream.write(action + data)
 
     def start_key_change(self):
-        if self._key_change == 0:
+        if self._key_change < 1:
             return
-        self._key_change = 0
-        self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
+
+        self._key_change -= 1
+        if not self._is_server:
+            self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:

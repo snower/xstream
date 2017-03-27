@@ -212,6 +212,9 @@ class Client(EventEmitter):
         return connection
 
     def on_fork_connect(self, connection):
+        if not self._session:
+            return connection.close()
+
         crypto_time = get_crypto_time()
         rand_code, protecol_code = pack_protocel_code(crypto_time, 1)
         session_id = xor_string(rand_code & 0xff, struct.pack("!H", self._session.id))
@@ -279,7 +282,7 @@ class Client(EventEmitter):
             self._connecting = None
         if self.running:
             if connection.is_connected_session:
-                self.init_connection()
+                current().async(self.init_connection)
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 current().timeout(self._reconnect_count, self.init_connection)
@@ -298,6 +301,7 @@ class Client(EventEmitter):
 
     def on_session_close(self, session):
         if self._session == session:
+            self.save_session()
             self._session = None
             self._connections = []
             self._connecting = None
