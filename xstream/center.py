@@ -149,7 +149,7 @@ class Center(EventEmitter):
                 finally:
                     self.writing_connection = None
 
-    def write_next(self, connection, first_write = True):
+    def get_write_connection_frame(self, connection):
         frame = self.frames.pop(0)
         if connection == frame.connection:
             frames = []
@@ -158,6 +158,11 @@ class Center(EventEmitter):
                 frame = self.frames.pop(0) if self.frames else None
             if frames:
                 self.frames = frames + self.frames
+        return frame
+
+    def write_next(self, connection, frame = None, first_write = True):
+        if frame is None:
+            frame = self.get_write_connection_frame(connection)
 
         if frame:
             if frame.index != 0:
@@ -173,22 +178,35 @@ class Center(EventEmitter):
                             self.send_timeout_loop = True
                             break
             if connection.write(frame.dumps()):
-                while not self.frames and self.ready_streams and self.wait_reset_frames is None:
-                    stream = self.ready_streams[0]
-                    if not stream.do_write():
-                        self.ready_streams.pop(0)
-                if self.frames and len(self.frames[0].data) + 11 + connection._wdata_len <= connection._mss + 15:
-                    self.write_next(connection, False)
+                def on_write_next_full(self, connection):
+                    frame = self.get_write_connection_frame(connection) if self.frames else None
+                    while not frame and self.ready_streams and self.wait_reset_frames is None:
+                        stream = self.ready_streams[0]
+                        if not stream.do_write():
+                            self.ready_streams.pop(0)
+                        frame = self.get_write_connection_frame(connection) if self.frames else None
+
+                    if frame:
+                        self.writing_connection = connection
+                        try:
+                            self.write_next(connection, frame, False)
+                        finally:
+                            self.writing_connection = None
+                    else:
+                        connection.flush()
+                current().async(on_write_next_full, self, connection)
+            else:
+                connection.flush()
             
         elif first_write:
             self.drain_connections.append(connection)
             if self.ready_streams:
-                def on_write_next():
+                def on_write_next(self):
                     while self.ready_streams and self.wait_reset_frames is None:
                         stream = self.ready_streams[0]
                         if not stream.do_write():
                             self.ready_streams.pop(0)
-                current().async(on_write_next)
+                current().async(on_write_next, self)
         return frame
 
     def on_frame(self, connection, data):

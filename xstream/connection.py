@@ -41,7 +41,6 @@ class Connection(EventEmitter):
         self._wdata_len = 0
         self._wbuffer = deque()
         self._wait_head = True
-        self._wait_write = False
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
@@ -97,7 +96,7 @@ class Connection(EventEmitter):
                 else:
                     self.on_action(action, data[1:-2])
 
-    def do_write(self):
+    def flush(self):
         if not self._closed:
             data = self._crypto.encrypt("".join(self._wbuffer))
             self._wdata_count += len(data)
@@ -105,7 +104,6 @@ class Connection(EventEmitter):
             self._connection.write(data)
             self._wbuffer.clear()
             self._wdata_len = 0
-            self._wait_write = False
 
     def write(self, data):
         if not self._closed:
@@ -113,9 +111,6 @@ class Connection(EventEmitter):
             self._wbuffer.append(data)
             self._wdata_len += len(data)
             self._wfdata_count += 1
-            if not self._wait_write:
-                current().async(self.do_write)
-                self._wait_write = True
             return self._wdata_len < self._mss - 236
 
     def write_action(self, action, data=''):
