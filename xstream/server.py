@@ -227,7 +227,7 @@ class Server(EventEmitter):
                     def add_connection(conn):
                         connection = session.add_connection(conn)
                         if connection:
-                            connection.write_action(0x05, rand_string(random.randint(2 * 1024, 32 * 1024)))
+                            connection.write_action(0x05, rand_string(random.randint(2, 32 * 1024)))
                             if is_loaded_session:
                                 session.write_action(0x01)
                                 if len(session._connections) >= 2:
