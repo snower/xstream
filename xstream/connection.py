@@ -114,7 +114,7 @@ class Connection(EventEmitter):
             return self._wdata_len < self._mss - 236
 
     def write_action(self, action, data=''):
-        data += rand_string(random.randint(1, 2048))
+        data += rand_string(random.randint(1, 1024))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
         self._wdata_count += len(data)
