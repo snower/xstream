@@ -94,7 +94,7 @@ class Client(EventEmitter):
         if not is_delay or not self._connections:
             do_init_connection()
         elif len(self._connections) >= 1:
-            current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 2)), do_init_connection)
+            current().timeout(random.randint(5 * (len(self._connections) ** 2), 240 * (len(self._connections) ** 2)), do_init_connection)
 
     def open(self):
         session = self.load_session()
