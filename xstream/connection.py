@@ -114,7 +114,7 @@ class Connection(EventEmitter):
             return self._wdata_len < self._mss - 236
 
     def write_action(self, action, data=''):
-        data += rand_string(random.randint(1, 256))
+        data += rand_string(random.randint(1, 2048))
         data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
         data = self._crypto.encrypt(data)
         self._wdata_count += len(data)
@@ -147,7 +147,7 @@ class Connection(EventEmitter):
                 self._ping_time = 0
                 current().timeout(2, self.on_ping_timeout)
             else:
-                current().timeout(10, self.on_ping_loop)
+                current().timeout(5, self.on_ping_loop)
 
     def on_ping_timeout(self):
         if not self._closed:
