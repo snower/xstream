@@ -2,29 +2,83 @@
 #14_6_20
 # create by: snower
 
+import os
 import time
 import random
 import struct
-from M2Crypto import Rand,EVP
 
 ALG_KEY_IV_LEN = {
-    'aes_128_cfb': (16, 16),
-    'aes_192_cfb': (24, 16),
-    'aes_256_cfb': (32, 16),
-    'bf_cfb': (16, 8),
-    'camellia_128_cfb': (16, 16),
-    'camellia_192_cfb': (24, 16),
-    'camellia_256_cfb': (32, 16),
-    'cast5_cfb': (16, 8),
-    'des_cfb': (8, 8),
-    'idea_cfb': (16, 8),
-    'rc2_cfb': (8, 8),
-    'rc4': (16, 0),
-    'seed_cfb': (16, 16),
-}
+        'aes_128_cfb': (16, 16),
+        'aes_192_cfb': (24, 16),
+        'aes_256_cfb': (32, 16),
+        'aes_128_ofb': (16, 16),
+        'aes_192_ofb': (24, 16),
+        'aes_256_ofb': (32, 16),
+        'aes_128_ctr': (16, 16),
+        'aes_192_ctr': (24, 16),
+        'aes_256_ctr': (32, 16),
+        'aes_128_cfb8': (16, 16),
+        'aes_192_cfb8': (24, 16),
+        'aes_256_cfb8': (32, 16),
+        'aes_128_cfb1': (16, 16),
+        'aes_192_cfb1': (24, 16),
+        'aes_256_cfb1': (32, 16),
+        'bf_cfb': (16, 8),
+        'camellia_128_cfb': (16, 16),
+        'camellia_192_cfb': (24, 16),
+        'camellia_256_cfb': (32, 16),
+        'cast5_cfb': (16, 8),
+        'des_cfb': (8, 8),
+        'idea_cfb': (16, 8),
+        'rc2_cfb': (16, 8),
+        'rc4': (16, 0),
+        'seed_cfb': (16, 16),
+    }
 
-def rand_string(length):
-    return Rand.rand_bytes(length)
+if os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
+    from M2Crypto import Rand,EVP
+
+    def get_evp(alg_key, key, iv, op):
+        if alg_key not in ALG_KEY_IV_LEN:
+            return
+        return EVP.Cipher(alg_key, key, iv, op, 0)
+
+    def rand_string(length):
+        return Rand.rand_bytes(length)
+
+    def sign_string(data):
+        d = ''
+        for t in ("md5", "sha1", "md5"):
+            s = EVP.MessageDigest(t)
+            s.update(data + d)
+            d = s.digest()
+        return d
+
+    def bytes_to_key_digest():
+        return EVP.MessageDigest('sha1')
+
+else:
+    import hashlib
+    from .openssl import OpenSSLCrypto
+
+    def get_evp(alg_key, key, iv, op):
+        if alg_key not in ALG_KEY_IV_LEN:
+            return
+        return OpenSSLCrypto(alg_key.replace("_", "-"), key, iv, op)
+
+    def rand_string(length):
+        return "".join([chr(random.randint(0, 255)) for _ in xrange(length)])
+
+    def sign_string(data):
+        d = ''
+        for t in (hashlib.md5, hashlib.sha1, hashlib.md5):
+            s = t()
+            s.update(data + d)
+            d = s.digest()
+        return d
+
+    def bytes_to_key_digest():
+        return hashlib.sha1()
 
 def xor_string(key, data, encrypt=True):
     if isinstance(key, basestring):
@@ -42,14 +96,6 @@ def xor_string(key, data, encrypt=True):
             result.append(chr(r))
             iv = r
     return "".join(result)
-
-def sign_string(data):
-    d = ''
-    for t in ("md5", "sha1", "md5"):
-        s=EVP.MessageDigest(t)
-        s.update(data + d)
-        d=s.digest()
-    return d
 
 def get_crypto_time(t = None):
     if t is None:
@@ -91,11 +137,11 @@ class Crypto(object):
             self._ensecret = secret
         else:
             self._ensecret = (secret[:32], secret[32:]) if secret and len(secret)>=64 else (rand_string(32), rand_string(32))
-        self._encipher = EVP.Cipher(
+        self._encipher = get_evp(
             self._alg,
             self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
-            self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, 32),
-            1, 0)
+            self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
+            1)
         return  "".join(self._ensecret)
 
     def init_decrypt(self, crypto_time, secret, session_secret = ""):
@@ -103,11 +149,11 @@ class Crypto(object):
             self._ensecret = secret
         else:
             self._desecret= (secret[:32], secret[32:])
-        self._decipher=EVP.Cipher(
+        self._decipher = get_evp(
             self._alg,
             self.bytes_to_key(self._desecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
-            self.bytes_to_key(self._desecret[1] + session_secret, crypto_time, 32),
-            0, 0)
+            self.bytes_to_key(self._desecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
+            0)
 
     def encrypt(self, data):
         return self._encipher.update(data)
@@ -118,7 +164,7 @@ class Crypto(object):
     def bytes_to_key(self, salt, crypto_time, key_len):
         d1, d2 = (self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key), ''
         for i in range(5):
-            s=EVP.MessageDigest('sha1')
+            s = bytes_to_key_digest()
             s.update("".join([d1, salt, str(crypto_time)]))
             d2=d1
             d1=s.digest()

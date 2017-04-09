@@ -73,9 +73,12 @@ def find_library(possible_lib_names, search_symbol, library_name):
         if os.name == "nt":
             paths.extend(find_library_nt(name))
         else:
-            path = ctypes.util.find_library(name)
-            if path:
-                paths.append(path)
+            try:
+                path = ctypes.util.find_library(name)
+                if path:
+                    paths.append(path)
+            except Exception as e:
+                logging.info('ctypes.util.find_library %s error %s', name, e)
 
     if not paths:
         # We may get here when find_library fails because, for example,
@@ -85,15 +88,19 @@ def find_library(possible_lib_names, search_symbol, library_name):
 
         for name in lib_names:
             patterns = [
+                '%s/lib%s.*' % (os.path.abspath("./"), name),
+                'lib%s.*' % name,
+                '%s.dll' % name,
                 '/usr/local/lib*/lib%s.*' % name,
                 '/usr/lib*/lib%s.*' % name,
-                'lib%s.*' % name,
-                '%s.dll' % name]
+                '/system/lib/lib%s.*' % name,
+            ]
 
             for pat in patterns:
                 files = glob.glob(pat)
                 if files:
                     paths.extend(files)
+
     for path in paths:
         try:
             lib = CDLL(path)
@@ -103,8 +110,8 @@ def find_library(possible_lib_names, search_symbol, library_name):
             else:
                 logging.warn('can\'t find symbol %s in %s', search_symbol,
                              path)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.info('CDLL %s error %s', path, e)
     return None
 
 
