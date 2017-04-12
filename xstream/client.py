@@ -162,7 +162,7 @@ class Client(EventEmitter):
 
         if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
             try:
-                mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 20, StreamFrame.FRAME_LEN)
+                mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
             except:
                 mss = StreamFrame.FRAME_LEN
             self._session = Session(session_id, self._auth_key, False, connection.crypto, mss)
@@ -238,7 +238,7 @@ class Client(EventEmitter):
         key = decrypt_data[16:80]
         if decrypt_data[:16] == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
             try:
-                self._session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 20, StreamFrame.FRAME_LEN)
+                self._session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
             except:pass
             setattr(connection, "crypto_time", crypto_time)
             connection.crypto.init_decrypt(crypto_time, key)

@@ -36,8 +36,7 @@ class Connection(EventEmitter):
         self._connection.on("drain",self.on_drain)
 
         self._start_time = time.time()
-        self._data_len = 2
-        self._buffer = Buffer()
+        self._data_len = 5
         self._wdata_len = 0
         self._wbuffer = deque()
         self._wait_head = True
@@ -51,14 +50,11 @@ class Connection(EventEmitter):
         self._rfdata_count = 0
         self._wfdata_count = 0
 
-    def on_data(self, connection, data):
+    def on_data(self, connection, buffer):
         self._data_time = time.time()
         self._rpdata_count += 1
-        if self._buffer._len + data._len >= self._data_len:
-            data = self._crypto.decrypt(data.read(-1))
-            self._rdata_count += len(data)
-            self._buffer.write(data)
-            self.read()
+        if buffer._len >= self._data_len:
+            self.read(buffer)
 
     def on_drain(self, connection):
         if not self._closed:
@@ -75,15 +71,16 @@ class Connection(EventEmitter):
                      format_data_len(self._wdata_count), self._wfdata_count, self._wpdata_count,
                     )
 
-    def read(self):
-        while len(self._buffer) >= self._data_len:
-            data = self._buffer.read(self._data_len)
+    def read(self, buffer):
+        while len(buffer) >= self._data_len:
+            data = buffer.read(self._data_len)
             if self._wait_head:
                 self._wait_head = False
-                self._data_len, = struct.unpack("!H", data)
+                self._data_len, = struct.unpack("!H", data[3:])
             else:
                 self._wait_head = True
-                self._data_len = 2
+                self._data_len = 5
+                data = self._crypto.decrypt(data)
 
                 if data[-2:] != '\x0f\x0f':
                     logging.info("xstream session %s connection %s verify error", self._session, self)
@@ -95,10 +92,16 @@ class Connection(EventEmitter):
                     self._rfdata_count += 1
                 else:
                     self.on_action(action, data[1:-2])
+                self._rdata_count += len(data) + 5
 
     def flush(self):
         if not self._closed:
-            data = self._crypto.encrypt("".join(self._wbuffer))
+            data = ''
+            for feg in self._wbuffer:
+                feg = self._crypto.encrypt("".join(['\x00', feg, '\x0f\x0f']))
+                feg = "".join(['\x17\x03\x03', struct.pack("!H", len(feg)), feg])
+                data += feg
+
             self._wdata_count += len(data)
             self._wpdata_count += 1
             self._connection.write(data)
@@ -107,16 +110,16 @@ class Connection(EventEmitter):
 
     def write(self, data):
         if not self._closed:
-            data = "".join([struct.pack("!HB", len(data)+3, 0), data, '\x0f\x0f'])
             self._wbuffer.append(data)
-            self._wdata_len += len(data)
+            self._wdata_len += len(data) + 8
             self._wfdata_count += 1
             return self._wdata_len < self._mss - 236
+        return False
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 1024))
-        data = "".join([struct.pack("!HB", len(data)+3, action), data, '\x0f\x0f'])
-        data = self._crypto.encrypt(data)
+        data = self._crypto.encrypt("".join([struct.pack("!B", action), data, '\x0f\x0f']))
+        data = "".join(['\x17\x03\x03', struct.pack("!H", len(data)), data])
         self._wdata_count += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1

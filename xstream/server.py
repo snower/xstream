@@ -154,7 +154,7 @@ class Server(EventEmitter):
 
     def create_session(self, connection, auth_key, crypto):
         try:
-            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 20, StreamFrame.FRAME_LEN)
+            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
         except:
             mss = StreamFrame.FRAME_LEN
         session = Session(self.get_session_id(), auth_key, True, crypto, mss)
@@ -203,7 +203,7 @@ class Server(EventEmitter):
 
                 if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
                     try:
-                        session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - 20, StreamFrame.FRAME_LEN)
+                        session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
                     except:pass
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     setattr(connection, "crypto_time", crypto_time)
