@@ -149,14 +149,10 @@ class Client(EventEmitter):
         _, protecol_code = pack_protocel_code(crypto_time, 0)
         key = connection.crypto.init_encrypt(crypto_time)
         auth = connection.crypto.encrypt(self._auth_key + sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)))
-        data = protecol_code + key + auth + rand_string(random.randint(16, 256))
-        connection.write("".join(
-            ['\x16\x03\x03', struct.pack("!H", len(data) + 10), '\x01\x00', struct.pack("!H", len(data) + 6),
-             '\x03\x03', struct.pack("!I", crypto_time), data]))
+        connection.write(protecol_code + key + auth + rand_string(random.randint(16, 1024)))
         logging.info("xstream auth connection connect %s", connection)
 
     def on_data(self, connection, data):
-        data.read(15)
         self.opening = False
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
         session_id, = struct.unpack("!H", xor_string(rand_code & 0xff, data.read(2), False))
@@ -231,14 +227,10 @@ class Client(EventEmitter):
         crypto = self._session.get_encrypt_crypto(crypto_time)
         data = crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
 
-        data = protecol_code + session_id + data + obstruction
-        connection.write("".join(
-            ['\x16\x03\x03', struct.pack("!H", len(data) + 10), '\x01\x00', struct.pack("!H", len(data) + 6),
-             '\x03\x03', struct.pack("!I", crypto_time), data]))
+        connection.write(protecol_code + session_id + data + obstruction)
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        data.read(15)
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
         crypto = self._session.get_decrypt_crypto(crypto_time)
         decrypt_data = crypto.decrypt(data.read(82))
