@@ -252,7 +252,7 @@ class Client(EventEmitter):
             connection.crypto.init_decrypt(crypto_time, key)
             obstruction_len, = struct.unpack("!H", decrypt_data[80:82])
             data.read(obstruction_len)
-            connection.write_action("".join(['\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
+            connection.write("".join(['\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
 
             def add_connection(conn):
                 connection = self._session.add_connection(conn)
