@@ -117,6 +117,7 @@ class Server(EventEmitter):
         current().timeout(random.randint(5, 30), on_timeout)
 
     def on_data(self, connection, data):
+        data.read(15)
         datas = str(data)
         rand_code, action, crypto_time = unpack_protocel_code(data.read(2))
         if action == 0:
@@ -140,7 +141,11 @@ class Server(EventEmitter):
                 rand_code, protocel_code = pack_protocel_code(crypto_time, 0)
                 session_id = xor_string(rand_code & 0xff, struct.pack("!H", session.id))
                 auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
-                connection.write(protocel_code + session_id + key + auth + rand_string(random.randint(512, 4096)))
+                data = protocel_code + session_id + key + auth + rand_string(random.randint(512, 4096))
+                connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 10), '\x02\x00',
+                                          struct.pack("!H", len(data) + 6), '\x03\x03',
+                                          struct.pack("!I", crypto_time), data,
+                                          '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
 
                 session.on("close", self.on_session_close)
                 session.on("keychange", self.save_session)
@@ -222,7 +227,10 @@ class Server(EventEmitter):
                     crypto = session.get_encrypt_crypto(crypto_time)
                     data = crypto.encrypt(auth + key + struct.pack("!H", obstruction_len))
 
-                    connection.write(protocel_code + data + obstruction)
+                    data = protocel_code + data + obstruction
+                    connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 10), '\x02\x00',
+                                              struct.pack("!H", len(data) + 6), '\x03\x03',
+                                              struct.pack("!I", crypto_time), data]))
 
                     def add_connection(conn):
                         connection = session.add_connection(conn)

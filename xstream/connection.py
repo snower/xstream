@@ -35,6 +35,7 @@ class Connection(EventEmitter):
         self._connection.on("data",self.on_data)
         self._connection.on("drain",self.on_drain)
 
+        self._read_header = False
         self._start_time = time.time()
         self._data_len = 5
         self._wdata_len = 0
@@ -51,6 +52,12 @@ class Connection(EventEmitter):
         self._wfdata_count = 0
 
     def on_data(self, connection, buffer):
+        if not self._read_header:
+            if len(buffer) < 51:
+                return
+            buffer.read(51)
+            self._read_header = True
+
         self._data_time = time.time()
         self._rpdata_count += 1
         if buffer._len >= self._data_len:
