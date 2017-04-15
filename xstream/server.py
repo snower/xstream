@@ -230,7 +230,8 @@ class Server(EventEmitter):
                     data = protocel_code + data + obstruction
                     connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 10), '\x02\x00',
                                               struct.pack("!H", len(data) + 6), '\x03\x03',
-                                              struct.pack("!I", crypto_time), data]))
+                                              struct.pack("!I", crypto_time), data,
+                                              '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
 
                     def add_connection(conn):
                         connection = session.add_connection(conn)
