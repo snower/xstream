@@ -147,8 +147,9 @@ class Client(EventEmitter):
         connection.is_connected = True
         crypto_time = int(time.time())
         key = connection.crypto.init_encrypt(crypto_time)
-        auth = connection.crypto.encrypt(self._auth_key)
-        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], '\x00\x02\xc0\x2f\x01\x00\x00'])
+        auth_key = connection.crypto.encrypt(self._auth_key)
+        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
+        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, '\x01\x00\x00'])
         connection.write("".join(['\x16\x03\x01', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
         logging.info("xstream auth connection connect %s", connection)
 

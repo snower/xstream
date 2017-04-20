@@ -129,34 +129,36 @@ class Server(EventEmitter):
         crypto_time, = struct.unpack("!I", data.read(4))
         key = data.read(28)
         data.read(1)
-        auth = data.read(16)
+        auth_key = data.read(16)
         key += data.read(16)
-        data.read(7)
+        data.read(2)
+        auth = data.read(16)
+        data.read(3)
 
-        if crypto_time and key and auth:
+        if crypto_time and key and auth_key and auth:
             crypto = Crypto(self._crypto_key, self._crypto_alg)
             crypto.init_decrypt(crypto_time, key)
 
-            auth_key = crypto.decrypt(auth)
+            auth_key = crypto.decrypt(auth_key)
+            if auth == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
+                crypto_time = int(time.time())
+                key = crypto.init_encrypt(crypto_time)
+                session = self.create_session(connection, auth_key, crypto)
 
-            crypto_time = int(time.time())
-            key = crypto.init_encrypt(crypto_time)
-            session = self.create_session(connection, auth_key, crypto)
+                session_id = xor_string(crypto_time & 0xff, struct.pack("!H", session.id))
+                auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
 
-            session_id = xor_string(crypto_time & 0xff, struct.pack("!H", session.id))
-            auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
+                data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], session_id, '\x00\x00'])
+                connection.write("".join(['\x16\x03\x01', struct.pack("!H", len(data) + 4),
+                                          '\x02\x00', struct.pack("!H", len(data)), data,
+                                          '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
 
-            data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], session_id, '\x00\x00'])
-            connection.write("".join(['\x16\x03\x01', struct.pack("!H", len(data) + 4),
-                                      '\x02\x00', struct.pack("!H", len(data)), data,
-                                      '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
-
-            session.on("close", self.on_session_close)
-            session.on("keychange", self.save_session)
-            self.emit("session", self, session)
-            self.save_session(session)
-            logging.info("xstream session open %s", session)
-            return
+                session.on("close", self.on_session_close)
+                session.on("keychange", self.save_session)
+                self.emit("session", self, session)
+                self.save_session(session)
+                logging.info("xstream session open %s", session)
+                return
 
         self.emit("connection", self, connection, datas)
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
