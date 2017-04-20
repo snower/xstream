@@ -136,7 +136,7 @@ class Crypto(object):
         if isinstance(secret, tuple):
             self._ensecret = secret
         else:
-            self._ensecret = (secret[:32], secret[32:]) if secret and len(secret)>=64 else (rand_string(32), rand_string(32))
+            self._ensecret = (secret[:28], secret[28:]) if secret else (rand_string(28), rand_string(16))
         self._encipher = get_evp(
             self._alg,
             self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
@@ -148,7 +148,7 @@ class Crypto(object):
         if isinstance(secret, tuple):
             self._ensecret = secret
         else:
-            self._desecret= (secret[:32], secret[32:])
+            self._desecret= (secret[:28], secret[28:])
         self._decipher = get_evp(
             self._alg,
             self.bytes_to_key(self._desecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
