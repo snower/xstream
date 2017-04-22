@@ -50,6 +50,7 @@ class Connection(EventEmitter):
         self._wpdata_count = 0
         self._rfdata_count = 0
         self._wfdata_count = 0
+        current().timeout(15, self.on_check_data_loop, random.randint(8, 16) * 1024 * 1024)
 
     def on_data(self, connection, buffer):
         if not self._read_header:
@@ -167,6 +168,14 @@ class Connection(EventEmitter):
                 logging.info("xstream session %s connection %s ping timeout", self._session, self)
             else:
                 current().timeout(5, self.on_ping_loop)
+
+    def on_check_data_loop(self, data_count_limit):
+        if not self._closed:
+            if self._rdata_count > data_count_limit:
+                self.close()
+                logging.info("xstream session %s connection %s data len out", self._session, self)
+            else:
+                current().timeout(15, self.on_check_data_loop, data_count_limit)
 
     def close(self):
         if self._closed:
