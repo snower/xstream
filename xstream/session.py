@@ -136,7 +136,7 @@ class Session(EventEmitter):
                         self.do_close()
 
                 if self._status == STATUS_OPENING:
-                    current().timeout(5, on_exit)
+                    current().timeout(15 * 60, on_exit)
                 else:
                     current().async(on_exit)
 
