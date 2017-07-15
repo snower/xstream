@@ -274,7 +274,7 @@ class Client(EventEmitter):
                                 current().timeout(5, on_expried, True)
                             else:
                                 connection.on_expried()
-                        current().timeout(random.randint(180, 1800), on_expried)
+                        current().timeout(connection._expried_seconds, on_expried)
                         current().timeout(30, connection.on_ping_loop)
 
                 current().async(add_connection, connection)
