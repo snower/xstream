@@ -50,6 +50,7 @@ class Connection(EventEmitter):
         self._wpdata_count = 0
         self._rfdata_count = 0
         self._wfdata_count = 0
+        self._expried_seconds = random.randint(180, 1800)
         current().timeout(15, self.on_check_data_loop, random.randint(8, 16) * 1024 * 1024)
 
     def on_data(self, connection, buffer):
@@ -171,7 +172,7 @@ class Connection(EventEmitter):
 
     def on_check_data_loop(self, data_count_limit):
         if not self._closed:
-            if self._rdata_count > data_count_limit:
+            if self._rdata_count > data_count_limit and self._start_time + self._expried_seconds / 2 < time.time():
                 self.close()
                 logging.info("xstream session %s connection %s data len out", self._session, self)
             else:
