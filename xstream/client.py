@@ -71,6 +71,13 @@ class Client(EventEmitter):
         with open(session_path + "/" + session_key, "w") as fp:
             fp.write(session)
         self.init_connection()
+        
+    def remove_session(self):
+        session_path = self.get_session_path()
+        if not os.path.exists(session_path + "/"):
+            os.makedirs(session_path + "/")
+        session_key = self.get_session_key()
+        os.remove(session_path + "/" + session_key)
 
     def init_connection(self, is_delay = True):
         if not self._session:
@@ -235,52 +242,56 @@ class Client(EventEmitter):
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
-        data.read(11)
-        crypto_time, = struct.unpack("!I", data.read(4))
-        key = data.read(28)
-        data.read(1)
-        auth = data.read(16)
-        key += data.read(16)
-        data.read(14)
+        try:
+            data.read(11)
+            crypto_time, = struct.unpack("!I", data.read(4))
+            key = data.read(28)
+            data.read(1)
+            auth = data.read(16)
+            key += data.read(16)
+            data.read(14)
 
-        crypto = self._session.get_decrypt_crypto(crypto_time)
-        key = crypto.decrypt(key)
+            crypto = self._session.get_decrypt_crypto(crypto_time)
+            key = crypto.decrypt(key)
 
-        if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
-            try:
-                self._session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
-            except:pass
-            setattr(connection, "crypto_time", crypto_time)
-            connection.crypto.init_decrypt(crypto_time, key)
+            if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
+                try:
+                    self._session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
+                except:pass
+                setattr(connection, "crypto_time", crypto_time)
+                connection.crypto.init_decrypt(crypto_time, key)
 
-            connection.write("".join(['\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
+                connection.write("".join(['\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
 
-            def add_connection(conn):
-                connection = self._session.add_connection(conn)
-                if not connection:
-                    conn.close()
+                def add_connection(conn):
+                    connection = self._session.add_connection(conn)
+                    if not connection:
+                        conn.close()
+                    else:
+                        def on_expried(is_close = False):
+                            if not is_close and len(self._connections) <= 1:
+                                self.init_connection(False)
+                                current().timeout(5, on_expried, True)
+                            else:
+                                connection.on_expried()
+                        current().timeout(random.randint(180, 1800), on_expried)
+                        current().timeout(30, connection.on_ping_loop)
+
+                current().async(add_connection, connection)
+                self._connecting = None
+                self._reconnect_count = 0
+                if len(self._connections) >= 2:
+                    self._session.start_key_change()
                 else:
-                    def on_expried(is_close = False):
-                        if not is_close and len(self._connections) <= 1:
-                            self.init_connection(False)
-                            current().timeout(5, on_expried, True)
-                        else:
-                            connection.on_expried()
-                    current().timeout(random.randint(180, 1800), on_expried)
-                    current().timeout(30, connection.on_ping_loop)
-
-            current().async(add_connection, connection)
-            self._connecting = None
-            self._reconnect_count = 0
-            if len(self._connections) >= 2:
-                self._session.start_key_change()
-            else:
-                self.init_connection()
-            connection.is_connected_session = True
-            logging.info("xstream connection ready %s", connection)
-            return
-        connection.close()
-        logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
+                    self.init_connection()
+                connection.is_connected_session = True
+                logging.info("xstream connection ready %s", connection)
+                return
+            connection.close()
+            logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
+        except:
+            self.remove_session()
+            self.session.close()
 
     def on_fork_close(self, connection):
         if not self._session:
