@@ -90,7 +90,7 @@ class Client(EventEmitter):
             if self._connecting is not None:
                 return
             
-            if not self._session or self._session.closed or self._session.key_change:
+            if not self._session or self._session.closed or (self._connections and self._session.key_change):
                 return
             
             if len(self._connections) >= self._max_connections:
