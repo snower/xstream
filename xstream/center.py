@@ -277,14 +277,13 @@ class Center(EventEmitter):
             for i in range(resend_count):
                 resend_index, = struct.unpack("!I", data[8 + i * 4: 12 + i * 4])
                 while index < send_frames_count:
-                    if resend_index != self.send_frames[0].index:
-                        index += 1
-                    else:
-                        frame = self.send_frames[0]
+                    if resend_index == self.send_frames[index].index:
+                        frame = self.send_frames[index]
                         if now - frame.send_time >= self.ttl / 1000.0:
                             bisect.insort(self.frames, frame)
                             resend_frame_ids.append(frame.index)
                         break
+                    index += 1
 
             if resend_frame_ids:
                 self.write_frame()
