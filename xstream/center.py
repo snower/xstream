@@ -153,6 +153,8 @@ class Center(EventEmitter):
         frame = self.frames.pop(0)
         if frame.index > 0 and frame.index <= self.ack_index:
             while frame.index > 0 and frame.index <= self.ack_index:
+                if not self.frames:
+                    return None
                 frame = self.frames.pop(0)
 
         if connection == frame.connection:
@@ -350,6 +352,8 @@ class Center(EventEmitter):
                 else:
                     data.append(struct.pack("!I", current_index))
                 current_index += 1
+                if len(data) >= 1024:
+                    break
 
             self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
