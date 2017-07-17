@@ -279,9 +279,10 @@ class Center(EventEmitter):
                 while index < send_frames_count:
                     if resend_index == self.send_frames[index].index:
                         frame = self.send_frames[index]
-                        if now - frame.send_time >= self.ttl / 1000.0:
+                        if now - frame.send_time >= self.ttl / 1000.0 and now - frame.resend_time >= self.ttl / 1000.0:
                             bisect.insort(self.frames, frame)
                             resend_frame_ids.append(frame.index)
+                            frame.resend_time = now
                         break
                     index += 1
 
