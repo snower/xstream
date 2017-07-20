@@ -249,11 +249,11 @@ class Server(EventEmitter):
                     key = crypto.encrypt(key)
 
                     data = "".join(
-                        ['\x00\x17\x00\x3c', auth, key, '\x00\x05\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+                        ['\xfa\xfa\x00\x3c', auth, key, '\x00\x05\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
                     data = "".join(
                         ['\x03\x03', struct.pack("!I", crypto_time), rand_string(28), '\x20', fork_auth_session_id,
-                         xsession_id, '\x00\x00', struct.pack("!H", len(data)), data])
+                         xsession_id, '\x00', struct.pack("!H", len(data)), data])
 
                     connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4),
                                               '\x02\x00', struct.pack("!H", len(data)), data,

@@ -238,7 +238,7 @@ class Client(EventEmitter):
         crypto = self._session.get_encrypt_crypto(crypto_time)
         key = crypto.encrypt(key)
 
-        data = "".join(['\x00\x17\x00\x3c', auth, key, '\x00\x23\x00\xc0', rand_string(192),
+        data = "".join(['\xfa\xfa\x00\x3c', auth, key, '\x00\x23\x00\xc0', rand_string(192),
                         '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
         ciphres = "".join(
@@ -257,7 +257,7 @@ class Client(EventEmitter):
         try:
             data.read(11)
             crypto_time, = struct.unpack("!I", data.read(4))
-            data.read(65)
+            data.read(64)
             extensions_len, = struct.unpack("!H", data.read(2))
             extensions = data.read(extensions_len)
 
