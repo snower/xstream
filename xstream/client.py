@@ -27,6 +27,7 @@ class Client(EventEmitter):
         self._auth_key = None
         self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
         self._crypto_alg = crypto_alg
+        self.fork_auth_session_id = rand_string(32)
         self._connecting = None
         self._reconnect_count = 0
         self.opening= False
@@ -237,21 +238,32 @@ class Client(EventEmitter):
         crypto = self._session.get_encrypt_crypto(crypto_time)
         key = crypto.encrypt(key)
 
-        data = "".join(['\x00\x17\x00\x00', '\x00\x23\x00\xc0', rand_string(192), '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
-        ciphres = "".join([session_id, '\xc0\x2b', '\xc0\x2c', '\xc0\x2f', '\xc0\x30', '\xcc\xa9', '\xcc\xa8', '\xc0\x13', '\xc0\x14', '\x00\x9c', '\x00\x9d', '\x00\x2f', '\x00\x35', '\x00\x0a'])
-        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], struct.pack("!H", len(ciphres)), ciphres, '\x01\x00', struct.pack("!H", len(data)), data])
-        connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
+        data = "".join(['\x00\x17\x00\x3c', auth, key, '\x00\x23\x00\xc0', rand_string(192),
+                        '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+
+        ciphres = "".join(
+            [session_id, '\xc0\x2b', '\xc0\x2c', '\xc0\x2f', '\xc0\x30', '\xcc\xa9', '\xcc\xa8', '\xc0\x13', '\xc0\x14',
+             '\x00\x9c', '\x00\x9d', '\x00\x2f', '\x00\x35', '\x00\x0a'])
+
+        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), rand_string(28), '\x20', self.fork_auth_session_id,
+                        struct.pack("!H", len(ciphres)), ciphres, '\x01\x00', struct.pack("!H", len(data)), data])
+
+        connection.write(
+            "".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
+
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
         try:
             data.read(11)
             crypto_time, = struct.unpack("!I", data.read(4))
-            key = data.read(28)
-            data.read(1)
-            auth = data.read(16)
-            key += data.read(16)
-            data.read(14)
+            data.read(65)
+            extensions_len, = struct.unpack("!H", data.read(2))
+            extensions = data.read(extensions_len)
+
+            auth = extensions[4: 20]
+            key = extensions[20: 52]
+
             if not (crypto_time, key, auth):
                 if self._session:
                     self.remove_session()

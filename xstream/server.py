@@ -183,17 +183,18 @@ class Server(EventEmitter):
         try:
             data.read(11)
             crypto_time, = struct.unpack("!I", data.read(4))
-            key = data.read(28)
-            data.read(1)
-            auth = data.read(16)
-            key += data.read(16)
+            data.read(29)
+            fork_auth_session_id = data.read(32)
             ciphres_len, = struct.unpack("!H", data.read(2))
             ciphres = data.read(ciphres_len)
             xsession_id = xor_string(crypto_time & 0xff, ciphres[:2], False)
             session_id, = struct.unpack("!H", xsession_id)
             data.read(2)
             extensions_len, = struct.unpack("!H", data.read(2))
-            data.read(extensions_len)
+            extensions = data.read(extensions_len)
+
+            auth = extensions[4: 20]
+            key = extensions[20: 52]
 
             if not (crypto_time, key, auth, session_id):
                 self.emit("connection", self, connection, datas)
@@ -247,7 +248,13 @@ class Server(EventEmitter):
                     crypto = session.get_encrypt_crypto(crypto_time)
                     key = crypto.encrypt(key)
 
-                    data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], xsession_id, '\x00\x00\x09\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+                    data = "".join(
+                        ['\x00\x17\x00\x3c', auth, key, '\x00\x05\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+
+                    data = "".join(
+                        ['\x03\x03', struct.pack("!I", crypto_time), rand_string(28), '\x20', fork_auth_session_id,
+                         xsession_id, '\x00\x00', struct.pack("!H", len(data)), data])
+
                     connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4),
                                               '\x02\x00', struct.pack("!H", len(data)), data,
                                               '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
