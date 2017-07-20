@@ -180,17 +180,29 @@ class Server(EventEmitter):
         return self._current_session_id
 
     def on_fork_connection(self, connection, data, datas):
-        data.read(11)
-        crypto_time, = struct.unpack("!I", data.read(4))
-        key = data.read(28)
-        data.read(1)
-        auth = data.read(16)
-        key += data.read(16)
-        data.read(2)
-        a=data.read(2)
-        xsession_id = xor_string(crypto_time & 0xff, a, False)
-        session_id, = struct.unpack("!H", xsession_id)
-        data.read(3)
+        try:
+            data.read(11)
+            crypto_time, = struct.unpack("!I", data.read(4))
+            key = data.read(28)
+            data.read(1)
+            auth = data.read(16)
+            key += data.read(16)
+            ciphres_len, = struct.unpack("!H", data.read(2))
+            ciphres = data.read(ciphres_len)
+            xsession_id = xor_string(crypto_time & 0xff, ciphres[:2], False)
+            session_id, = struct.unpack("!H", xsession_id)
+            data.read(2)
+            extensions_len, = struct.unpack("!H", data.read(2))
+            data.read(extensions_len)
+
+            if not (crypto_time, key, auth, session_id):
+                self.emit("connection", self, connection, datas)
+                logging.info("xstream connection refuse %s %s", connection, time.time())
+                return
+        except:
+            self.emit("connection", self, connection, datas)
+            logging.info("xstream connection refuse %s %s", connection, time.time())
+            return
 
         if crypto_time and key and session_id and auth:
             is_loaded_session = False
