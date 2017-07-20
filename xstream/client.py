@@ -262,7 +262,7 @@ class Client(EventEmitter):
             extensions = data.read(extensions_len)
 
             auth = extensions[4: 20]
-            key = extensions[20: 52]
+            key = extensions[20: 64]
 
             if not (crypto_time, key, auth):
                 if self._session:
