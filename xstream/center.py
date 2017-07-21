@@ -357,7 +357,8 @@ class Center(EventEmitter):
                 if len(data) >= 1024:
                     break
 
-            self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
+            if len(data) <= (last_index - self.recv_index) * 0.3:
+                self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
             current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
