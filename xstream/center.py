@@ -270,24 +270,27 @@ class Center(EventEmitter):
                 frame = self.send_frames.pop(0)
                 frame.ack_time = time.time()
 
-            index, send_frames_count = 0, len(self.send_frames)
             now = time.time()
             resend_frame_ids = []
+            waiting_frames = []
 
             for i in range(resend_count):
                 resend_index, = struct.unpack("!I", data[8 + i * 4: 12 + i * 4])
-                while index < send_frames_count:
-                    if resend_index == self.send_frames[index].index:
-                        frame = self.send_frames[index]
+                while self.send_frames:
+                    frame = self.send_frames.pop(0)
+                    if resend_index == frame.index:
                         if now - frame.send_time >= self.ttl / 1000.0 and now - frame.resend_time >= self.ttl / 1000.0 and frame.resend_time <= frame.send_time:
                             bisect.insort(self.frames, frame)
                             resend_frame_ids.append(frame.index)
                             frame.resend_time = now
                         break
-                    index += 1
+                    else:
+                        waiting_frames.append(frame)
 
             if resend_frame_ids:
                 self.write_frame()
+            if waiting_frames:
+                self.send_frames = waiting_frames + self.send_frames
             logging.info("stream session %s center %s index resend action %s %s %s", self.session, self, self.ack_index, resend_count, resend_frame_ids)
         elif action == ACTION_INDEX_RESET:
             self.write_action(ACTION_INDEX_RESET_ACK)
