@@ -283,9 +283,8 @@ class Center(EventEmitter):
                             bisect.insort(self.frames, frame)
                             resend_frame_ids.append(frame.index)
                             frame.resend_time = now
-                        break
-                    else:
-                        waiting_frames.append(frame)
+                            break
+                    waiting_frames.append(frame)
 
             if resend_frame_ids:
                 self.write_frame()
