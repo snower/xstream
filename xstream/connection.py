@@ -122,8 +122,8 @@ class Connection(EventEmitter):
             self._wbuffer.append(data)
             self._wdata_len += len(data) + 8
             self._wfdata_count += 1
-            return self._wdata_len < self._mss - 236
-        return False
+            return self._mss - self._wdata_len
+        return 0
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 1024))

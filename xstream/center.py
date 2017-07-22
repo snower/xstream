@@ -183,8 +183,10 @@ class Center(EventEmitter):
                             current().timeout(max(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
-            if connection.write(frame.dumps()):
-                def on_write_next_full(self, connection):
+
+            next_data_len = connection.write(frame.dumps())
+            if next_data_len > 64:
+                def on_write_next_full(self, connection, next_data_len):
                     frame = self.get_write_connection_frame(connection) if self.frames else None
                     while not frame and self.ready_streams and self.wait_reset_frames is None:
                         stream = self.ready_streams[0]
@@ -193,14 +195,18 @@ class Center(EventEmitter):
                         frame = self.get_write_connection_frame(connection) if self.frames else None
 
                     if frame:
-                        self.writing_connection = connection
-                        try:
-                            self.write_next(connection, frame, False)
-                        finally:
-                            self.writing_connection = None
+                        if len(frame.data) + 11 <= next_data_len:
+                            self.writing_connection = connection
+                            try:
+                                self.write_next(connection, frame, False)
+                            finally:
+                                self.writing_connection = None
+                        else:
+                            bisect.insort(self.frames, frame)
+                            connection.flush()
                     else:
                         connection.flush()
-                current().async(on_write_next_full, self, connection)
+                current().async(on_write_next_full, self, connection, next_data_len)
             else:
                 connection.flush()
             
@@ -357,7 +363,7 @@ class Center(EventEmitter):
                 if len(data) >= 1024:
                     break
 
-            if len(data) < 16 or len(data) <= (last_index - self.recv_index) * 0.3:
+            if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.3:
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
