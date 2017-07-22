@@ -21,6 +21,7 @@ ACTION_NOISE = 0x05
 class Connection(EventEmitter):
     def __init__(self, connection, session, mss):
         super(Connection,self).__init__()
+        self.loop = current()
         self._connection = connection
         self._session = session
         self._crypto = connection.crypto
@@ -41,6 +42,7 @@ class Connection(EventEmitter):
         self._wdata_len = 0
         self._wbuffer = deque()
         self._wait_head = True
+        self._wait_read = False
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
@@ -62,8 +64,9 @@ class Connection(EventEmitter):
 
         self._data_time = time.time()
         self._rpdata_count += 1
-        if buffer._len >= self._data_len:
-            self.read(buffer)
+        if not self._wait_read and buffer._len >= self._data_len:
+            self._wait_read = True
+            self.loop.async(self.read, buffer)
 
     def on_drain(self, connection):
         if not self._closed:
@@ -81,11 +84,18 @@ class Connection(EventEmitter):
                     )
 
     def read(self, buffer):
+        self._wait_read = False
+        read_count = 0
         while len(buffer) >= self._data_len:
             data = buffer.read(self._data_len)
             if self._wait_head:
                 self._wait_head = False
                 self._data_len, = struct.unpack("!H", data[3:])
+                if read_count >= 64:
+                    if len(buffer) >= self._data_len:
+                        self._wait_read = True
+                        self.loop.async(self.read, buffer)
+                    break
             else:
                 self._wait_head = True
                 self._data_len = 5
@@ -102,6 +112,7 @@ class Connection(EventEmitter):
                 else:
                     self.on_action(action, data[1:-2])
                 self._rdata_count += len(data) + 5
+                read_count += 1
 
     def flush(self):
         if not self._closed:
