@@ -386,7 +386,7 @@ class Center(EventEmitter):
                 if len(data) >= 1024:
                     break
 
-            if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.3:
+            if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.4:
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
