@@ -42,6 +42,7 @@ class Center(EventEmitter):
         self.wait_reset_frames = None
         self.closed = False
         self.writing_connection = None
+        self.waiting_read_frame = False
 
         self.write_ttl()
         current().timeout(2, self.on_ready_streams_lookup)
@@ -120,9 +121,12 @@ class Center(EventEmitter):
             self.sort_stream()
 
             if self.drain_connections and self.wait_reset_frames is None:
-                stream = self.ready_streams[0]
-                if not stream.do_write():
-                    self.ready_streams.pop(0)
+                if self.frames:
+                    self.write_frame()
+                else:
+                    stream = self.ready_streams[0]
+                    if not stream.do_write():
+                        self.ready_streams.pop(0)
         current().async(do_stream_write)
         return True
 
@@ -185,7 +189,7 @@ class Center(EventEmitter):
                             break
 
             next_data_len = connection.write(frame.dumps())
-            if next_data_len > 64:
+            if next_data_len > 32:
                 def on_write_next_full(self, connection, next_data_len):
                     frame = self.get_write_connection_frame(connection) if self.frames else None
                     while not frame and self.ready_streams and self.wait_reset_frames is None:
@@ -221,6 +225,21 @@ class Center(EventEmitter):
                 current().async(on_write_next, self)
         return frame
 
+    def on_read_frame(self):
+        self.waiting_read_frame = False
+        read_frame_count = 0
+        while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
+            if self.recv_frames[0].index == self.recv_index:
+                if read_frame_count >= 64:
+                    self.waiting_read_frame = True
+                    current().async(self.on_read_frame)
+                    return
+
+                self.emit("frame", self, self.recv_frames[0])
+                self.recv_index += 1
+                read_frame_count += 1
+            self.recv_frames.pop(0)
+
     def on_frame(self, connection, data):
         frame = Frame.loads(data, connection)
 
@@ -231,18 +250,22 @@ class Center(EventEmitter):
             return
 
         if frame.index == self.recv_index:
-            while frame and frame.index <= self.recv_index:
-                if frame.index == self.recv_index:
-                    self.emit("frame", self, frame)
-                    self.recv_index += 1
+            self.emit("frame", self, frame)
+            self.recv_index += 1
 
-                frame = self.recv_frames.pop(0) if self.recv_frames else None
+            while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
+                if self.recv_frames[0].index == self.recv_index:
+                    if not self.waiting_read_frame:
+                        self.waiting_read_frame = True
+                        current().async(self.on_read_frame, frame)
+                    break
+
+                self.recv_frames.pop(0)
 
             if not self.ack_loop:
                 current().timeout(1, self.on_ack_loop)
                 self.ack_loop = True
-
-        if frame:
+        else:
             bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
