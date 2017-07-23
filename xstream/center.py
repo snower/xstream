@@ -257,6 +257,7 @@ class Center(EventEmitter):
                 if not self.waiting_read_frame:
                     self.waiting_read_frame = True
                     current().async(self.on_read_frame)
+                    break
 
             if not self.ack_loop:
                 current().timeout(1, self.on_ack_loop)
