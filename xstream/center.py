@@ -253,11 +253,10 @@ class Center(EventEmitter):
             self.emit("frame", self, frame)
             self.recv_index += 1
 
-            while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
+            if self.recv_frames and self.recv_frames[0].index <= self.recv_index:
                 if not self.waiting_read_frame:
                     self.waiting_read_frame = True
                     current().async(self.on_read_frame)
-                    break
 
             if not self.ack_loop:
                 current().timeout(1, self.on_ack_loop)
