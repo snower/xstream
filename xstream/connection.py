@@ -16,7 +16,8 @@ ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
 ACTION_CLOSE  = 0x03
 ACTION_CLOSE_ACK = 0x04
-ACTION_NOISE = 0x05
+ACTION_READY = 0x05
+ACTION_NOISE = 0x06
 
 class Connection(EventEmitter):
     def __init__(self, connection, session, mss):
@@ -54,6 +55,9 @@ class Connection(EventEmitter):
         self._wfdata_count = 0
         self._expried_seconds = random.randint(180, 1800)
         current().timeout(15, self.on_check_data_loop, random.randint(8, 16) * 1024 * 1024)
+
+    def start(self):
+        self.emit("drain", self)
 
     def on_data(self, connection, buffer):
         if not self._read_header:
@@ -157,6 +161,9 @@ class Connection(EventEmitter):
             self._closed = True
             self._connection.end()
             self.remove_all_listeners()
+        elif action == ACTION_READY:
+            self.write_action(ACTION_NOISE, rand_string(128, 16 * 1024))
+            self.start()
 
     def on_expried(self):
         if not self._closed:

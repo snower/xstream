@@ -262,11 +262,10 @@ class Server(EventEmitter):
                     def add_connection(conn):
                         connection = session.add_connection(conn)
                         if connection:
-                            def do_write_action():
-                                connection.write_action(0x05, rand_string(random.randint(2, 32 * 1024)))
-                            current().timeout(0.6, do_write_action)
                             if is_loaded_session:
-                                session.write_action(0x01)
+                                def do_write_action():
+                                    session.write_action(0x01)
+                                current().timeout(1, do_write_action)
                                 if len(session._connections) >= 2:
                                     session.start_key_change()
                         else:

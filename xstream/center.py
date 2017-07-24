@@ -50,26 +50,6 @@ class Center(EventEmitter):
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
         connection.on("drain", self.on_drain)
-        if self.frames:
-            self.writing_connection = connection
-            try:
-                self.write_next(connection)
-            finally:
-                self.writing_connection = None
-        else:
-            while not self.frames and self.wait_reset_frames is None and self.ready_streams:
-                stream = self.ready_streams[0]
-                if not stream.do_write():
-                    self.ready_streams.pop(0)
-
-            if self.frames:
-                self.writing_connection = connection
-                try:
-                    self.write_next(connection)
-                finally:
-                    self.writing_connection = None
-            else:
-                self.drain_connections.append(connection)
 
     def remove_connection(self, connection):
         for send_frame in self.send_frames:
