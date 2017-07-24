@@ -162,7 +162,7 @@ class Connection(EventEmitter):
             self._connection.end()
             self.remove_all_listeners()
         elif action == ACTION_READY:
-            self.write_action(ACTION_NOISE, rand_string(128, 16 * 1024))
+            self.write_action(ACTION_NOISE, rand_string(random.randint(128, 16 * 1024)))
             self.start()
             logging.info('xstream session %s connection ready', self)
 
