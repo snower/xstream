@@ -57,7 +57,7 @@ class Connection(EventEmitter):
         current().timeout(15, self.on_check_data_loop, random.randint(8, 16) * 1024 * 1024)
 
     def start(self):
-        self.emit("drain", self)
+        self.loop.async(self.emit, "drain", self)
 
     def on_data(self, connection, buffer):
         if not self._read_header:
@@ -164,6 +164,7 @@ class Connection(EventEmitter):
         elif action == ACTION_READY:
             self.write_action(ACTION_NOISE, rand_string(128, 16 * 1024))
             self.start()
+            logging.info('xstream session %s connection ready', self)
 
     def on_expried(self):
         if not self._closed:

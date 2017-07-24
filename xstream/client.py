@@ -292,7 +292,7 @@ class Client(EventEmitter):
                 if not connection:
                     conn.close()
                 else:
-                    connection.write_action(0x05, rand_string(random.randint(128, 2048)))
+                    connection.write_action(0x05, rand_string(random.randint(128, 256)))
                     connection.start()
                     def on_expried(is_close = False):
                         if not is_close and len(self._connections) <= 1:

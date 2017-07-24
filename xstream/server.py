@@ -265,7 +265,7 @@ class Server(EventEmitter):
                             if is_loaded_session:
                                 def do_write_action():
                                     session.write_action(0x01)
-                                current().timeout(1, do_write_action)
+                                current().async(do_write_action)
                                 if len(session._connections) >= 2:
                                     session.start_key_change()
                         else:
