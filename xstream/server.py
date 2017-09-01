@@ -266,8 +266,12 @@ class Server(EventEmitter):
                                 def do_write_action():
                                     session.write_action(0x01)
                                 current().async(do_write_action)
-                                if len(session._connections) >= 2:
-                                    session.start_key_change()
+
+                            if len(session._connections) >= 2:
+                                def on_timeout_start_key_change():
+                                    if len(session._connections) >= 2:
+                                        session.start_key_change()
+                                current().timeout(2, on_timeout_start_key_change)
                         else:
                             self.emit("connection", self, conn, datas)
 

@@ -242,16 +242,25 @@ class Session(EventEmitter):
             else:
                 self._status = STATUS_OPENING
         elif action == ACTION_KEYCHANGE:
+            status = ord(data[0])
+            if status == 0:
+                return
+
             if self._is_server:
-                self._current_crypto_key = data[:64]
-                self.write_action(ACTION_KEYCHANGE, self._current_crypto_key, True)
-                self._key_change += 1
-                self.emit("keychange", self)
-                logging.info("xstream session %s key change", self)
-            else:
-                if self._key_change < 1:
-                    self._current_crypto_key = data[:64]
+                if self._key_change != 0:
+                    self.close()
+                else:
+                    self._current_crypto_key = data[1:65]
                     self._key_change += 1
+                    self.emit("keychange", self)
+                    logging.info("xstream session %s key change", self)
+            else:
+                if self._key_change == 1 or not self._center or self._center.ttl >= 800:
+                    self.write_action(ACTION_KEYCHANGE, chr(0) + data[1:65], True)
+                else:
+                    self._current_crypto_key = data[1:65]
+                    self.write_action(ACTION_KEYCHANGE, chr(1) + self._current_crypto_key, True)
+                    self._key_change = 1
                     self.emit("keychange", self)
                     logging.info("xstream session %s key change", self)
 
@@ -270,9 +279,17 @@ class Session(EventEmitter):
         if self._key_change < 1:
             return
 
+        if not self._center or self._center.ttl >= 800:
+            return
+
         self._key_change -= 1
-        if not self._is_server:
-            self.write_action(ACTION_KEYCHANGE, rand_string(64), True)
+        if self._is_server:
+            self.write_action(ACTION_KEYCHANGE, chr(1) + rand_string(64), True)
+        else:
+            def on_timeout():
+                if self._key_change < 1:
+                    self._key_change = 1
+            current().timeout(5, on_timeout)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:
