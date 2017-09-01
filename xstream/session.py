@@ -239,8 +239,10 @@ class Session(EventEmitter):
         if action == ACTION_OPENING:
             if self._status != STATUS_INITED:
                 self.close()
+                logging.info("xstream session %s opening error close", self)
             else:
                 self._status = STATUS_OPENING
+                logging.info("xstream session %s opening", self)
         elif action == ACTION_KEYCHANGE:
             status = ord(data[0])
             if status == 0:

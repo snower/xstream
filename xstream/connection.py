@@ -173,7 +173,8 @@ class Connection(EventEmitter):
 
     def on_ping_loop(self):
         if not self._closed:
-            if time.time() - self._data_time >= 15:
+            timeout = 180 if self._session._center.ttl <= 500 else (60 if self._session._center.ttl <= 1000 else 15)
+            if time.time() - self._data_time >= timeout:
                 self.write_action(ACTION_PING)
                 self._ping_time = 0
                 current().timeout(2, self.on_ping_timeout)

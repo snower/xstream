@@ -196,13 +196,11 @@ class Center(EventEmitter):
             
         elif first_write:
             self.drain_connections.append(connection)
-            if self.ready_streams:
-                def on_write_next(self):
-                    while self.ready_streams and self.wait_reset_frames is None:
-                        stream = self.ready_streams[0]
-                        if not stream.do_write():
-                            self.ready_streams.pop(0)
-                current().async(on_write_next, self)
+            if self.ready_streams and self.wait_reset_frames is None:
+                stream = self.ready_streams[0]
+                if not stream.do_write():
+                    self.ready_streams.pop(0)
+                current().async(self.write_frame)
         return frame
 
     def on_read_frame(self):
@@ -249,19 +247,16 @@ class Center(EventEmitter):
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
-        while not self.frames and self.wait_reset_frames is None and self.ready_streams:
-            stream = self.ready_streams[0]
-            if not stream.do_write():
-                self.ready_streams.pop(0)
+        self.drain_connections.append(connection)
 
         if self.frames:
-            self.writing_connection = connection
-            try:
-                self.write_next(connection)
-            finally:
-                self.writing_connection = None
+            if not self.writing_connection:
+                current().async(self.write_frame)
         else:
-            self.drain_connections.append(connection)
+            while not self.frames and self.wait_reset_frames is None and self.ready_streams:
+                stream = self.ready_streams[0]
+                if not stream.do_write():
+                    self.ready_streams.pop(0)
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
