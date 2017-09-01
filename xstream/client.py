@@ -29,6 +29,7 @@ class Client(EventEmitter):
         self._crypto_alg = crypto_alg
         self.fork_auth_session_id = rand_string(32)
         self._connecting = None
+        self._connecting_time = 0
         self._reconnect_count = 0
         self.opening= False
         self.running = False
@@ -90,6 +91,9 @@ class Client(EventEmitter):
         def do_init_connection():
             if self._connecting is not None:
                 return
+
+            if self._connections and time.time() - self._connecting_time < 15:
+                return
             
             if not self._session or self._session.closed or (self._connections and self._session.key_change):
                 return
@@ -98,11 +102,12 @@ class Client(EventEmitter):
                 return
             
             self._connecting = self.fork_connection()
+            self._connecting_time = time.time()
 
         if not is_delay or not self._connections:
             do_init_connection()
         elif len(self._connections) >= 1:
-            current().timeout(random.randint(5 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 3)), do_init_connection)
+            current().timeout(random.randint(10 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 3)), do_init_connection)
 
     def open(self):
         session = self.load_session()
@@ -308,8 +313,7 @@ class Client(EventEmitter):
             self._reconnect_count = 0
             if len(self._connections) >= 2:
                 self._session.start_key_change()
-            else:
-                self.init_connection()
+            self.init_connection()
             connection.is_connected_session = True
             logging.info("xstream connection ready %s", connection)
             return
