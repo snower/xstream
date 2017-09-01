@@ -221,12 +221,12 @@ class Server(EventEmitter):
             if session_id in self._sessions:
                 session = self._sessions[session_id]
                 if session.closed:
-                    logging.info("xstream connection refuse session closed %s %s %s %s", session_id, connection, time.time())
+                    logging.info("xstream connection refuse session closed %s %s %s", session_id, connection, time.time())
                     self.emit("connection", self, connection, datas)
                     return
 
                 if session.key_change:
-                    logging.info("xstream connection key_change refuse session closed %s %s %s %s", session_id, connection, time.time())
+                    logging.info("xstream connection key_change refuse session closed %s %s %s", session_id, connection, time.time())
                     self.emit("connection", self, connection, datas)
                     return
 

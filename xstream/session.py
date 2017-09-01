@@ -245,19 +245,25 @@ class Session(EventEmitter):
                 logging.info("xstream session %s opening", self)
         elif action == ACTION_KEYCHANGE:
             status = ord(data[0])
-            if status == 0:
-                logging.info("xstream session %s error key change", self)
-                return
 
             if self._is_server:
                 if self._key_change != 0:
                     self.close()
                 else:
+                    if status == 0:
+                        self._key_change += 1
+                        logging.info("xstream session %s error key change", self)
+                        return
+
                     self._current_crypto_key = data[1:65]
                     self._key_change += 1
                     self.emit("keychange", self)
                     logging.info("xstream session %s key change", self)
             else:
+                if status == 0:
+                    logging.info("xstream session %s error key change", self)
+                    return
+
                 if self._key_change == 1 or len(self._connections) < 2 or not self._center or self._center.ttl >= 800:
                     self.write_action(ACTION_KEYCHANGE, chr(0) + data[1:65], True)
                     logging.info("xstream session %s empty key change", self)
