@@ -247,18 +247,15 @@ class Session(EventEmitter):
             status = ord(data[0])
 
             if self._is_server:
-                if self._key_change != 0:
-                    self.close()
-                else:
-                    if status == 0:
-                        self._key_change += 1
-                        logging.info("xstream session %s error key change", self)
-                        return
-
-                    self._current_crypto_key = data[1:65]
+                if status == 0:
                     self._key_change += 1
-                    self.emit("keychange", self)
-                    logging.info("xstream session %s key change", self)
+                    logging.info("xstream session %s error key change", self)
+                    return
+
+                self._current_crypto_key = data[1:65]
+                self._key_change += 1
+                self.emit("keychange", self)
+                logging.info("xstream session %s key change", self)
             else:
                 if status == 0:
                     logging.info("xstream session %s error key change", self)
@@ -295,11 +292,15 @@ class Session(EventEmitter):
         self._key_change -= 1
         if self._is_server:
             self.write_action(ACTION_KEYCHANGE, chr(1) + rand_string(64), True)
-        else:
-            def on_timeout():
+            def on_server_timeout():
                 if self._key_change < 1:
                     self._key_change = 1
-            current().timeout(10, on_timeout)
+            current().timeout(8, on_server_timeout)
+        else:
+            def on_client_timeout():
+                if self._key_change < 1:
+                    self._key_change = 1
+            current().timeout(10, on_client_timeout)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:
