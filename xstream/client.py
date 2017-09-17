@@ -243,14 +243,13 @@ class Client(EventEmitter):
         crypto = self._session.get_encrypt_crypto(crypto_time)
         key = crypto.encrypt(key)
 
-        data = "".join(['\xfa\xfa\x00\x3c', auth, key, '\x00\x23\x00\xc0', rand_string(192),
-                        '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+        data = "".join(['\x00\x23\x00\xc0', auth, key[28:], rand_string(160), '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
         ciphres = "".join(
             [session_id, '\xc0\x2b', '\xc0\x2c', '\xc0\x2f', '\xc0\x30', '\xcc\xa9', '\xcc\xa8', '\xc0\x13', '\xc0\x14',
              '\x00\x9c', '\x00\x9d', '\x00\x2f', '\x00\x35', '\x00\x0a'])
 
-        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), rand_string(28), '\x20', self.fork_auth_session_id,
+        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', self.fork_auth_session_id,
                         struct.pack("!H", len(ciphres)), ciphres, '\x01\x00', struct.pack("!H", len(data)), data])
 
         connection.write(
@@ -262,12 +261,14 @@ class Client(EventEmitter):
         try:
             data.read(11)
             crypto_time, = struct.unpack("!I", data.read(4))
-            data.read(64)
+            key = data.read(28)
+            data.read(36)
             extensions_len, = struct.unpack("!H", data.read(2))
-            extensions = data.read(extensions_len)
+            data.read(extensions_len)
 
-            auth = extensions[4: 20]
-            key = extensions[20: 64]
+            last_data = str(data)
+            auth = last_data[11:27]
+            key += last_data[27:43]
 
             if not (crypto_time, key, auth):
                 if self._session:
