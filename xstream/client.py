@@ -31,6 +31,7 @@ class Client(EventEmitter):
         self._connecting = None
         self._connecting_time = 0
         self._reconnect_count = 0
+        self._fork_auth_fail_count = 0
         self.opening= False
         self.running = False
 
@@ -317,9 +318,15 @@ class Client(EventEmitter):
             self.init_connection()
             connection.is_connected_session = True
             logging.info("xstream connection ready %s", connection)
+            self._fork_auth_fail_count = 0
             return
         connection.close()
         logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
+        self._fork_auth_fail_count += 1
+        if self._fork_auth_fail_count >= 3:
+            if self._session:
+                self.remove_session()
+                self._session.close()
 
     def on_fork_close(self, connection):
         if not self._session:
