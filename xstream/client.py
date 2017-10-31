@@ -324,9 +324,7 @@ class Client(EventEmitter):
         logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
         self._fork_auth_fail_count += 1
         if self._fork_auth_fail_count >= 3:
-            if self._session:
-                self.remove_session()
-                self._session.close()
+            self.remove_session()
 
     def on_fork_close(self, connection):
         if not self._session:
