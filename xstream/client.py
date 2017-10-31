@@ -48,6 +48,9 @@ class Client(EventEmitter):
         return os.path.abspath("./session")
 
     def load_session(self):
+        if self._fork_auth_fail_count >= 3:
+            return None
+        
         session_path = self.get_session_path()
         if not os.path.exists(session_path + "/"):
             os.makedirs(session_path + "/")
@@ -66,6 +69,9 @@ class Client(EventEmitter):
         return None
 
     def save_session(self):
+        if self._fork_auth_fail_count >= 3:
+            return
+        
         session_path = self.get_session_path()
         if not os.path.exists(session_path + "/"):
             os.makedirs(session_path + "/")
