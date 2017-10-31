@@ -32,6 +32,7 @@ class Client(EventEmitter):
         self._connecting_time = 0
         self._reconnect_count = 0
         self._fork_auth_fail_count = 0
+        self._session_removed = False
         self.opening= False
         self.running = False
 
@@ -48,7 +49,7 @@ class Client(EventEmitter):
         return os.path.abspath("./session")
 
     def load_session(self):
-        if self._fork_auth_fail_count >= 3:
+        if self._session_removed:
             return None
         
         session_path = self.get_session_path()
@@ -69,7 +70,7 @@ class Client(EventEmitter):
         return None
 
     def save_session(self):
-        if self._fork_auth_fail_count >= 3:
+        if self._session_removed:
             return
         
         session_path = self.get_session_path()
@@ -77,16 +78,23 @@ class Client(EventEmitter):
             os.makedirs(session_path + "/")
         session_key = self.get_session_key()
         session = self._session.dumps()
-        with open(session_path + "/" + session_key, "w") as fp:
-            fp.write(session)
-        self.init_connection()
+        if session:
+            with open(session_path + "/" + session_key, "w") as fp:
+                fp.write(session)
+            self.init_connection()
+            logging.info("xstream save session %s %s %s", self, session_key, self._session)
         
     def remove_session(self):
         session_path = self.get_session_path()
         if not os.path.exists(session_path + "/"):
             os.makedirs(session_path + "/")
         session_key = self.get_session_key()
-        os.remove(session_path + "/" + session_key)
+        try:
+            os.remove(session_path + "/" + session_key)
+        except OSError:
+            pass
+        self._session_removed = True
+        logging.info("xstream remove session %s %s %s", self, session_key, self._session)
 
     def init_connection(self, is_delay = True):
         if not self._session:
@@ -199,6 +207,7 @@ class Client(EventEmitter):
             self.running = True
             self.init_connection(False)
             connection.close()
+            self._session_removed = False
             self.save_session()
             self._session.write_action(0x01)
             logging.info("xstream client %s session %s open", self, self._session)
@@ -278,13 +287,15 @@ class Client(EventEmitter):
             key += last_data[27:43]
 
             if not (crypto_time, key, auth):
+                connection.close()
+                self.remove_session()
                 if self._session:
-                    self.remove_session()
                     self._session.close()
                 return
         except:
+            connection.close()
+            self.remove_session()
             if self._session:
-                self.remove_session()
                 self._session.close()
             return
 
@@ -331,6 +342,8 @@ class Client(EventEmitter):
         self._fork_auth_fail_count += 1
         if self._fork_auth_fail_count >= 3:
             self.remove_session()
+            if self._session:
+                self._session.close()
 
     def on_fork_close(self, connection):
         if not self._session:
