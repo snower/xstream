@@ -54,7 +54,8 @@ class Connection(EventEmitter):
         self._rfdata_count = 0
         self._wfdata_count = 0
         self._expried_seconds = random.randint(180, 1800)
-        current().timeout(15, self.on_check_data_loop, random.randint(8, 16) * 1024 * 1024)
+        self._expried_data = random.randint(8, 16) * 1024 * 1024
+        current().timeout(15, self.on_check_data_loop)
 
     def start(self):
         self.loop.async(self.emit, "drain", self)
@@ -190,13 +191,17 @@ class Connection(EventEmitter):
             else:
                 current().timeout(5, self.on_ping_loop)
 
-    def on_check_data_loop(self, data_count_limit):
+    def on_check_data_loop(self):
         if not self._closed:
-            if self._rdata_count > data_count_limit and self._start_time + self._expried_seconds / 2 < time.time():
-                self.close()
-                logging.info("xstream session %s connection %s data len out", self._session, self)
-            else:
-                current().timeout(15, self.on_check_data_loop, data_count_limit)
+            if self._rdata_count <= self._expried_data:
+                return current().timeout(15, self.on_check_data_loop)
+
+            if time.time() - self._start_time < self._expried_seconds / 2:
+                if time.time() - self._start_time < self._expried_seconds / (2 * self._rdata_count / self._expried_data):
+                    return current().timeout(15, self.on_check_data_loop)
+
+            self.close()
+            logging.info("xstream session %s connection %s data len out", self._session, self)
 
     def close(self):
         if self._closed:

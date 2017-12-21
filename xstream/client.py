@@ -96,7 +96,7 @@ class Client(EventEmitter):
         self._session_removed = True
         logging.info("xstream remove session %s %s %s", self, session_key, self._session)
 
-    def init_connection(self, is_delay = True):
+    def init_connection(self, is_delay = True, delay_rate = 1):
         if not self._session:
             return
 
@@ -122,7 +122,7 @@ class Client(EventEmitter):
         if not is_delay or not self._connections:
             do_init_connection()
         elif len(self._connections) >= 1:
-            current().timeout(random.randint(10 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 3)), do_init_connection)
+            current().timeout(random.randint(10 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 3)) * delay_rate, do_init_connection)
 
     def open(self):
         session = self.load_session()
@@ -348,7 +348,7 @@ class Client(EventEmitter):
     def on_fork_close(self, connection):
         if not self._session:
             return
-        self._session.remove_connection(connection)
+        conn = self._session.remove_connection(connection)
         if connection in self._connections:
             self._connections.remove(connection)
         if self._connecting == connection:
@@ -358,7 +358,11 @@ class Client(EventEmitter):
                 current().async(self.init_connection)
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
-                current().timeout(self._reconnect_count, self.init_connection)
+                if conn and conn._rdata_count:
+                    delay_rate = max(1.0 / (conn._rdata_count / conn._expried_data * 10), 1)
+                else:
+                    delay_rate = 1
+                current().timeout(self._reconnect_count, self.init_connection, True, delay_rate)
             else:
                 self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))

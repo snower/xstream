@@ -116,6 +116,7 @@ class Session(EventEmitter):
         return None
 
     def remove_connection(self, conn):
+        connection = None
         for connection in self._connections:
             if connection._connection == conn:
                 if self._center:
@@ -139,6 +140,8 @@ class Session(EventEmitter):
                     current().timeout(15 * 60, on_exit)
                 else:
                     current().async(on_exit)
+
+        return connection
 
     def on_frame(self, center, frame):
         self._data_time = time.time()
