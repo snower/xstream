@@ -359,7 +359,7 @@ class Client(EventEmitter):
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 if conn and conn._rdata_count and conn._expried_data and time.time() - conn._start_time > 5:
-                    delay_rate = max(1.0 / (conn._rdata_count / conn._expried_data * 10), 1)
+                    delay_rate = max(1.0 / (float(conn._rdata_count) / float(conn._expried_data) * 10.0), 1)
                 else:
                     delay_rate = 1
                 current().timeout(self._reconnect_count, self.init_connection, True, delay_rate)
