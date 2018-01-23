@@ -385,12 +385,31 @@ class Center(EventEmitter):
                     return
         self.send_timeout_loop = False
 
-    def write_ttl(self):
-        for i in range(1):
-            data = struct.pack("!I", int(time.time() * 1000) & 0xffffffff)
+    def write_ttl(self, last_write_ttl_time = 0, last_send_index = 0, last_recv_index = 0):
+        if self.closed:
+            return
+
+        now = time.time()
+        require_write = False
+
+        if last_write_ttl_time and last_send_index and last_recv_index:
+            p_send_index = self.send_index - last_send_index
+            p_recv_index = self.recv_index - last_recv_index
+            if (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 15:
+                require_write = True
+            elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 30:
+                require_write = True
+            elif now - last_write_ttl_time >= 60:
+                require_write = True
+        else:
+            require_write = True
+
+        if require_write:
+            data = struct.pack("!I", int(now * 1000) & 0xffffffff)
             self.write_action(ACTION_TTL, data, index=0)
-        if not self.closed:
-            current().timeout(60, self.write_ttl)
+            last_write_ttl_time = now
+
+        current().timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
 
     def on_ready_streams_lookup(self):
         self.sort_stream()

@@ -54,7 +54,7 @@ class Connection(EventEmitter):
         self._rfdata_count = 0
         self._wfdata_count = 0
         self._expried_seconds = random.randint(180, 1800)
-        self._expried_data = random.randint(8, 16) * 1024 * 1024
+        self._expried_data = random.randint(8 * 1024 * 1024, 16 * 1024 * 1024)
         current().timeout(15, self.on_check_data_loop)
 
     def start(self):
