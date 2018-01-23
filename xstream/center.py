@@ -395,7 +395,9 @@ class Center(EventEmitter):
         if last_write_ttl_time and last_send_index and last_recv_index:
             p_send_index = self.send_index - last_send_index
             p_recv_index = self.recv_index - last_recv_index
-            if (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
+            if self.ttl > 1000 and now - last_write_ttl_time >= 13:
+                require_write = True
+            elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
                 require_write = True
             elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 28:
                 require_write = True
