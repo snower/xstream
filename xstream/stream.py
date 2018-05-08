@@ -18,14 +18,13 @@ ACTION_CLIOSE = 3
 ACTION_CLIOSED = 4
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, is_server = False, mss = None, priority = 0, capped = False, expried_time = 900):
+    def __init__(self, stream_id, session, is_server = False, priority = 0, capped = False, expried_time = 900):
         super(Stream, self).__init__()
 
         self.loop = current()
         self._stream_id = stream_id
         self._session = session
         self._is_server = is_server
-        self._mss = mss or StreamFrame.FRAME_LEN
         self._priority = priority
         self._capped = capped
         self._closed = False
@@ -136,8 +135,8 @@ class Stream(EventEmitter):
         else:
             for _ in range(64):
                 blen = len(self._send_buffer)
-                if blen > self._mss:
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._mss))
+                if blen > self._session._mss:
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._session._mss))
                     self._send_frames.append(frame)
                 elif blen > 0 and (flush_all or len(self._send_frames) < 2):
                     frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))

@@ -7,6 +7,7 @@ import random
 import logging
 import base64
 import pickle
+import socket
 from sevent import EventEmitter, current, tcp
 from crypto import Crypto, rand_string
 from connection import Connection
@@ -101,6 +102,14 @@ class Session(EventEmitter):
         self._crypto.init_decrypt(crypto_time, self._crypto_desecret, self._current_crypto_key)
         return self._crypto
 
+    def update_mss(self):
+        self._mss = StreamFrame.FRAME_LEN
+
+        for connection in self._connections:
+            mss = min((connection._connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
+            if mss < self._mss:
+                self._mss = mss
+
     def add_connection(self, conn):
         if self._status == STATUS_CLOSED:
             conn.close()
@@ -109,9 +118,12 @@ class Session(EventEmitter):
                 if conn.crypto_time == connection._connection.crypto_time:
                     return None
 
-            connection = Connection(conn, self, self._mss)
+            connection = Connection(conn, self)
             self._connections.append(connection)
             self._center.add_connection(connection)
+
+            self.update_mss()
+
             return connection
         return None
 
@@ -141,6 +153,7 @@ class Session(EventEmitter):
                 else:
                     current().async(on_exit)
 
+        self.update_mss()
         return connection
 
     def on_frame(self, center, frame):
@@ -196,7 +209,7 @@ class Session(EventEmitter):
         is_server = stream_id is not None
         if stream_id is None:
             stream_id = self.get_stream_id()
-        stream = Stream(stream_id, self, is_server, self._mss, **kwargs)
+        stream = Stream(stream_id, self, is_server, **kwargs)
         self._streams[stream_id] = stream
         self.emit("stream", self, stream)
         return stream

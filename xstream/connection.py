@@ -20,13 +20,12 @@ ACTION_READY = 0x05
 ACTION_NOISE = 0x06
 
 class Connection(EventEmitter):
-    def __init__(self, connection, session, mss):
+    def __init__(self, connection, session):
         super(Connection,self).__init__()
         self.loop = current()
         self._connection = connection
         self._session = session
         self._crypto = connection.crypto
-        self._mss = mss
 
         try:
             connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -138,7 +137,7 @@ class Connection(EventEmitter):
             self._wbuffer.append(data)
             self._wdata_len += len(data) + 8
             self._wfdata_count += 1
-            return self._mss - self._wdata_len
+            return self._session._mss - self._wdata_len
         return 0
 
     def write_action(self, action, data=''):

@@ -164,11 +164,7 @@ class Server(EventEmitter):
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
-        try:
-            mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
-        except:
-            mss = StreamFrame.FRAME_LEN
-        session = Session(self.get_session_id(), auth_key, True, crypto, mss)
+        session = Session(self.get_session_id(), auth_key, True, crypto, StreamFrame.FRAME_LEN)
         self._sessions[session.id] = session
         self._used_session_ids[session.id] = self.get_session_key(session.id)
         return session
@@ -235,9 +231,6 @@ class Server(EventEmitter):
                 key = crypto.decrypt(key)
 
                 if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
-                    try:
-                        session._mss = min((connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
-                    except:pass
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     setattr(connection, "crypto_time", crypto_time)
                     connection.crypto.init_decrypt(crypto_time, key)
