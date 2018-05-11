@@ -98,7 +98,7 @@ class Client(EventEmitter):
         self._session_removed = True
         logging.info("xstream remove session %s %s %s", self, session_key, self._session)
 
-    def init_connection(self, is_delay = True, delay_rate = 1):
+    def init_connection(self, is_delay = True, delay_rate = None):
         if not self._session:
             return
 
