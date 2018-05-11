@@ -142,8 +142,8 @@ class Client(EventEmitter):
 
         if self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout:
             self.init_connection()
-        elif len(self._connections) == 1:
-            conn = self._connections[0]
+        elif len(self._session._connections) == 1:
+            conn = self._session._connections[0]
             if conn and conn._rdata_count and conn._rdata_count > 1048576 and conn._expried_data and time.time() - conn._start_time > 5:
                 delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
                 if delay_rate < self.init_connection_delay_rate:
