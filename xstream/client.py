@@ -126,8 +126,11 @@ class Client(EventEmitter):
             self._connecting_time = time.time()
 
         if not is_delay or not self._connections or (self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout):
+            update_delay_rate = len(self._connections)
             do_init_connection()
             self.init_connection_timeout = 0
+            if not update_delay_rate:
+                self.init_connection_delay_rate = delay_rate
         elif len(self._connections) >= 1:
             if delay_rate > self.init_connection_delay_rate:
                 delay_rate = self.init_connection_delay_rate
