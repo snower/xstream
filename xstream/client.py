@@ -35,6 +35,8 @@ class Client(EventEmitter):
         self._session_removed = False
         self.opening= False
         self.running = False
+        self.init_connection_timeout = 0
+        self.init_connection_delay_rate = 1
 
     def get_auth_key(self):
         return struct.pack("!I", int(time.time())) + rand_string(12)
@@ -119,10 +121,23 @@ class Client(EventEmitter):
             self._connecting = self.fork_connection()
             self._connecting_time = time.time()
 
-        if not is_delay or not self._connections:
+        if not is_delay or not self._connections or time.time() >= self.init_connection_timeout:
             do_init_connection()
+            self.init_connection_timeout = 0
+            self.init_connection_delay_rate = 1
         elif len(self._connections) >= 1:
-            current().timeout(random.randint(10 * (len(self._connections) ** 2), 60 * (len(self._connections) ** 3)) * delay_rate, do_init_connection)
+            timeout = time.time() + max(random.randint(60 * (len(self._connections) ** 2), 300 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
+            if self.init_connection_timeout == 0 or timeout < self.init_connection_timeout:
+                self.init_connection_timeout = timeout
+                self.init_connection_delay_rate = delay_rate
+
+    def on_init_connection_timeout(self, session):
+        if not self._session or self._session != session:
+            return
+
+        if self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout:
+            self.init_connection()
+        current().timeout(5, self.on_init_connection_timeout, self._session)
 
     def open(self):
         session = self.load_session()
@@ -206,6 +221,7 @@ class Client(EventEmitter):
             self._session_removed = False
             self.save_session()
             self._session.write_action(0x01)
+            current().timeout(5, self.on_init_connection_timeout, self._session)
             logging.info("xstream client %s session %s open", self, self._session)
             return
         connection.close()
@@ -352,7 +368,7 @@ class Client(EventEmitter):
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 if conn and conn._rdata_count and conn._expried_data and time.time() - conn._start_time > 5:
-                    delay_rate = max(1.0 / (float(conn._rdata_count) / float(conn._expried_data) * 10.0), 1)
+                    delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
                 else:
                     delay_rate = 1
                 current().timeout(self._reconnect_count, self.init_connection, True, delay_rate)
