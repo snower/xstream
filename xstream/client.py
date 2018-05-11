@@ -134,7 +134,7 @@ class Client(EventEmitter):
         elif len(self._connections) >= 1:
             if delay_rate > self.init_connection_delay_rate:
                 delay_rate = self.init_connection_delay_rate
-            timeout = time.time() + max(random.randint(22.5 * (len(self._connections) ** 2), 112.5 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
+            timeout = time.time() + max(random.randint(90 * (len(self._connections) ** 2), 450 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
             if self.init_connection_timeout == 0 or timeout < self.init_connection_timeout:
                 self.init_connection_timeout = timeout
                 self.init_connection_delay_rate = delay_rate
