@@ -113,9 +113,6 @@ class Client(EventEmitter):
         def do_init_connection():
             if self._connecting is not None:
                 return
-
-            if self._connections and time.time() - self._connecting_time < 15:
-                return
             
             if not self._session or self._session.closed or (self._connections and self._session.key_change):
                 return
@@ -128,7 +125,7 @@ class Client(EventEmitter):
             self._connecting = self.fork_connection()
             self._connecting_time = time.time()
 
-        if not is_delay or not self._connections or time.time() >= self.init_connection_timeout:
+        if not is_delay or not self._connections or (self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout):
             do_init_connection()
             self.init_connection_timeout = 0
         elif len(self._connections) >= 1:
