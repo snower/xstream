@@ -160,6 +160,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(False)
+            current().timeout(5, self.on_init_connection_timeout, self._session)
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
