@@ -102,9 +102,6 @@ class Client(EventEmitter):
         if not self._session:
             return
 
-        if self._session.key_change:
-            return
-
         if len(self._connections) >= self._max_connections:
             self.init_connection_timeout = 0
             self.init_connection_delay_rate = 1
@@ -125,13 +122,15 @@ class Client(EventEmitter):
             self._connecting = self.fork_connection()
             self._connecting_time = time.time()
 
-        if not is_delay or not self._connections or (self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout):
-            update_delay_rate = len(self._connections)
+        if not self._connections:
             do_init_connection()
             self.init_connection_timeout = 0
-            if not update_delay_rate:
-                self.init_connection_delay_rate = delay_rate or 1
-        elif len(self._connections) >= 1:
+            self.init_connection_delay_rate = delay_rate or 1
+        elif not self._session.key_change and self._connecting is None and \
+            (not is_delay or (self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout)):
+            do_init_connection()
+            self.init_connection_timeout = 0
+        else:
             if delay_rate:
                 if delay_rate >= 1:
                     self.init_connection_delay_rate = delay_rate
