@@ -168,7 +168,7 @@ class Center(EventEmitter):
                             self.send_timeout_loop = True
                             break
 
-            next_data_len = connection.write(frame.dumps())
+            next_data_len = connection.write(frame)
             if next_data_len > 32:
                 def on_write_next_full(self, connection, next_data_len):
                     frame = self.get_write_connection_frame(connection) if self.frames else None

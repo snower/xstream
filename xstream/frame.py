@@ -20,14 +20,26 @@ class Frame(object):
         self.resend_time = 0
 
     def dumps(self):
+        if self.data.__class__ == StreamFrame:
+            return "".join([struct.pack("!BHBIHBHBB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
+                                        self.data.stream_id, self.data.flag, self.data.action), self.data.data])
         return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
 
     @classmethod
     def loads(cls, data, connection=None):
+        if data[10] == '\x00' and len(data) >= 15:
+            unpack_data = struct.unpack("!BHBIHBHBB", data[:15])
+            stream_frame = StreamFrame(*unpack_data[6:], data=data[15:])
+            return Frame(*unpack_data[:6], data=stream_frame, connection=connection)
         return Frame(*struct.unpack("!BHBIHB", data[:11]), data=data[11:], connection=connection)
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)
+
+    def __len__(self):
+        if self.data.__class__ == StreamFrame:
+            return len(self.data.data) + 15
+        return len(self.data) + 11
 
     def ttl(self):
         return int(time.time() * 1000) - self.timestamp
@@ -50,7 +62,9 @@ class StreamFrame(object):
 
     @classmethod
     def loads(cls, data):
+        if data.__class__ == StreamFrame:
+            return data
         return StreamFrame(*struct.unpack("!HBB", data[:4]), data=data[4:])
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data) + 4

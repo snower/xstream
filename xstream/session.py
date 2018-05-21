@@ -243,8 +243,7 @@ class Session(EventEmitter):
             return False
         
         self._data_time = time.time()
-        data = frame.dumps()
-        return self._center.write(data)
+        return self._center.write(frame)
 
     def on_action(self, action, data):
         if action & 0x80 == 0:

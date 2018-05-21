@@ -11,6 +11,7 @@ from collections import deque
 from sevent import EventEmitter, current, Buffer
 from crypto import rand_string
 from utils import format_data_len
+from .frame import Frame, StreamFrame
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
@@ -122,7 +123,14 @@ class Connection(EventEmitter):
         if not self._closed:
             data = ''
             for feg in self._wbuffer:
-                feg = self._crypto.encrypt("".join(['\x00', feg, '\x0f\x0f']))
+                if feg.__class__ == Frame:
+                    if feg.data.__class__ == StreamFrame:
+                        self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
+                                             feg.data.stream_id, feg.data.flag, feg.data.action), feg.data.data, '\x0f\x0f']))
+                    else:
+                        "".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action), feg.data, '\x0f\x0f'])
+                else:
+                    feg = self._crypto.encrypt("".join(['\x00', feg, '\x0f\x0f']))
                 feg = "".join(['\x17\x03\x03', struct.pack("!H", len(feg)), feg])
                 data += feg
 

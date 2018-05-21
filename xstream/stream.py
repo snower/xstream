@@ -162,7 +162,7 @@ class Stream(EventEmitter):
             if not data or data == self._send_buffer:
                 return
 
-            if isinstance(data, Buffer):
+            if data.__class__ == Buffer:
                 if not self._send_buffer:
                     self._send_buffer = data
                     self.loop.async(self.on_write)
