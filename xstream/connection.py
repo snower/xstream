@@ -125,10 +125,10 @@ class Connection(EventEmitter):
             for feg in self._wbuffer:
                 if feg.__class__ == Frame:
                     if feg.data.__class__ == StreamFrame:
-                        self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
+                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
                                              feg.data.stream_id, feg.data.flag, feg.data.action), feg.data.data, '\x0f\x0f']))
                     else:
-                        "".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action), feg.data, '\x0f\x0f'])
+                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action), feg.data, '\x0f\x0f']))
                 else:
                     feg = self._crypto.encrypt("".join(['\x00', feg, '\x0f\x0f']))
                 feg = "".join(['\x17\x03\x03', struct.pack("!H", len(feg)), feg])
