@@ -112,6 +112,8 @@ class Stream(EventEmitter):
                     frame.flag |= 0x02
                 if self._capped:
                     frame.flag |= 0x04
+                if self._expried_time == 0:
+                    frame.flag |= 0x08
 
             self._session.write(frame)
             self._send_frame_count += 1
@@ -202,7 +204,7 @@ class Stream(EventEmitter):
 
         self._closed = True
 
-        if self._session.closed:
+        if self._session.closed or self._send_frame_count <= 0:
             return self.do_close()
 
         while self._send_buffer:

@@ -172,7 +172,10 @@ class Session(EventEmitter):
                         priority = 1
                     if stream_frame.flag & 0x04:
                         capped = True
-                    self.create_stream(stream_frame.stream_id, priority = priority, capped = capped)
+                    if stream_frame.flag & 0x08:
+                        self.create_stream(stream_frame.stream_id, priority = priority, capped = capped, expried_time = 0)
+                    else:
+                        self.create_stream(stream_frame.stream_id, priority = priority, capped = capped)
                 elif stream_frame.action == 0x03:
                     data = rand_string(random.randint(1, 256))
                     frame = StreamFrame(stream_frame.stream_id, 0, 0x04, data)

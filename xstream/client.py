@@ -98,11 +98,8 @@ class Client(EventEmitter):
         self._session_removed = True
         logging.info("xstream remove session %s %s %s", self, session_key, self._session)
 
-    def init_connection(self, is_delay = True, delay_rate = 1):
+    def init_connection(self, is_delay = True, delay_rate = None):
         if not self._session:
-            return
-
-        if self._session.key_change:
             return
 
         if len(self._connections) >= self._max_connections:
@@ -112,9 +109,6 @@ class Client(EventEmitter):
         
         def do_init_connection():
             if self._connecting is not None:
-                return
-
-            if self._connections and time.time() - self._connecting_time < 15:
                 return
             
             if not self._session or self._session.closed or (self._connections and self._session.key_change):
@@ -128,13 +122,23 @@ class Client(EventEmitter):
             self._connecting = self.fork_connection()
             self._connecting_time = time.time()
 
-        if not is_delay or not self._connections or time.time() >= self.init_connection_timeout:
+        if not self._connections:
             do_init_connection()
             self.init_connection_timeout = 0
-        elif len(self._connections) >= 1:
-            if delay_rate > self.init_connection_delay_rate:
+            self.init_connection_delay_rate = delay_rate or 1
+        elif not self._session.key_change and self._connecting is None and \
+            (not is_delay or (self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout)):
+            do_init_connection()
+            self.init_connection_timeout = 0
+        else:
+            if delay_rate:
+                if delay_rate >= 1:
+                    self.init_connection_delay_rate = delay_rate
+                elif delay_rate > self.init_connection_delay_rate:
+                    delay_rate = self.init_connection_delay_rate
+            else:
                 delay_rate = self.init_connection_delay_rate
-            timeout = time.time() + max(random.randint(22.5 * (len(self._connections) ** 2), 112.5 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
+            timeout = time.time() + max(random.randint(90 * (len(self._connections) ** 2), 450 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
             if self.init_connection_timeout == 0 or timeout < self.init_connection_timeout:
                 self.init_connection_timeout = timeout
                 self.init_connection_delay_rate = delay_rate
@@ -145,6 +149,12 @@ class Client(EventEmitter):
 
         if self.init_connection_timeout > 0 and time.time() >= self.init_connection_timeout:
             self.init_connection()
+        elif len(self._session._connections) == 1:
+            conn = self._session._connections[0]
+            if conn and conn._rdata_count and conn._rdata_count > 1048576 and conn._expried_data and time.time() - conn._start_time > 5:
+                delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
+                if delay_rate < self.init_connection_delay_rate:
+                    self.init_connection(True, delay_rate)
         current().timeout(5, self.on_init_connection_timeout, self._session)
 
     def open(self):
@@ -157,6 +167,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(False)
+            current().timeout(5, self.on_init_connection_timeout, self._session)
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
