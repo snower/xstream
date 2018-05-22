@@ -334,6 +334,7 @@ class Client(EventEmitter):
         key = crypto.decrypt(key)
 
         if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
+            self._session.set_last_auth_time(crypto_time)
             setattr(connection, "crypto_time", crypto_time)
             connection.crypto.init_decrypt(crypto_time, key)
 

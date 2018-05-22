@@ -140,7 +140,7 @@ class Server(EventEmitter):
             crypto.init_decrypt(crypto_time, key)
 
             auth_key = crypto.decrypt(auth_key)
-            if auth == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
+            if abs(crypto_time - time.time()) < 1800 and auth == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
                 crypto_time = int(time.time())
                 key = crypto.init_encrypt(crypto_time)
                 session = self.create_session(connection, auth_key, crypto)
@@ -230,7 +230,9 @@ class Server(EventEmitter):
                 crypto = session.get_decrypt_crypto(crypto_time)
                 key = crypto.decrypt(key)
 
-                if auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
+                if abs(crypto_time - time.time()) < 1800 and session.get_last_auth_time() < crypto_time \
+                        and auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
+                    session.set_last_auth_time(crypto_time)
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     setattr(connection, "crypto_time", crypto_time)
                     connection.crypto.init_decrypt(crypto_time, key)

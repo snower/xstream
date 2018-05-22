@@ -32,6 +32,7 @@ class Session(EventEmitter):
         self._crypto_desecret = crypto._desecret
         self._crypto = crypto
         self._current_crypto_key =  '0' * 64
+        self._last_auth_time = 0
         self._mss = mss
         self._key_change = 1
         self._current_stream_id = 1 if is_server else 2
@@ -73,6 +74,7 @@ class Session(EventEmitter):
             "crypto_ensecret": list(self._crypto_ensecret),
             "crypto_desecret": list(self._crypto_desecret),
             "current_crypto_key": self._current_crypto_key,
+            "last_auth_time": self._last_auth_time,
             "key_change": self._key_change,
             "mss": self._mss,
             "t": time.time()
@@ -87,12 +89,22 @@ class Session(EventEmitter):
             crypto._desecret = tuple(s["crypto_desecret"])
             session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
             session._current_crypto_key = s["current_crypto_key"]
+            session._last_auth_time = int(s.get("last_auth_time", 0))
             session._key_change = s["key_change"]
             if not s["is_server"] and session._key_change < 1:
                 return None
         except:
             return None
         return session
+
+    def get_last_auth_time(self):
+        return self._last_auth_time
+
+    def set_last_auth_time(self, last_auth_time):
+        if last_auth_time < self._last_auth_time:
+            return
+
+        self._last_auth_time = last_auth_time
 
     def get_encrypt_crypto(self, crypto_time):
         self._crypto.init_encrypt(crypto_time, self._crypto_ensecret, self._current_crypto_key)
