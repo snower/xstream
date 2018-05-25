@@ -9,10 +9,12 @@ setup(
     package_data={
         '': ['README.md'],
     },
-    install_requires=['ssloop>=0.0.5'],
+    install_requires=[
+        'sevent>0.0.3'
+    ],
     author='snower',
     author_email='sujian199@gmail.com',
-    url='http://github.com/snower/ssloop',
+    url='http://github.com/snower/xstream',
     license='MIT',
     description='xstream is a simple spdy  protocol',
     long_description='xstream is a simple spdy  protocol'

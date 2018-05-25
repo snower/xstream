@@ -35,6 +35,7 @@ class Session(EventEmitter):
         self._last_auth_time = 0
         self._mss = mss
         self._key_change = 1
+        self._key_change_timeout = None
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -284,6 +285,10 @@ class Session(EventEmitter):
 
                 self._current_crypto_key = data[1:65]
                 self._key_change += 1
+                if self._key_change_timeout:
+                    current().cancel_timeout(self._key_change_timeout)
+                    self._key_change_timeout = None
+
                 self.emit("keychange", self)
                 logging.info("xstream session %s key change", self)
             else:
@@ -298,6 +303,10 @@ class Session(EventEmitter):
                     self._current_crypto_key = data[1:65]
                     self.write_action(ACTION_KEYCHANGE, chr(1) + self._current_crypto_key, True)
                     self._key_change = 1
+                    if self._key_change_timeout:
+                        current().cancel_timeout(self._key_change_timeout)
+                        self._key_change_timeout = None
+
                     self.emit("keychange", self)
                     logging.info("xstream session %s key change", self)
 
@@ -320,17 +329,21 @@ class Session(EventEmitter):
             return
 
         self._key_change -= 1
+        if self._key_change_timeout:
+            current().cancel_timeout(self._key_change_timeout)
+            self._key_change_timeout = None
+
         if self._is_server:
             self.write_action(ACTION_KEYCHANGE, chr(1) + rand_string(64), True)
             def on_server_timeout():
                 if self._key_change < 1:
                     self._key_change = 1
-            current().timeout(8, on_server_timeout)
+            self._key_change_timeout = current().timeout(8, on_server_timeout)
         else:
             def on_client_timeout():
                 if self._key_change < 1:
                     self._key_change = 1
-            current().timeout(10, on_client_timeout)
+            self._key_change_timeout = current().timeout(10, on_client_timeout)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:

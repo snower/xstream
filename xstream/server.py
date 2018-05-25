@@ -165,7 +165,6 @@ class Server(EventEmitter):
 
     def create_session(self, connection, auth_key, crypto):
         session = Session(self.get_session_id(), auth_key, True, crypto, StreamFrame.FRAME_LEN)
-        self._sessions[session.id] = session
         self._used_session_ids[session.id] = self.get_session_key(session.id)
         return session
 

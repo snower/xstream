@@ -41,7 +41,8 @@ class Connection(EventEmitter):
         self._start_time = time.time()
         self._data_len = 5
         self._wdata_len = 0
-        self._wbuffer = deque()
+        self._flush_buffer = deque()
+        self._wbuffer = Buffer()
         self._wait_head = True
         self._wait_read = False
         self._closed = False
@@ -122,7 +123,7 @@ class Connection(EventEmitter):
     def flush(self):
         if not self._closed:
             data = ''
-            for feg in self._wbuffer:
+            for feg in self._flush_buffer:
                 if feg.__class__ == Frame:
                     if feg.data.__class__ == StreamFrame:
                         feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
@@ -136,13 +137,13 @@ class Connection(EventEmitter):
 
             self._wdata_count += len(data)
             self._wpdata_count += 1
-            self._connection.write(data)
-            self._wbuffer.clear()
+            self._connection.write(self._wbuffer.write(data))
+            self._flush_buffer.clear()
             self._wdata_len = 0
 
     def write(self, data):
         if not self._closed:
-            self._wbuffer.append(data)
+            self._flush_buffer.append(data)
             self._wdata_len += len(data) + 8
             self._wfdata_count += 1
             return self._session._mss - self._wdata_len
