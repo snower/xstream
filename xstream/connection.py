@@ -123,7 +123,8 @@ class Connection(EventEmitter):
     def flush(self):
         if not self._closed:
             data = ''
-            for feg in self._flush_buffer:
+            while self._flush_buffer:
+                feg = self._flush_buffer.popleft()
                 if feg.__class__ == Frame:
                     if feg.data.__class__ == StreamFrame:
                         feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
@@ -156,7 +157,7 @@ class Connection(EventEmitter):
         self._wdata_count += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1
-        return self._connection.write(data)
+        return self._connection.write(self._wbuffer.write(data))
 
     def on_action(self, action, data):
         if action == ACTION_PING:
