@@ -226,4 +226,4 @@ class Connection(EventEmitter):
         self.close()
 
     def __str__(self):
-        return "<%s %s>" % (super(Connection, self).__str__(), "%s:%s" % self._connection.address)
+        return "<%s %s>" % (super(Connection, self).__str__(), self._connection.address)
