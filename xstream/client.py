@@ -363,11 +363,11 @@ class Client(EventEmitter):
                 self._session.start_key_change()
             self.init_connection()
             connection.is_connected_session = True
-            logging.info("xstream connection ready %s", connection)
+            logging.info("xstream connection ready %s %s:%s", connection, connection.address[0], connection.address[1])
             self._fork_auth_fail_count = 0
             return
         connection.close()
-        logging.info("xstream connection auth fail %s %s %s", connection, time.time(), crypto_time)
+        logging.info("xstream connection auth fail %s %s %s %s:%s", connection, time.time(), crypto_time, connection.address[0], connection.address[1])
         self._fork_auth_fail_count += 1
         if self._fork_auth_fail_count >= 3:
             self.remove_session()
