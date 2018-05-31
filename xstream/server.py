@@ -23,9 +23,16 @@ class Server(EventEmitter):
         self._host = host
         self._port = port
         if isinstance(self._host, (tuple, list)):
-            self._server = [tcp.Server() for _ in range(len(self._host))]
+            self._server = []
+            for _ in range(len(self._host)):
+                server = tcp.Server()
+                server.enable_nodelay()
+                server.enable_reuseaddr()
+                self._server.append(server)
         else:
             self._server = tcp.Server()
+            self._server.enable_nodelay()
+            self._server.enable_reuseaddr()
         self._used_session_ids = {}
         self._sessions = {}
         self._current_session_id = 1

@@ -177,6 +177,7 @@ class Client(EventEmitter):
         self._connecting = None
         self._auth_key = self.get_auth_key()
         connection = tcp.Socket()
+        connection.enable_nodelay()
         setattr(connection, "is_connected", False)
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         connection.on("connect", self.on_connect)
@@ -257,6 +258,7 @@ class Client(EventEmitter):
 
     def fork_connection(self):
         connection = tcp.Socket()
+        connection.enable_nodelay()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
         setattr(connection, "is_connected_session", False),
         connection.once("connect", self.on_fork_connect)

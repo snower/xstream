@@ -29,7 +29,6 @@ class Connection(EventEmitter):
         self._crypto = connection.crypto
 
         try:
-            connection.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
         except: pass
 
