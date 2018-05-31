@@ -91,13 +91,13 @@ class Connection(EventEmitter):
     def read(self, buffer):
         self._wait_read = False
         read_count = 0
-        while len(buffer) >= self._data_len:
+        while buffer._len >= self._data_len:
             data = buffer.read(self._data_len)
             if self._wait_head:
                 self._wait_head = False
                 self._data_len, = struct.unpack("!H", data[3:])
                 if read_count >= 64:
-                    if len(buffer) >= self._data_len:
+                    if buffer._len >= self._data_len:
                         self._wait_read = True
                         self.loop.async(self.read, buffer)
                     break
@@ -112,7 +112,7 @@ class Connection(EventEmitter):
 
                 action = ord(data[0])
                 if action == 0:
-                    self.emit("frame", self, data[1:-2])
+                    self.emit("frame", self, data)
                     self._rfdata_count += 1
                 else:
                     self.on_action(action, data[1:-2])
@@ -223,3 +223,6 @@ class Connection(EventEmitter):
 
     def __del__(self):
         self.close()
+
+    def __str__(self):
+        return "<%s %s>" % (super(Connection, self).__str__(), self._connection.address)
