@@ -18,6 +18,8 @@ class Frame(object):
         self.send_time = 0
         self.ack_time = 0
         self.resend_time = 0
+        self.resend_count = 0
+        self.send_timeout_count = 0
 
     def dumps(self):
         if self.data.__class__ == StreamFrame:

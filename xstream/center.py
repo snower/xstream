@@ -280,10 +280,14 @@ class Center(EventEmitter):
                 while self.send_frames:
                     frame = self.send_frames.pop(0)
                     if resend_index == frame.index:
+                        if frame.resend_count >= 60:
+                            return self.session.close()
+
                         if now - frame.send_time >= self.ttl / 1000.0 and now - frame.resend_time >= self.ttl / 1000.0 and frame.resend_time <= frame.send_time:
                             bisect.insort(self.frames, frame)
                             resend_frame_ids.append(frame.index)
                             frame.resend_time = now
+                            frame.resend_count += 1
                             break
                     waiting_frames.append(frame)
 
@@ -370,15 +374,21 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
 
     def on_send_timeout_loop(self, frame, ack_index):
+        if self.closed:
+            return
+
+        if frame.ack_time == 0 and frame.index <= self.ack_index:
+            frame.ack_time = time.time()
+
         if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
             for send_frame in self.send_frames:
                 if frame.connection == send_frame.connection:
                     bisect.insort(self.frames, send_frame)
                     self.send_frames.remove(send_frame)
-            if frame.connection and frame.connection._connection:
+            if frame.connection and frame.connection._connection and frame.send_timeout_count < 3:
                 connection = frame.connection._connection
                 connection.close()
-                logging.info("xstream session %s center %s %s send timeout close %s %s %s", self.session, self, connection, frame.index, self.send_index, self.ack_index)
+                logging.info("xstream session %s center %s %s send timeout close %s %s %s %s", self.session, self, connection, frame.index, self.send_index, self.ack_index, frame.send_timeout_count)
             current().async(self.write_frame)
 
         if self.send_frames:
@@ -386,6 +396,7 @@ class Center(EventEmitter):
                 if send_frame.index != 0:
                     current().timeout(min(max(60, math.sqrt(self.ttl * 20) - (time.time() - send_frame.send_time)), 20), self.on_send_timeout_loop, send_frame, self.ack_index)
                     self.send_timeout_loop = True
+                    send_frame.send_timeout_count += 1
                     return
         self.send_timeout_loop = False
 
