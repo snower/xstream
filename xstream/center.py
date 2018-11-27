@@ -7,7 +7,7 @@ import logging
 import struct
 import random
 import math
-from collections import deque
+from collections import deque, defaultdict
 import bisect
 from sevent import EventEmitter, current
 from frame import Frame
@@ -221,6 +221,7 @@ class Center(EventEmitter):
 
     def on_frame(self, connection, data):
         frame = Frame.loads(data, connection)
+        frame.recv_time = time.time()
 
         if frame.index == 0:
             return self.emit("frame", self, frame)
@@ -351,22 +352,34 @@ class Center(EventEmitter):
         if self.recv_frames and recv_index == self.recv_index:
             data = []
             current_index = self.recv_index
-            if self.recv_frames[-1].index - self.recv_index > 64:
+            if self.recv_frames[-1].index - self.recv_index > 256:
                 last_index = int(self.recv_index + (self.recv_frames[-1].index - self.recv_index) / 2)
             else:
                 last_index = self.recv_frames[-1].index
-            index = 0
+            now = time.time()
+            index, max_recv_timeout, connection_count = 0, 0, defaultdict(int)
             while current_index < last_index:
-                if self.recv_frames[index].index == current_index:
+                recv_frame = self.recv_frames[index]
+                if recv_frame.index == current_index:
                     index += 1
                 else:
                     data.append(struct.pack("!I", current_index))
                 current_index += 1
+                if now - recv_frame.recv_time > max_recv_timeout:
+                    max_recv_timeout = now - recv_frame.recv_time
+                connection_count[id(recv_frame.connection)] += 1
                 if len(data) >= 1024:
                     break
 
-            if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.4:
-                self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
+            require_resend = False
+            for _, c in connection_count.items():
+                if c >= len(data) * 0.7:
+                    require_resend = True
+                    break
+
+            if self.session and len(self.session._connections) > 1:
+                if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.4 or require_resend or max_recv_timeout >= 2:
+                    self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
             current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)

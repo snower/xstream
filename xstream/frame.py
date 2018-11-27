@@ -11,11 +11,12 @@ class Frame(object):
         self.session_id = session_id
         self.flag = flag
         self.index = index
-        self.timestamp = ((int(time.time() * 1000) & 0xffffffff0000) | (timestamp & 0xffff)) if timestamp is not None else int(time.time() * 1000)
+        self.timestamp = 0 #((int(time.time() * 1000) & 0xffffffff0000) | (timestamp & 0xffff)) if timestamp is not None else int(time.time() * 1000)
         self.action = action
         self.data = data
         self.connection = connection
         self.send_time = 0
+        self.recv_time = 0
         self.ack_time = 0
         self.resend_time = 0
         self.resend_count = 0
