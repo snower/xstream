@@ -7,7 +7,7 @@ import logging
 import struct
 import random
 import math
-from collections import deque, defaultdict
+from collections import deque
 import bisect
 from sevent import EventEmitter, current
 from frame import Frame
@@ -418,7 +418,13 @@ class Center(EventEmitter):
         if last_write_ttl_time and last_send_index and last_recv_index:
             p_send_index = self.send_index - last_send_index
             p_recv_index = self.recv_index - last_recv_index
+            if self.ttl > 2000 and now - last_write_ttl_time >= 8:
+                require_write = True
             if self.ttl > 1000 and now - last_write_ttl_time >= 13:
+                require_write = True
+            elif (p_send_index >= 2872 or p_recv_index >= 2872) and now - last_write_ttl_time >= 3:
+                require_write = True
+            elif (p_send_index >= 718 or p_recv_index >= 718) and now - last_write_ttl_time >= 8:
                 require_write = True
             elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
                 require_write = True
