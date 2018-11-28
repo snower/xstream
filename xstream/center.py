@@ -349,40 +349,35 @@ class Center(EventEmitter):
         self.ack_loop = False
 
     def on_ack_timeout_loop(self, recv_index):
-        if self.recv_frames and recv_index == self.recv_index:
+        if recv_index == self.recv_index and self.recv_frames \
+                and self.session and len(self.session._connections) > 1:
             data = []
             current_index = self.recv_index
-            if self.recv_frames[-1].index - self.recv_index > 256:
+            if self.recv_frames[-1].index - self.recv_index > 128:
                 last_index = int(self.recv_index + (self.recv_frames[-1].index - self.recv_index) / 2)
             else:
                 last_index = self.recv_frames[-1].index
+
             now = time.time()
-            index, max_recv_timeout, connection_count = 0, 0, defaultdict(int)
+            index, max_recv_timeout = 0, 0
             while current_index < last_index:
                 recv_frame = self.recv_frames[index]
                 if recv_frame.index == current_index:
+                    if now - recv_frame.recv_time > max_recv_timeout:
+                        max_recv_timeout = now - recv_frame.recv_time
                     index += 1
                 else:
                     data.append(struct.pack("!I", current_index))
                 current_index += 1
-                if now - recv_frame.recv_time > max_recv_timeout:
-                    max_recv_timeout = now - recv_frame.recv_time
-                connection_count[id(recv_frame.connection)] += 1
-                if len(data) >= 1024:
+                if len(data) >= 320:
                     break
 
-            require_resend = False
-            for _, c in connection_count.items():
-                if c >= len(data) * 0.7:
-                    require_resend = True
-                    break
-
-            if self.session and len(self.session._connections) > 1:
-                if len(data) <= 4 or len(data) <= (last_index - self.recv_index) * 0.4 or require_resend or max_recv_timeout >= 2:
-                    self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
+            if len(data) <= 4 or max_recv_timeout >= max(self.ttl * 4 / 1000, 3) \
+                    or len(data) <= (current_index - self.recv_index) * (0.48 / len(self.session._connections)):
+                self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
-            current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().timeout(min(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
