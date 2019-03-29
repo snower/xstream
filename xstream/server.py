@@ -113,7 +113,7 @@ class Server(EventEmitter):
         else:
             self._server.on("connection", self.on_connection)
             self._server.listen((self._host, self._port))
-        current().timeout(6 * 60 * 60, self.check_session)
+        current().add_timeout(6 * 60 * 60, self.check_session)
 
     def on_connection(self, server, connection):
         connection.once("data", self.on_data)
@@ -121,7 +121,7 @@ class Server(EventEmitter):
         def on_timeout():
             if not connection.is_connected_session:
                 connection.close()
-        current().timeout(random.randint(5, 30), on_timeout)
+        current().add_timeout(random.randint(5, 30), on_timeout)
 
     def on_data(self, connection, data):
         datas = str(data)
@@ -266,17 +266,17 @@ class Server(EventEmitter):
                             if is_loaded_session:
                                 def do_write_action():
                                     session.write_action(0x01)
-                                current().async(do_write_action)
+                                current().add_async(do_write_action)
 
                             if len(session._connections) >= 2:
                                 def on_timeout_start_key_change():
                                     if len(session._connections) >= 2:
                                         session.start_key_change()
-                                current().timeout(2, on_timeout_start_key_change)
+                                current().add_timeout(2, on_timeout_start_key_change)
                         else:
                             self.emit("connection", self, conn, datas)
 
-                    current().async(add_connection, connection)
+                    current().add_async(add_connection, connection)
 
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)

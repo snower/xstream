@@ -155,7 +155,7 @@ class Client(EventEmitter):
                 delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
                 if delay_rate < self.init_connection_delay_rate:
                     self.init_connection(True, delay_rate)
-        current().timeout(5, self.on_init_connection_timeout, self._session)
+        current().add_timeout(5, self.on_init_connection_timeout, self._session)
 
     def open(self):
         session = self.load_session()
@@ -167,7 +167,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(False)
-            current().timeout(5, self.on_init_connection_timeout, self._session)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session)
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
@@ -190,7 +190,7 @@ class Client(EventEmitter):
         
         def on_timeout():
             connection.close()
-        current().timeout(5, on_timeout)
+        current().add_timeout(5, on_timeout)
 
     def reopen(self, callback=None):
         if callable(callback):
@@ -200,7 +200,7 @@ class Client(EventEmitter):
                 if not self.opening and not self.running:
                     self.open()
                     logging.info("xstream client %s session reopen", self)
-            current().timeout(2, do_open)
+            current().add_timeout(2, do_open)
 
     def close(self):
         for connection in self._connections:
@@ -241,7 +241,7 @@ class Client(EventEmitter):
             self._session_removed = False
             self.save_session()
             self._session.write_action(0x01)
-            current().timeout(5, self.on_init_connection_timeout, self._session)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session)
             logging.info("xstream client %s session %s open", self, self._session)
             return
         connection.close()
@@ -253,7 +253,7 @@ class Client(EventEmitter):
             self._session = None
             self.running = False
         if not self._session:
-            current().timeout(1, self.reopen)
+            current().add_timeout(1, self.reopen)
         logging.info("xstream auth connection close %s %s", connection, len(self._connections))
 
     def fork_connection(self):
@@ -276,7 +276,7 @@ class Client(EventEmitter):
         def on_timeout():
             if not connection.is_connected_session:
                 connection.close()
-        current().timeout(5, on_timeout)
+        current().add_timeout(5, on_timeout)
         return connection
 
     def on_fork_connect(self, connection):
@@ -352,13 +352,13 @@ class Client(EventEmitter):
                     def on_expried(is_close = False):
                         if not is_close and len(self._connections) <= 1:
                             self.init_connection(False)
-                            current().timeout(5, on_expried, True)
+                            current().add_timeout(5, on_expried, True)
                         else:
                             connection.on_expried()
-                    current().timeout(connection._expried_seconds, on_expried)
-                    current().timeout(30, connection.on_ping_loop)
+                    current().add_timeout(connection._expried_seconds, on_expried)
+                    current().add_timeout(30, connection.on_ping_loop)
 
-            current().async(add_connection, connection)
+            current().add_async(add_connection, connection)
             self._connecting = None
             self._reconnect_count = 0
             if len(self._connections) >= 2:
@@ -386,14 +386,14 @@ class Client(EventEmitter):
             self._connecting = None
         if self.running:
             if connection.is_connected_session:
-                current().async(self.init_connection)
+                current().add_async(self.init_connection)
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 if conn and conn._rdata_count and conn._expried_data and time.time() - conn._start_time > 5:
                     delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
                 else:
                     delay_rate = 1
-                current().timeout(self._reconnect_count, self.init_connection, True, delay_rate)
+                current().add_timeout(self._reconnect_count, self.init_connection, True, delay_rate)
             else:
                 self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))

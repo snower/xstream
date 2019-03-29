@@ -47,7 +47,7 @@ class Session(EventEmitter):
 
         self._center.on("frame", self.on_frame)
         if not self._is_server:
-            current().timeout(60, self.on_check_loop)
+            current().add_timeout(60, self.on_check_loop)
 
     @property
     def id(self):
@@ -162,9 +162,9 @@ class Session(EventEmitter):
                         self.do_close()
 
                 if self._status == STATUS_OPENING:
-                    current().timeout(15 * 60, on_exit)
+                    current().add_timeout(15 * 60, on_exit)
                 else:
-                    current().async(on_exit)
+                    current().add_async(on_exit)
 
         self.update_mss()
         return connection
@@ -235,7 +235,7 @@ class Session(EventEmitter):
         if callable(callback):
             callback(self, stream)
         if self._status == STATUS_CLOSED:
-            current().async(stream.do_close)
+            current().add_async(stream.do_close)
         return stream
 
     def close_stream(self, stream):
@@ -248,14 +248,14 @@ class Session(EventEmitter):
     def ready_write(self, stream, is_ready=True):
         if self._status == STATUS_CLOSED:
             if stream.id in self._streams:
-                current().async(stream.do_close)
+                current().add_async(stream.do_close)
             return False
         return self._center.ready_write(stream, is_ready)
 
     def write(self, frame):
         if self._status == STATUS_CLOSED:
             if frame.stream_id in self._streams:
-                current().async(self._streams[frame.stream_id].do_close)
+                current().add_async(self._streams[frame.stream_id].do_close)
             return False
         
         self._data_time = time.time()
@@ -338,18 +338,18 @@ class Session(EventEmitter):
             def on_server_timeout():
                 if self._key_change < 1:
                     self._key_change = 1
-            self._key_change_timeout = current().timeout(8, on_server_timeout)
+            self._key_change_timeout = current().add_timeout(8, on_server_timeout)
         else:
             def on_client_timeout():
                 if self._key_change < 1:
                     self._key_change = 1
-            self._key_change_timeout = current().timeout(10, on_client_timeout)
+            self._key_change_timeout = current().add_timeout(10, on_client_timeout)
 
     def on_check_loop(self):
         if time.time() - self._data_time > 300 and not self._streams:
             self.do_close()
         else:
-            current().timeout(60, self.on_check_loop)
+            current().add_timeout(60, self.on_check_loop)
 
     def close(self):
         if self._status == STATUS_CLOSED:
@@ -370,7 +370,7 @@ class Session(EventEmitter):
         if self._connections:
             for connection in self._connections:
                 if connection._connection and connection._connection._state == tcp.STATE_CLOSED:
-                    current().async(self.remove_connection, connection._connection)
+                    current().add_async(self.remove_connection, connection._connection)
                 else:
                     connection.close()
         else:

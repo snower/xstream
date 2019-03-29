@@ -46,7 +46,7 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
         if self._expried_time:
-            self.loop.timeout(self._expried_time / 5.0, self.on_time_out_loop)
+            self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     @property
     def id(self):
@@ -84,7 +84,7 @@ class Stream(EventEmitter):
     def on_read(self, frame):
         if not self._recv_wait_emit:
             self._recv_wait_emit = True
-            self.loop.async(self.on_data)
+            self.loop.add_async(self.on_data)
         self._recv_buffer.write(frame.data)
         self._recv_frame_count += 1
         self._recv_data_len += len(frame.data)
@@ -167,19 +167,19 @@ class Stream(EventEmitter):
             if data.__class__ == Buffer:
                 if not self._send_buffer:
                     self._send_buffer = data
-                    self.loop.async(self.on_write)
+                    self.loop.add_async(self.on_write)
                 else:
                     self._send_buffer.write(data.read(-1))
             else:
                 if not self._send_buffer:
                     self._send_buffer = Buffer()
-                    self.loop.async(self.on_write)
+                    self.loop.add_async(self.on_write)
                 self._send_buffer.write(data)
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 256 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
-        self.loop.async(self._session.write, frame)
+        self.loop.add_async(self._session.write, frame)
 
     def on_action(self, frame):
         if frame.action == ACTION_OPEN:
@@ -225,8 +225,8 @@ class Stream(EventEmitter):
 
         def do_colse_timeout():
             if self._session:
-                self.loop.timeout(self._expried_time, self.do_close)
-        self.loop.timeout(5, do_colse_timeout)
+                self.loop.add_timeout(self._expried_time, self.do_close)
+        self.loop.add_timeout(5, do_colse_timeout)
 
     def do_close(self):
         if not self._session:
@@ -249,14 +249,14 @@ class Stream(EventEmitter):
                          format_data_len(self._recv_data_len), self._recv_frame_count,
                          (time.time() - self._start_time) * 1000)
 
-        self.loop.async(do_close)
+        self.loop.add_async(do_close)
 
     def on_time_out_loop(self):
         if not self._closed:
             if time.time() - self._data_time > self._expried_time:
                 self.close()
             else:
-                self.loop.timeout(self._expried_time / 5.0, self.on_time_out_loop)
+                self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     def __del__(self):
         self.close()

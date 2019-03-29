@@ -46,7 +46,7 @@ class Center(EventEmitter):
         self.waiting_read_frame = False
 
         self.write_ttl()
-        current().timeout(2, self.on_ready_streams_lookup)
+        current().add_timeout(2, self.on_ready_streams_lookup)
 
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
@@ -57,7 +57,7 @@ class Center(EventEmitter):
             if connection == send_frame.connection:
                 bisect.insort(self.frames, send_frame)
                 self.send_frames.remove(send_frame)
-        current().async(self.write_frame)
+        current().add_async(self.write_frame)
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
@@ -108,7 +108,7 @@ class Center(EventEmitter):
                     stream = self.ready_streams[0]
                     if not stream.do_write():
                         self.ready_streams.pop(0)
-        current().async(do_stream_write)
+        current().add_async(do_stream_write)
         return True
 
     def write(self, data):
@@ -116,7 +116,7 @@ class Center(EventEmitter):
         if self.wait_reset_frames is None:
             bisect.insort(self.frames, frame)
             if not self.writing_connection:
-                current().async(self.write_frame)
+                current().add_async(self.write_frame)
         else:
             bisect.insort(self.wait_reset_frames, frame)
         return frame
@@ -165,7 +165,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().timeout(max(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
+                            current().add_timeout(max(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
 
@@ -191,7 +191,7 @@ class Center(EventEmitter):
                             connection.flush()
                     else:
                         connection.flush()
-                current().async(on_write_next_full, self, connection, next_data_len)
+                current().add_async(on_write_next_full, self, connection, next_data_len)
             else:
                 connection.flush()
             
@@ -201,7 +201,7 @@ class Center(EventEmitter):
                 stream = self.ready_streams[0]
                 if not stream.do_write():
                     self.ready_streams.pop(0)
-                current().async(self.write_frame)
+                current().add_async(self.write_frame)
         return frame
 
     def on_read_frame(self):
@@ -211,7 +211,7 @@ class Center(EventEmitter):
             if self.recv_frames[0].index == self.recv_index:
                 if read_frame_count >= 64:
                     self.waiting_read_frame = True
-                    current().async(self.on_read_frame)
+                    current().add_async(self.on_read_frame)
                     return
 
                 self.emit("frame", self, self.recv_frames[0])
@@ -236,16 +236,16 @@ class Center(EventEmitter):
             if self.recv_frames and self.recv_frames[0].index <= self.recv_index:
                 if not self.waiting_read_frame:
                     self.waiting_read_frame = True
-                    current().async(self.on_read_frame)
+                    current().add_async(self.on_read_frame)
 
             if not self.ack_loop:
-                current().timeout(1, self.on_ack_loop)
+                current().add_timeout(1, self.on_ack_loop)
                 self.ack_loop = True
         else:
             bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().add_timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -253,7 +253,7 @@ class Center(EventEmitter):
 
         if self.frames:
             if not self.writing_connection:
-                current().async(self.write_frame)
+                current().add_async(self.write_frame)
         else:
             while not self.frames and self.wait_reset_frames is None and self.ready_streams:
                 stream = self.ready_streams[0]
@@ -377,7 +377,7 @@ class Center(EventEmitter):
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
             
         if self.recv_frames and not self.closed:
-            current().timeout(min(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().add_timeout(min(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
@@ -397,12 +397,12 @@ class Center(EventEmitter):
                 connection = frame.connection._connection
                 connection.close()
                 logging.info("xstream session %s center %s %s send timeout close %s %s %s %s", self.session, self, connection, frame.index, self.send_index, self.ack_index, frame.send_timeout_count)
-            current().async(self.write_frame)
+            current().add_async(self.write_frame)
 
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().timeout(min(max(60, math.sqrt(self.ttl * 20) - (time.time() - send_frame.send_time)), 20), self.on_send_timeout_loop, send_frame, self.ack_index)
+                    current().add_timeout(min(max(60, math.sqrt(self.ttl * 20) - (time.time() - send_frame.send_time)), 20), self.on_send_timeout_loop, send_frame, self.ack_index)
                     self.send_timeout_loop = True
                     send_frame.send_timeout_count += 1
                     return
@@ -437,12 +437,12 @@ class Center(EventEmitter):
             self.write_action(ACTION_TTL, data, index=0)
             last_write_ttl_time = now
 
-        current().timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
+        current().add_timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
 
     def on_ready_streams_lookup(self):
         self.sort_stream()
         if not self.closed:
-            current().timeout(1, self.on_ready_streams_lookup)
+            current().add_timeout(1, self.on_ready_streams_lookup)
 
     def close(self):
         if not self.closed:
