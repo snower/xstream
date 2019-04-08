@@ -164,13 +164,13 @@ class Client(EventEmitter):
         last_rdata_counts = last_rdata_counts or {}
         rdata_counts = {}
         rdata_count = 0
-        for conn in self._connections:
+        for conn in self._session._connections:
             rdata_count += conn._rdata_count - last_rdata_counts.get(id(conn), 0)
             rdata_counts[id(conn)] = conn._rdata_count
 
-        if len(self._connections) < self._max_connections and rdata_count > len(self._connections) * 1024 * 1024:
+        if len(self._session._connections) < self._max_connections and rdata_count > len(self._session._connections) * 1024 * 1024:
             self.init_connection(False)
-        elif self._session._center.ttl >= len(self._connections) * 500:
+        elif self._session._center.ttl >= len(self._session._connections) * 500:
             self.init_connection(False)
 
         current().add_timeout(5, self.on_init_connection_timeout, self._session, rdata_counts)
