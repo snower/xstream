@@ -157,6 +157,24 @@ class Client(EventEmitter):
             else:
                 self.init_connection_delay_rate = 1
 
+    def on_init_connection_timeout(self, session, last_rdata_counts=None):
+        if not self._session or self._session != session:
+            return
+
+        last_rdata_counts = last_rdata_counts or {}
+        rdata_counts = {}
+        rdata_count = 0
+        for conn in self._connections:
+            rdata_count += conn._rdata_count - last_rdata_counts.get(id(conn), 0)
+            rdata_counts[id(conn)] = conn._rdata_count
+
+        if len(self._connections) < self._max_connections and rdata_count > len(self._connections) * 1024 * 1024:
+            self.init_connection(False)
+        elif self._session._center.ttl >= len(self._connections) * 500:
+            self.init_connection(False)
+
+        current().add_timeout(5, self.on_init_connection_timeout, self._session, rdata_counts)
+
     def open(self):
         session = self.load_session()
         if session:
@@ -167,6 +185,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(False)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session)
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
@@ -240,6 +259,7 @@ class Client(EventEmitter):
             self._session_removed = False
             self.save_session()
             self._session.write_action(0x01)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session)
             logging.info("xstream client %s session %s open", self, self._session)
             return
         connection.close()
@@ -392,9 +412,10 @@ class Client(EventEmitter):
                     etime = time.time() - conn._start_time
                     if etime < conn._expried_seconds / 2.0:
                         delay_rate = max(min((5 - math.exp((float(conn._rdata_count * 2) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
-                        connect_next = True
                     else:
                         delay_rate = max(min((5 - math.exp((float(conn._rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
+                    if etime < conn._expried_seconds / 2.0 or conn._rdata_count > conn._expried_data + 1024:
+                        connect_next = True
                 else:
                     delay_rate = 1
                 current().add_timeout(self._reconnect_count, self.init_connection, True, delay_rate, connect_next)
