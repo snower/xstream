@@ -6,7 +6,7 @@ import os
 import time
 import logging
 import struct
-import socket
+import math
 import random
 import hashlib
 from sevent import EventEmitter, current, tcp
@@ -138,7 +138,7 @@ class Client(EventEmitter):
                     delay_rate = self.init_connection_delay_rate
             else:
                 delay_rate = self.init_connection_delay_rate
-            timeout = time.time() + max(random.randint(90 * (len(self._connections) ** 2), 450 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 8))
+            timeout = time.time() + max(random.randint(300 * (len(self._connections) ** 2), 600 * (len(self._connections) ** 3)) * delay_rate, random.randint(2, 4))
             if self.init_connection_timeout == 0 or timeout < self.init_connection_timeout:
                 self.init_connection_timeout = timeout
                 self.init_connection_delay_rate = delay_rate
@@ -152,7 +152,7 @@ class Client(EventEmitter):
         elif len(self._session._connections) == 1:
             conn = self._session._connections[0]
             if conn and conn._rdata_count and conn._rdata_count > 1048576 and conn._expried_data and time.time() - conn._start_time > 5:
-                delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
+                delay_rate = max(min((5 - math.exp((float(conn._rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
                 if delay_rate < self.init_connection_delay_rate:
                     self.init_connection(True, delay_rate)
         current().add_timeout(5, self.on_init_connection_timeout, self._session)
@@ -390,7 +390,11 @@ class Client(EventEmitter):
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 if conn and conn._rdata_count and conn._expried_data and time.time() - conn._start_time > 5:
-                    delay_rate = min(1.0 / ((float(conn._rdata_count) / 1048576.0)  ** 10 / (float(conn._expried_data) / 1048576.0)), 1)
+                    etime = time.time() - conn._start_time
+                    if etime < conn._expried_seconds / 2.0:
+                        delay_rate = max(min((5 - math.exp((float(conn._rdata_count * 2) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
+                    else:
+                        delay_rate = max(min((5 - math.exp((float(conn._rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
                 else:
                     delay_rate = 1
                 current().add_timeout(self._reconnect_count, self.init_connection, True, delay_rate)
