@@ -388,7 +388,7 @@ class Client(EventEmitter):
             elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 connect_next = False
-                if conn and conn._rdata_count and conn._expried_data and time.time() - conn._start_time > 5:
+                if conn and conn._rdata_count and conn._expried_data:
                     etime = time.time() - conn._start_time
                     if etime < conn._expried_seconds / 2.0:
                         delay_rate = max(min((5 - math.exp((float(conn._rdata_count * 2) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
