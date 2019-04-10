@@ -168,10 +168,11 @@ class Client(EventEmitter):
             rdata_count += conn._rdata_count - last_rdata_counts.get(id(conn), 0)
             rdata_counts[id(conn)] = conn._rdata_count
 
-        if len(self._session._connections) < self._max_connections and rdata_count > len(self._session._connections) * 1024 * 1024:
-            self.init_connection(False)
-        elif self._session._center.ttl >= len(self._session._connections) * 500:
-            self.init_connection(False)
+        if len(self._session._connections) < self._max_connections:
+            if rdata_count > len(self._session._connections) * 1280 * 1024:
+                self.init_connection(False)
+            elif self._session._center.ttl >= len(self._session._connections) * 600:
+                self.init_connection(False)
 
         current().add_timeout(5, self.on_init_connection_timeout, self._session, rdata_counts)
 
@@ -410,10 +411,11 @@ class Client(EventEmitter):
                 connect_next = False
                 if conn and conn._rdata_count and conn._expried_data:
                     etime = time.time() - conn._start_time
+                    rdata_count = float(conn._rdata_count) / etime * 180.0
                     if etime < conn._expried_seconds / 2.0:
-                        delay_rate = max(min((5 - math.exp((float(conn._rdata_count * 2) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
+                        delay_rate = max(min((5 - math.exp((float(rdata_count * 2) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
                     else:
-                        delay_rate = max(min((5 - math.exp((float(conn._rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
+                        delay_rate = max(min((5 - math.exp((float(rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
                     if etime < conn._expried_seconds / 2.0 or conn._rdata_count > conn._expried_data + 1024:
                         connect_next = True
                 else:
