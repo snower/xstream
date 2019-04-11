@@ -398,17 +398,16 @@ class Client(EventEmitter):
     def on_fork_close(self, connection):
         if not self._session:
             return
+
         conn = self._session.remove_connection(connection)
         if connection in self._connections:
             self._connections.remove(connection)
         if self._connecting == connection:
             self._connecting = None
+
         if self.running:
             if connection.is_connected_session:
-                current().add_async(self.init_connection)
-            elif self._reconnect_count < 60:
-                self._reconnect_count += 1
-                connect_next = False
+                delay_rate, connect_next = 1, False
                 if conn and conn._rdata_count and conn._expried_data:
                     etime = time.time() - conn._start_time
                     rdata_count = float(conn._rdata_count) / etime * 180.0
@@ -418,9 +417,12 @@ class Client(EventEmitter):
                         delay_rate = max(min((5 - math.exp((float(rdata_count) / float(8388608) + 1) ** 4)) / 10.0, 1), 0.001)
                     if etime < conn._expried_seconds / 2.0 or conn._rdata_count > conn._expried_data + 1024:
                         connect_next = True
-                else:
-                    delay_rate = 1
-                current().add_timeout(self._reconnect_count, self.init_connection, True, delay_rate, connect_next)
+                current().add_async(self.init_connection, True, delay_rate, connect_next)
+                logging.info("xstream connection close init_connection %s %s %s", len(self._connections), delay_rate, connect_next)
+            elif self._reconnect_count < 60:
+                self._reconnect_count += 1
+                current().add_timeout(self._reconnect_count, self.init_connection, False)
+                logging.info("xstream connection close reinit_connection %s %s", len(self._connections), self._reconnect_count)
             else:
                 self._session.close()
         logging.info("xstream connection close %s %s", connection, len(self._connections))
@@ -430,7 +432,7 @@ class Client(EventEmitter):
             self.reopen(callback)
         elif callable(callback):
             if not self._connections:
-                self.init_connection()
+                self.init_connection(False)
             callback(self, self._session)
         return self._session
 
