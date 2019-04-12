@@ -371,7 +371,7 @@ class Client(EventEmitter):
                     def on_expried(is_close = False):
                         if not is_close and len(self._connections) <= 1:
                             self.init_connection(False)
-                            current().add_timeout(5, on_expried, True)
+                            current().add_timeout(random.randint(5, 15), on_expried, True)
                         else:
                             connection.on_expried()
                     current().add_timeout(connection._expried_seconds, on_expried)
