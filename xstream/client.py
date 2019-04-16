@@ -101,13 +101,16 @@ class Client(EventEmitter):
         logging.info("xstream remove session %s %s %s", self, session_key, self._session)
 
     def init_connection(self, is_delay = True, delay_rate = None, connect_next = False):
-        if not self._session:
+        if not self._session or self._session.closed:
             return
 
         if self._connecting is not None:
             return
 
         if len(self._connections) >= self._max_connections:
+            if self.init_connection_timeout_handler:
+                current().cancel_timeout(self.init_connection_timeout_handler)
+                self.init_connection_timeout_handler = None
             self.init_connection_timeout = None
             self.init_connection_delay_rate = 1
             return
@@ -115,13 +118,18 @@ class Client(EventEmitter):
         def do_init_connection():
             if self._connecting is not None:
                 return
+
+            if self.init_connection_timeout_handler:
+                current().cancel_timeout(self.init_connection_timeout_handler)
+                self.init_connection_timeout_handler = None
+            self.init_connection_timeout = None
+            self.init_connection_delay_rate = 1
             
-            if not self._session or self._session.closed or (self._connections and self._session.key_change):
+            if not self._session or self._session.closed \
+                    or (self._connections and self._session.key_change):
                 return
             
             if len(self._connections) >= self._max_connections:
-                self.init_connection_timeout = None
-                self.init_connection_delay_rate = 1
                 return
             
             self._connecting = self.fork_connection()
@@ -129,11 +137,8 @@ class Client(EventEmitter):
 
         if not self._connections:
             do_init_connection()
-            self.init_connection_timeout = None
-            self.init_connection_delay_rate = delay_rate or 1
         elif not self._session.key_change and not is_delay:
             do_init_connection()
-            self.init_connection_timeout = None
         else:
             if delay_rate:
                 if delay_rate > self.init_connection_delay_rate:
@@ -144,11 +149,7 @@ class Client(EventEmitter):
             timeout = time.time() + max(random.randint(300 * (len(self._connections) ** 2), 900 * (len(self._connections) ** 2)) * delay_rate, random.randint(1, 4))
 
             if self.init_connection_timeout_handler:
-                if self.init_connection_timeout and self.init_connection_timeout < timeout:
-                    return
-
                 current().cancel_timeout(self.init_connection_timeout_handler)
-
             self.init_connection_timeout = timeout
             self.init_connection_timeout_handler = current().add_timeout(timeout, do_init_connection)
 
@@ -171,7 +172,7 @@ class Client(EventEmitter):
         if len(self._session._connections) < self._max_connections:
             if rdata_count > len(self._session._connections) * 1280 * 1024:
                 self.init_connection(False)
-            elif self._session._center.ttl >= len(self._session._connections) * 600:
+            elif self._session._center.ttl >= len(self._session._connections) * 720:
                 self.init_connection(False)
 
         current().add_timeout(5, self.on_init_connection_timeout, self._session, rdata_counts)
