@@ -385,6 +385,7 @@ class Client(EventEmitter):
                 self._session.start_key_change()
             self.init_connection()
             connection.is_connected_session = True
+            self.fork_auth_session_id = rand_string(32)
             logging.info("xstream connection ready %s %s:%s", connection, connection.address[0], connection.address[1])
             self._fork_auth_fail_count = 0
             return
