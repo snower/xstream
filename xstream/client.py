@@ -146,7 +146,7 @@ class Client(EventEmitter):
             else:
                 delay_rate = self.init_connection_delay_rate
 
-            timeout = max(random.randint(300 * (len(self._connections) ** 2), 900 * (len(self._connections) ** 2)) * delay_rate, random.randint(1, 4))
+            timeout = max(random.randint(1200 * len(self._connections), 3600 * len(self._connections)) * delay_rate, random.randint(0, 3))
 
             if self.init_connection_timeout_handler:
                 current().cancel_timeout(self.init_connection_timeout_handler)
