@@ -413,10 +413,13 @@ class Client(EventEmitter):
                 if conn and conn._rdata_count and conn._expried_data:
                     etime = time.time() - conn._start_time
                     rdata_count = float(conn._rdata_count) / etime * 180.0
-                    if etime < conn._expried_seconds / 2.0:
-                        delay_rate = max(min((12 - math.exp((float(rdata_count * 2) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
-                    else:
-                        delay_rate = max(min((12 - math.exp((float(rdata_count) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
+                    try:
+                        if etime < conn._expried_seconds / 2.0:
+                            delay_rate = max(min((12 - math.exp((float(rdata_count * 2) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
+                        else:
+                            delay_rate = max(min((12 - math.exp((float(rdata_count) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
+                    except:
+                        delay_rate = 1
                     if etime < conn._expried_seconds / 2.0 or conn._rdata_count > conn._expried_data * 2:
                         connect_next = True
                 current().add_async(self.init_connection, True, delay_rate, connect_next)
