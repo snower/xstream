@@ -418,6 +418,8 @@ class Client(EventEmitter):
                             delay_rate = max(min((12 - math.exp((float(rdata_count * 2) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
                         else:
                             delay_rate = max(min((12 - math.exp((float(rdata_count) / float(16777216) + 1) ** 4)) / 10.0, 1), 0.001)
+                    except OverflowError:
+                        delay_rate = 0.001
                     except:
                         delay_rate = 1
                     if etime < conn._expried_seconds / 2.0 or conn._rdata_count > conn._expried_data * 2:
