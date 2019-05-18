@@ -214,7 +214,7 @@ class Center(EventEmitter):
                     current().add_async(self.on_read_frame)
                     return
 
-                self.emit("frame", self, self.recv_frames[0])
+                self.emit_frame(self, self.recv_frames[0])
                 self.recv_index += 1
                 read_frame_count += 1
             self.recv_frames.pop(0)
@@ -224,13 +224,13 @@ class Center(EventEmitter):
         frame.recv_time = time.time()
 
         if frame.index == 0:
-            return self.emit("frame", self, frame)
+            return self.emit_frame(self, frame)
 
         if frame.index < self.recv_index or abs(frame.index - self.recv_index) > 0x7fffffff:
             return
 
         if frame.index == self.recv_index:
-            self.emit("frame", self, frame)
+            self.emit_frame(self, frame)
             self.recv_index += 1
 
             if self.recv_frames and self.recv_frames[0].index <= self.recv_index:

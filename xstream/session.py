@@ -154,7 +154,7 @@ class Session(EventEmitter):
                 if self._center:
                     self._center.close()
                     self._center = None
-                    self.emit("close", self)
+                    self.emit_close(self)
                     self.remove_all_listeners()
             else:
                 def on_exit():
@@ -227,7 +227,7 @@ class Session(EventEmitter):
             stream_id = self.get_stream_id()
         stream = Stream(stream_id, self, is_server, **kwargs)
         self._streams[stream_id] = stream
-        self.emit("stream", self, stream)
+        self.emit_stream(self, stream)
         return stream
 
     def stream(self, callback=None, **kwargs):
@@ -289,7 +289,7 @@ class Session(EventEmitter):
                     current().cancel_timeout(self._key_change_timeout)
                     self._key_change_timeout = None
 
-                self.emit("keychange", self)
+                self.emit_keychange(self)
                 logging.info("xstream session %s key change", self)
             else:
                 if status == 0:
@@ -307,7 +307,7 @@ class Session(EventEmitter):
                         current().cancel_timeout(self._key_change_timeout)
                         self._key_change_timeout = None
 
-                    self.emit("keychange", self)
+                    self.emit_keychange(self)
                     logging.info("xstream session %s key change", self)
 
     def write_action(self, action, data='', index=None, center = False):
@@ -376,7 +376,7 @@ class Session(EventEmitter):
         else:
             self._center.close()
             self._center = None
-            self.emit("close", self)
+            self.emit_close(self)
             self.remove_all_listeners()
         logging.info("xstream session %s close", self)
 

@@ -183,7 +183,7 @@ class Client(EventEmitter):
             self._session = session
             self._session.on("close", self.on_session_close)
             self._session.on("keychange", lambda session: self.save_session())
-            self.emit("session", self, self._session)
+            self.emit_session(self, self._session)
 
             self.running = True
             self.init_connection(False)
@@ -253,7 +253,7 @@ class Client(EventEmitter):
             self._session = Session(session_id, self._auth_key, False, connection.crypto, StreamFrame.FRAME_LEN)
             self._session.on("close", self.on_session_close)
             self._session.on("keychange", lambda session: self.save_session())
-            self.emit("session", self, self._session)
+            self.emit_session(self, self._session)
 
             self.running = True
             self.init_connection(False)

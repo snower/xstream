@@ -162,12 +162,12 @@ class Server(EventEmitter):
 
                 session.on("close", self.on_session_close)
                 session.on("keychange", self.save_session)
-                self.emit("session", self, session)
+                self.emit_session(self, session)
                 self.save_session(session)
                 logging.info("xstream session open %s", session)
                 return
 
-        self.emit("connection", self, connection, datas)
+        self.emit_connection(self, connection, datas)
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
@@ -200,11 +200,11 @@ class Server(EventEmitter):
             key += extensions[20: 36]
 
             if not (crypto_time, key, auth, session_id):
-                self.emit("connection", self, connection, datas)
+                self.emit_connection(self, connection, datas)
                 logging.info("xstream connection refuse %s %s", connection, time.time())
                 return
         except:
-            self.emit("connection", self, connection, datas)
+            self.emit_connection(self, connection, datas)
             logging.info("xstream connection refuse %s %s", connection, time.time())
             return
 
@@ -217,7 +217,7 @@ class Server(EventEmitter):
                     self._sessions[session.id] = session
                     session.on("close", self.on_session_close)
                     session.on("keychange", self.save_session)
-                    self.emit("session", self, session)
+                    self.emit_session(self, session)
                     is_loaded_session = True
                     logging.info("xstream session open %s", session)
 
@@ -225,12 +225,12 @@ class Server(EventEmitter):
                 session = self._sessions[session_id]
                 if session.closed:
                     logging.info("xstream connection refuse session closed %s %s %s", session_id, connection, time.time())
-                    self.emit("connection", self, connection, datas)
+                    self.emit_connection(self, connection, datas)
                     return
 
                 if session.key_change:
                     logging.info("xstream connection key_change refuse session closed %s %s %s", session_id, connection, time.time())
-                    self.emit("connection", self, connection, datas)
+                    self.emit_connection(self, connection, datas)
                     return
 
                 crypto = session.get_decrypt_crypto(crypto_time)
@@ -274,7 +274,7 @@ class Server(EventEmitter):
                                         session.start_key_change()
                                 current().add_timeout(2, on_timeout_start_key_change)
                         else:
-                            self.emit("connection", self, conn, datas)
+                            self.emit_connection(self, conn, datas)
 
                     current().add_async(add_connection, connection)
 
@@ -284,7 +284,7 @@ class Server(EventEmitter):
                     connection.on("close", on_fork_connection_close)
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
-        self.emit("connection", self, connection, datas)
+        self.emit_connection(self, connection, datas)
         logging.info("xstream connection refuse %s %s %s", session_id, connection, time.time())
 
     def on_session_close(self, session):

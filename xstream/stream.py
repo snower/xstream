@@ -70,7 +70,7 @@ class Stream(EventEmitter):
         return self._capped
 
     def on_data(self):
-        self.emit("data", self, self._recv_buffer)
+        self.emit_data(self, self._recv_buffer)
         self._recv_wait_emit = False
 
     def on_frame(self, frame):
@@ -241,7 +241,7 @@ class Stream(EventEmitter):
 
             session = self._session
             if self._session:
-                self.emit("close", self)
+                self.emit_close(self)
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None

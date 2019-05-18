@@ -58,7 +58,7 @@ class Connection(EventEmitter):
         current().add_timeout(15, self.on_check_data_loop)
 
     def start(self):
-        self.loop.add_async(self.emit, "drain", self)
+        self.loop.add_async(self.emit_drain, self)
 
     def on_data(self, connection, buffer):
         if not self._read_header:
@@ -75,10 +75,10 @@ class Connection(EventEmitter):
 
     def on_drain(self, connection):
         if not self._closed:
-            self.emit("drain", self)
+            self.emit_drain(self)
 
     def on_close(self, connection):
-        self.emit("close",self)
+        self.emit_close(self)
         self._closed = True
         self._session, session = None, self._session
         self.remove_all_listeners()
@@ -112,7 +112,7 @@ class Connection(EventEmitter):
 
                 action = ord(data[0])
                 if action == 0:
-                    self.emit("frame", self, data)
+                    self.emit_frame(self, data)
                     self._rfdata_count += 1
                 else:
                     self.on_action(action, data[1:-2])
