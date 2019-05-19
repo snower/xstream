@@ -203,11 +203,11 @@ class Connection(EventEmitter):
             etime = time.time() - self._start_time
             if self._rdata_count <= self._expried_data:
                 if self._rdata_count <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
-                    return current().add_timeout(15, self.on_check_data_loop)
+                    return current().add_timeout(5, self.on_check_data_loop)
 
             if etime < self._expried_seconds / 2.0:
                 if etime < self._expried_seconds / (2.0 * float(self._rdata_count) / float(self._expried_data)):
-                    return current().add_timeout(15, self.on_check_data_loop)
+                    return current().add_timeout(5, self.on_check_data_loop)
 
             self.close()
             logging.info("xstream session %s connection %s data len out", self._session, self)

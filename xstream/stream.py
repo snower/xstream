@@ -151,7 +151,7 @@ class Stream(EventEmitter):
         if self._send_is_set_ready:
             return
 
-        if not self._send_is_set_ready and self._send_buffer:
+        if self._send_buffer:
             self._send_time = time.time()
             self._send_is_set_ready = True
             if not self._session.ready_write(self):
@@ -164,11 +164,12 @@ class Stream(EventEmitter):
                 return
 
             if data.__class__ == Buffer:
-                if not self._send_buffer:
-                    self._send_buffer = data
-                elif data != self._send_buffer:
-                    while data:
-                        self._send_buffer.write(data.next())
+                if data != self._send_buffer:
+                    if not self._send_buffer:
+                        self._send_buffer = data
+                    else:
+                        while data:
+                            self._send_buffer.write(data.next())
             else:
                 if self._send_buffer is None:
                     self._send_buffer = Buffer()
