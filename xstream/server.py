@@ -171,7 +171,15 @@ class Server(EventEmitter):
                 logging.info("xstream session open %s", session)
                 return
 
-        self.emit_connection(self, connection, datas)
+        def on_fork_fail_connection_close(connection):
+            self._fork_auth_fail_count -= 1
+
+        connection.on("close", on_fork_fail_connection_close)
+        self._fork_auth_fail_count += 1
+        if self._fork_auth_fail_count >= 128:
+            connection.close()
+        else:
+            self.emit_connection(self, connection, datas)
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
     def create_session(self, connection, auth_key, crypto):
