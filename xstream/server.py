@@ -33,11 +33,13 @@ class Server(EventEmitter):
             self._server = tcp.Server()
             self._server.enable_nodelay()
             self._server.enable_reuseaddr()
+
         self._used_session_ids = {}
         self._sessions = {}
         self._current_session_id = 1
         self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
         self._crypto_alg = crypto_alg
+        self._fork_auth_fail_count = 0
 
     def get_session_key(self, session_id):
         return hashlib.md5("".join([str(self._host), str(self._port), self._crypto_key, self._crypto_alg, str(session_id)]).encode("utf-8")).hexdigest()
@@ -118,12 +120,14 @@ class Server(EventEmitter):
     def on_connection(self, server, connection):
         connection.once("data", self.on_data)
         setattr(connection, "is_connected_session", False)
+        setattr(connection, "is_connected_dataed", False)
         def on_timeout():
-            if not connection.is_connected_session:
+            if not connection.is_connected_dataed:
                 connection.close()
-        current().add_timeout(random.randint(5, 30), on_timeout)
+        current().add_timeout(random.randint(1200, 3000) / 1000.0, on_timeout)
 
     def on_data(self, connection, data):
+        connection.is_connected_dataed = True
         datas = str(data)
         action = datas[2]
         if action == '\x01':
@@ -210,7 +214,6 @@ class Server(EventEmitter):
 
         if crypto_time and key and session_id and auth:
             is_loaded_session = False
-            connection.is_connected_session = True
             if session_id not in self._sessions:
                 session = self.load_session(session_id)
                 if session:
@@ -278,13 +281,24 @@ class Server(EventEmitter):
 
                     current().add_async(add_connection, connection)
 
+                    connection.is_connected_session = True
+                    self._fork_auth_fail_count = 0
                     def on_fork_connection_close(connection):
                         session.remove_connection(connection)
                         logging.info("xstream connection close %s %s", session, connection)
                     connection.on("close", on_fork_connection_close)
                     logging.info("xstream connection connect %s %s", session, connection)
                     return
-        self.emit_connection(self, connection, datas)
+
+        def on_fork_fail_connection_close(connection):
+            self._fork_auth_fail_count -= 1
+
+        connection.on("close", on_fork_fail_connection_close)
+        self._fork_auth_fail_count += 1
+        if self._fork_auth_fail_count >= 128:
+            connection.close()
+        else:
+            self.emit_connection(self, connection, datas)
         logging.info("xstream connection refuse %s %s %s", session_id, connection, time.time())
 
     def on_session_close(self, session):
