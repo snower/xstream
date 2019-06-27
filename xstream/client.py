@@ -280,6 +280,7 @@ class Client(EventEmitter):
         connection = tcp.Socket()
         connection.enable_nodelay()
         setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
+        setattr(connection, "is_connected_xstream", False),
         setattr(connection, "is_connected_session", False),
         connection.once("connect", self.on_fork_connect)
         connection.once("close", self.on_fork_close)
@@ -323,6 +324,8 @@ class Client(EventEmitter):
 
         connection.write(
             "".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
+
+        connection.is_connected_xstream = True
 
         logging.info("xstream connection connect %s", connection)
 
@@ -389,13 +392,9 @@ class Client(EventEmitter):
             logging.info("xstream connection ready %s %s:%s", connection, connection.address[0], connection.address[1])
             self._fork_auth_fail_count = 0
             return
+
         connection.close()
         logging.info("xstream connection auth fail %s %s %s %s:%s", connection, time.time(), crypto_time, connection.address[0], connection.address[1])
-        self._fork_auth_fail_count += 1
-        if self._fork_auth_fail_count >= 3:
-            self.remove_session()
-            if self._session:
-                self._session.close()
 
     def on_fork_close(self, connection):
         if not self._session:
@@ -407,7 +406,14 @@ class Client(EventEmitter):
         if self._connecting == connection:
             self._connecting = None
 
-        if self.running:
+        if connection.is_connected_xstream and not connection.is_connected_session:
+            self._fork_auth_fail_count += 1
+            if self._fork_auth_fail_count >= 3:
+                self.remove_session()
+                if self._session:
+                    self._session.close()
+                logging.info("xstream session reauth %s %s", connection, self.session)
+        elif self.running:
             if connection.is_connected_session:
                 delay_rate, connect_next = 1, False
                 if conn and conn._rdata_count and conn._expried_data:
@@ -426,7 +432,7 @@ class Client(EventEmitter):
                         connect_next = True
                 current().add_async(self.init_connection, True, delay_rate, connect_next)
                 logging.info("xstream connection close init_connection %s %s %s", len(self._connections), delay_rate, connect_next)
-            elif self._reconnect_count < 60:
+            elif self._reconnect_count < 5:
                 self._reconnect_count += 1
                 current().add_timeout(self._reconnect_count, self.init_connection, False)
                 logging.info("xstream connection close reinit_connection %s %s", len(self._connections), self._reconnect_count)
@@ -449,7 +455,6 @@ class Client(EventEmitter):
             self._session = None
             self._connections = []
             self._connecting = None
-            self._reconnect_count = 0
             self.opening = False
             self.running = False
             self.init_connection_timeout = None
