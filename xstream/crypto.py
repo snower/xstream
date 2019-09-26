@@ -11,6 +11,9 @@ ALG_KEY_IV_LEN = {
         'aes_128_cfb': (16, 16),
         'aes_192_cfb': (24, 16),
         'aes_256_cfb': (32, 16),
+        'aes_128_gcm': (16, 16),
+        'aes_192_gcm': (24, 16),
+        'aes_256_gcm': (32, 16),
         'aes_128_ofb': (16, 16),
         'aes_192_ofb': (24, 16),
         'aes_256_ofb': (32, 16),
@@ -34,8 +37,37 @@ ALG_KEY_IV_LEN = {
         'rc4': (16, 0),
         'seed_cfb': (16, 16),
     }
+if os.environ.get("XSTREAM_CRYPTO", "cryptography").lower() == "cryptography":
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1
+    from cryptography.hazmat.backends import default_backend
+    backend = default_backend()
 
-if os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
+    def get_evp(alg_key, key, iv, op):
+        if "aes" not in alg_key:
+            return
+        cipher = Cipher(algorithms.AES(key), getattr(modes, alg_key.split("_")[-1].upper())(iv), backend=backend)
+        if op == 1:
+            return cipher.encryptor()
+        return cipher.decryptor()
+
+    def rand_string(length):
+        return os.urandom(length)
+
+    def sign_string(data):
+        d = ''
+        for t in (MD5, SHA1, MD5):
+            s = Hash(t(), backend=backend)
+            s.update(data + d)
+            d = s.finalize()
+        return d
+
+    def bytes_to_key_digest():
+        s = Hash(SHA1(), backend=backend)
+        setattr(s, "digest", s.finalize)
+        return s
+
+elif os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
     from M2Crypto import Rand,EVP
 
     def get_evp(alg_key, key, iv, op):
@@ -67,7 +99,7 @@ else:
         return OpenSSLCrypto(alg_key.replace("_", "-"), key, iv, op)
 
     def rand_string(length):
-        return "".join([chr(random.randint(0, 255)) for _ in xrange(length)])
+        return os.urandom(length)
 
     def sign_string(data):
         d = ''
