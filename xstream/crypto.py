@@ -37,19 +37,35 @@ ALG_KEY_IV_LEN = {
         'rc4': (16, 0),
         'seed_cfb': (16, 16),
     }
-if os.environ.get("XSTREAM_CRYPTO", "cryptography").lower() == "cryptography":
+
+def get_cryptography():
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
     from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1
     from cryptography.hazmat.backends import default_backend
     backend = default_backend()
+    buf = bytearray(262144)
+    ffi_buf = backend._ffi.cast("unsigned char *", backend._ffi.from_buffer(buf))
+    outlen = backend._ffi.new("int *")
+
+    def update_warp(backend, cryptor, buf, ffi_buf, outlen):
+        def update(data):
+            data_len = len(data)
+            if data_len > 261120:
+                udata = b''
+                for i in range((data_len % 261120) + 1):
+                    udata += update(data[i*261120: (i+1) * 261120])
+                return udata
+            backend._lib.EVP_CipherUpdate(cryptor._ctx._ctx, ffi_buf, outlen, backend._ffi.from_buffer(data), data_len)
+            return bytes(buf[:outlen[0]])
+        return update
 
     def get_evp(alg_key, key, iv, op):
         if "aes" not in alg_key:
             return
         cipher = Cipher(algorithms.AES(key), getattr(modes, alg_key.split("_")[-1].upper())(iv), backend=backend)
-        if op == 1:
-            return cipher.encryptor()
-        return cipher.decryptor()
+        cryptor = cipher.encryptor() if op == 1 else cipher.decryptor()
+        setattr(cryptor, "update", update_warp(backend, cryptor, buf, ffi_buf, outlen))
+        return cryptor
 
     def rand_string(length):
         return os.urandom(length)
@@ -67,7 +83,9 @@ if os.environ.get("XSTREAM_CRYPTO", "cryptography").lower() == "cryptography":
         setattr(s, "digest", s.finalize)
         return s
 
-elif os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
+    return get_evp, rand_string, sign_string, bytes_to_key_digest
+
+def get_m2crypto():
     from M2Crypto import Rand,EVP
 
     def get_evp(alg_key, key, iv, op):
@@ -89,7 +107,9 @@ elif os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
     def bytes_to_key_digest():
         return EVP.MessageDigest('sha1')
 
-else:
+    return get_evp, rand_string, sign_string, bytes_to_key_digest
+
+def get_openssl():
     import hashlib
     from .openssl import OpenSSLCrypto
 
@@ -111,6 +131,15 @@ else:
 
     def bytes_to_key_digest():
         return hashlib.sha1()
+
+    return get_evp, rand_string, sign_string, bytes_to_key_digest
+
+if os.environ.get("XSTREAM_CRYPTO", "cryptography").lower() == "cryptography":
+    get_evp, rand_string, sign_string, bytes_to_key_digest = get_cryptography()
+elif os.environ.get("XSTREAM_CRYPTO", "m2crypto").lower() == "m2crypto":
+    get_evp, rand_string, sign_string, bytes_to_key_digest = get_m2crypto()
+else:
+    get_evp, rand_string, sign_string, bytes_to_key_digest = get_openssl()
 
 def xor_string(key, data, encrypt=True):
     if isinstance(key, basestring):
