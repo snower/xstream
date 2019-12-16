@@ -328,7 +328,7 @@ class Session(EventEmitter):
             self._key_change_timeout = None
 
         if self._is_server:
-            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 30:
+            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 15 * 60:
                 return
 
             data = struct.pack("!BI", 1, self._key_change_count) + rand_string(64)
