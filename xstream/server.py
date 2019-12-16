@@ -283,7 +283,7 @@ class Server(EventEmitter):
                                 def on_timeout_start_key_change():
                                     if len(session._connections) >= 2:
                                         session.start_key_change()
-                                current().add_timeout(2, on_timeout_start_key_change)
+                                current().add_timeout(random.randint(2, 5), on_timeout_start_key_change)
                         else:
                             self.emit_connection(self, conn, datas)
 

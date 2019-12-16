@@ -6,6 +6,7 @@ import time
 import random
 import logging
 import base64
+import struct
 import pickle
 import socket
 from sevent import EventEmitter, current, tcp
@@ -34,8 +35,10 @@ class Session(EventEmitter):
         self._current_crypto_key =  '0' * 64
         self._last_auth_time = 0
         self._mss = mss
-        self._key_change = 1
+        self._key_change = False
         self._key_change_timeout = None
+        self._key_change_count = 0
+        self._key_change_time = time.time()
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -44,10 +47,7 @@ class Session(EventEmitter):
         self._status = STATUS_INITED
         self._controll_stream = self.create_stream(0, priority = 1, capped = True, expried_time = 0)
         self._controll_stream.on("data", self.on_controll_data)
-
         self._center.on("frame", self.on_frame)
-        if not self._is_server:
-            current().add_timeout(60, self.on_check_loop)
 
     @property
     def id(self):
@@ -63,7 +63,7 @@ class Session(EventEmitter):
 
     @property
     def key_change(self):
-        return self._key_change < 1
+        return self._key_change
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
@@ -275,40 +275,38 @@ class Session(EventEmitter):
                 self._status = STATUS_OPENING
                 logging.info("xstream session %s opening", self)
         elif action == ACTION_KEYCHANGE:
-            status = ord(data[0])
+            status, key_change_count = struct.unpack("!BI", data[:5])
+            if key_change_count < self._key_change_count:
+                return
+            key_change, self._key_change = self._key_change, False
+            if self._key_change_timeout:
+                current().cancel_timeout(self._key_change_timeout)
+                self._key_change_timeout = None
 
             if self._is_server:
                 if status == 0:
-                    self._key_change += 1
                     logging.info("xstream session %s error key change", self)
                     return
 
-                self._current_crypto_key = data[1:65]
-                self._key_change += 1
-                if self._key_change_timeout:
-                    current().cancel_timeout(self._key_change_timeout)
-                    self._key_change_timeout = None
-
+                self._current_crypto_key = data[5:69]
+                self._key_change_count += 1
+                self._key_change_time = time.time()
                 self.emit_keychange(self)
                 logging.info("xstream session %s key change", self)
             else:
-                if status == 0:
-                    logging.info("xstream session %s error key change", self)
+                if not key_change or len(self._connections) < 2 or not self._center or self._center.ttl >= 800:
+                    self.write_action(ACTION_KEYCHANGE, struct.pack("!BI", 0, self._key_change_count) + data[5:69], True)
+                    logging.info("xstream session %s empty key change", self)
                     return
 
-                if self._key_change == 1 or len(self._connections) < 2 or not self._center or self._center.ttl >= 800:
-                    self.write_action(ACTION_KEYCHANGE, chr(0) + data[1:65], True)
-                    logging.info("xstream session %s empty key change", self)
-                else:
-                    self._current_crypto_key = data[1:65]
-                    self.write_action(ACTION_KEYCHANGE, chr(1) + self._current_crypto_key, True)
-                    self._key_change = 1
-                    if self._key_change_timeout:
-                        current().cancel_timeout(self._key_change_timeout)
-                        self._key_change_timeout = None
-
-                    self.emit_keychange(self)
-                    logging.info("xstream session %s key change", self)
+                self._current_crypto_key = data[5:69]
+                data = struct.pack("!BI", 1, self._key_change_count) + self._current_crypto_key
+                self.write_action(ACTION_KEYCHANGE, data, True)
+                self.write_action(ACTION_KEYCHANGE, data, False)
+                self._key_change_count += 1
+                self._key_change_time = time.time()
+                self.emit_keychange(self)
+                logging.info("xstream session %s key change", self)
 
     def write_action(self, action, data='', index=None, center = False):
         if self._status == STATUS_CLOSED:
@@ -322,34 +320,31 @@ class Session(EventEmitter):
             self._controll_stream.write(action + data)
 
     def start_key_change(self):
-        if self._key_change < 1:
+        if self._key_change:
             return
 
-        if not self._center or self._center.ttl >= 800:
-            return
-
-        self._key_change -= 1
         if self._key_change_timeout:
             current().cancel_timeout(self._key_change_timeout)
             self._key_change_timeout = None
 
         if self._is_server:
-            self.write_action(ACTION_KEYCHANGE, chr(1) + rand_string(64), True)
+            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 30:
+                return
+
+            data = struct.pack("!BI", 1, self._key_change_count) + rand_string(64)
+            self.write_action(ACTION_KEYCHANGE, data, True)
+            self.write_action(ACTION_KEYCHANGE, data, False)
+            self._key_change = True
             def on_server_timeout():
-                if self._key_change < 1:
-                    self._key_change = 1
-            self._key_change_timeout = current().add_timeout(8, on_server_timeout)
+                self._key_change = False
+                self._key_change_timeout = None
+            self._key_change_timeout = current().add_timeout(5, on_server_timeout)
         else:
             def on_client_timeout():
-                if self._key_change < 1:
-                    self._key_change = 1
-            self._key_change_timeout = current().add_timeout(10, on_client_timeout)
-
-    def on_check_loop(self):
-        if time.time() - self._data_time > 300 and not self._streams:
-            self.do_close()
-        else:
-            current().add_timeout(60, self.on_check_loop)
+                self._key_change = False
+                self._key_change_timeout = None
+            self._key_change = True
+            self._key_change_timeout = current().add_timeout(15, on_client_timeout)
 
     def close(self):
         if self._status == STATUS_CLOSED:
