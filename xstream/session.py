@@ -38,7 +38,7 @@ class Session(EventEmitter):
         self._key_change = False
         self._key_change_timeout = None
         self._key_change_count = 0
-        self._key_change_time = time.time()
+        self._key_change_time = 0
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -328,7 +328,7 @@ class Session(EventEmitter):
             self._key_change_timeout = None
 
         if self._is_server:
-            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 15 * 60:
+            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 2 * 60 * 60:
                 return
 
             data = struct.pack("!BI", 1, self._key_change_count) + rand_string(64)

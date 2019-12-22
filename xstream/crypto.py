@@ -223,10 +223,11 @@ class Crypto(object):
         return self._decipher.update(data)
 
     def bytes_to_key(self, salt, crypto_time, key_len):
-        d1, d2 = (self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key), ''
+        key = self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key
+        d1, d2 = key, ''
         for i in range(5):
             s = bytes_to_key_digest()
-            s.update("".join([d1, salt, str(crypto_time)]))
+            s.update("".join([d1, key, salt, str(crypto_time)]))
             d2=d1
             d1=s.digest()
         return (d1+d2)[:key_len]
