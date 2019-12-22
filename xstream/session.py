@@ -92,7 +92,7 @@ class Session(EventEmitter):
             session._current_crypto_key = s["current_crypto_key"]
             session._last_auth_time = int(s.get("last_auth_time", 0))
             session._key_change = s["key_change"]
-            if not s["is_server"] and session._key_change < 1:
+            if not s["is_server"] and session._key_change:
                 return None
         except:
             return None
