@@ -41,6 +41,8 @@ class Server(EventEmitter):
         self._crypto_alg = crypto_alg
         self._fork_auth_fail_count = 0
 
+        current().add_timeout(120, self.on_check_session_timeout)
+
     def get_session_key(self, session_id):
         return hashlib.md5("".join([str(self._host), str(self._port), self._crypto_key, self._crypto_alg, str(session_id)]).encode("utf-8")).hexdigest()
 
@@ -155,6 +157,7 @@ class Server(EventEmitter):
                 crypto_time = int(time.time())
                 key = crypto.init_encrypt(crypto_time)
                 session = self.create_session(connection, auth_key, crypto)
+                self._sessions[session.id] = session
 
                 session_id = xor_string(crypto_time & 0xff, struct.pack("!H", session.id))
                 auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
@@ -308,6 +311,18 @@ class Server(EventEmitter):
         else:
             self.emit_connection(self, connection, datas)
         logging.info("xstream connection refuse %s %s %s", session_id, connection, time.time())
+
+    def on_check_session_timeout(self):
+        try:
+            now = time.time()
+            for session_id, session in self._sessions.items():
+                if now - session._data_time >= 15 * 60:
+                    try:
+                        session.close()
+                    except Exception as e:
+                        logging.info("xstream session timeout close error %s %s", session, e)
+        finally:
+            current().add_timeout(120, self.on_check_session_timeout)
 
     def on_session_close(self, session):
         if session.id in self._sessions:

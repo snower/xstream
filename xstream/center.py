@@ -45,9 +45,9 @@ class Center(EventEmitter):
         self.closed = False
         self.writing_connection = None
         self.waiting_read_frame = False
+        self.ready_streams_lookup_timeout = None
 
         self.write_ttl()
-        current().add_timeout(2, self.on_ready_streams_lookup)
 
     def add_connection(self, connection):
         connection.on("frame", self.on_frame)
@@ -95,13 +95,14 @@ class Center(EventEmitter):
 
         if stream not in self.ready_streams:
             self.ready_streams.append(stream)
+            if not self.ready_streams_lookup_timeout:
+                current().add_timeout(2, self.on_ready_streams_lookup)
 
         def do_stream_write():
             if not self.ready_streams:
                 return
 
             self.sort_stream()
-
             if self.drain_connections and self.wait_reset_frames is None:
                 if self.frames:
                     self.write_frame()
@@ -406,42 +407,43 @@ class Center(EventEmitter):
         if self.closed:
             return
 
-        if self.ttl_changing:
-            self.on_ttl_ack(5000)
+        try:
+            if self.ttl_changing:
+                self.on_ttl_ack(5000)
 
-        now = time.time()
-        require_write = False
+            now = time.time()
+            require_write = False
 
-        if last_write_ttl_time and last_send_index and last_recv_index:
-            p_send_index = self.send_index - last_send_index
-            p_recv_index = self.recv_index - last_recv_index
-            if self.ttl > 2000 and now - last_write_ttl_time >= 8:
+            if last_write_ttl_time and last_send_index and last_recv_index:
+                p_send_index = self.send_index - last_send_index
+                p_recv_index = self.recv_index - last_recv_index
+                if self.ttl > 2000 and now - last_write_ttl_time >= 8:
+                    require_write = True
+                elif self.ttl > 1000 and now - last_write_ttl_time >= 13:
+                    require_write = True
+                elif (p_send_index >= 2872 or p_recv_index >= 2872) and now - last_write_ttl_time >= 3:
+                    require_write = True
+                elif (p_send_index >= 718 or p_recv_index >= 718) and now - last_write_ttl_time >= 8:
+                    require_write = True
+                elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
+                    require_write = True
+                elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 28:
+                    require_write = True
+                elif now - last_write_ttl_time >= random.randint(58, 118):
+                    require_write = True
+            else:
                 require_write = True
-            elif self.ttl > 1000 and now - last_write_ttl_time >= 13:
-                require_write = True
-            elif (p_send_index >= 2872 or p_recv_index >= 2872) and now - last_write_ttl_time >= 3:
-                require_write = True
-            elif (p_send_index >= 718 or p_recv_index >= 718) and now - last_write_ttl_time >= 8:
-                require_write = True
-            elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
-                require_write = True
-            elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 28:
-                require_write = True
-            elif now - last_write_ttl_time >= random.randint(58, 118):
-                require_write = True
-        else:
-            require_write = True
 
-        if require_write:
-            self.ttl_index += 1
-            if self.ttl_index > 0xffffffff:
-                self.ttl_index = 0
-            data = struct.pack("!QI", int(now * 1000000), self.ttl_index)
-            self.write_action(ACTION_TTL, data, index=0)
-            self.ttl_changing = True
-            last_write_ttl_time = now
-
-        current().add_timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
+            if require_write:
+                self.ttl_index += 1
+                if self.ttl_index > 0xffffffff:
+                    self.ttl_index = 0
+                data = struct.pack("!QI", int(now * 1000000), self.ttl_index)
+                self.write_action(ACTION_TTL, data, index=0)
+                self.ttl_changing = True
+                last_write_ttl_time = now
+        finally:
+            current().add_timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
 
     def on_ttl_ack(self, ack_time):
         self.ttl_changing = False
@@ -457,8 +459,10 @@ class Center(EventEmitter):
 
     def on_ready_streams_lookup(self):
         self.sort_stream()
-        if not self.closed:
-            current().add_timeout(1, self.on_ready_streams_lookup)
+        if self.ready_streams and not self.closed:
+            self.ready_streams_lookup_timeout = current().add_timeout(1, self.on_ready_streams_lookup)
+        else:
+            self.ready_streams_lookup_timeout = None
 
     def close(self):
         if not self.closed:
