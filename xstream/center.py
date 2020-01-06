@@ -96,7 +96,7 @@ class Center(EventEmitter):
         if stream not in self.ready_streams:
             self.ready_streams.append(stream)
             if not self.ready_streams_lookup_timeout:
-                current().add_timeout(2, self.on_ready_streams_lookup)
+                self.ready_streams_lookup_timeout = current().add_timeout(2, self.on_ready_streams_lookup)
 
         def do_stream_write():
             if not self.ready_streams:
