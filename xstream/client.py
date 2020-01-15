@@ -408,12 +408,15 @@ class Client(EventEmitter):
 
         if connection.is_connected_xstream and not connection.is_connected_session:
             self._fork_auth_fail_count += 1
-            if self._fork_auth_fail_count >= 3:
+            if self._fork_auth_fail_count >= 2:
                 self.remove_session()
                 if self._session:
                     self._session.close()
                 logging.info("xstream session reauth %s %s", connection, self.session)
-        elif self.running:
+                logging.info("xstream connection close %s %s", connection, len(self._connections))
+                return 
+
+        if self.running:
             if connection.is_connected_session:
                 delay_rate, connect_next = 1, False
                 if conn and conn._rdata_count and conn._expried_data:
@@ -439,7 +442,7 @@ class Client(EventEmitter):
                 else :
                     current().add_timeout(10, self.init_connection, False)
                 logging.info("xstream connection connect error reinit_connection %s %s", len(self._connections), self._reconnect_count)
-            elif self._reconnect_count < 5:
+            elif self._reconnect_count < 60:
                 self._reconnect_count += 1
                 current().add_timeout(self._reconnect_count, self.init_connection, False)
                 logging.info("xstream connection close reinit_connection %s %s", len(self._connections), self._reconnect_count)
