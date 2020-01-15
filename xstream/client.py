@@ -432,6 +432,13 @@ class Client(EventEmitter):
                         connect_next = True
                 current().add_async(self.init_connection, True, delay_rate, connect_next)
                 logging.info("xstream connection close init_connection %s %s %s", len(self._connections), delay_rate, connect_next)
+            elif not connection.is_connected_xstream and self._reconnect_count < 30:
+                self._reconnect_count += 1
+                if isinstance(self._host, (tuple, list, set)):
+                    current().add_timeout(10 if self._reconnect_count >= len(self._host) else 1, self.init_connection, False)
+                else :
+                    current().add_timeout(10, self.init_connection, False)
+                logging.info("xstream connection connect error reinit_connection %s %s", len(self._connections), self._reconnect_count)
             elif self._reconnect_count < 5:
                 self._reconnect_count += 1
                 current().add_timeout(self._reconnect_count, self.init_connection, False)
