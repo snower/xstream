@@ -414,7 +414,7 @@ class Client(EventEmitter):
                     self._session.close()
                 logging.info("xstream session reauth %s %s", connection, self.session)
                 logging.info("xstream connection close %s %s", connection, len(self._connections))
-                return 
+                return
 
         if self.running:
             if connection.is_connected_session:
@@ -442,7 +442,7 @@ class Client(EventEmitter):
                 else :
                     current().add_timeout(10, self.init_connection, False)
                 logging.info("xstream connection connect error reinit_connection %s %s", len(self._connections), self._reconnect_count)
-            elif self._reconnect_count < 60:
+            elif self._reconnect_count < 30:
                 self._reconnect_count += 1
                 current().add_timeout(self._reconnect_count, self.init_connection, False)
                 logging.info("xstream connection close reinit_connection %s %s", len(self._connections), self._reconnect_count)
