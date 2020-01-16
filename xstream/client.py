@@ -297,7 +297,7 @@ class Client(EventEmitter):
         def on_timeout():
             if not connection.is_connected_session:
                 connection.close()
-        current().add_timeout(5, on_timeout)
+        current().add_timeout(15, on_timeout)
         return connection
 
     def on_fork_connect(self, connection):
@@ -408,11 +408,11 @@ class Client(EventEmitter):
 
         if connection.is_connected_xstream and not connection.is_connected_session:
             self._fork_auth_fail_count += 1
-            if self._fork_auth_fail_count >= 2:
+            if self._fork_auth_fail_count >= 4:
                 self.remove_session()
                 if self._session:
                     self._session.close()
-                logging.info("xstream session reauth %s %s", connection, self.session)
+                logging.info("xstream session reauth %s %s", connection, self._session)
                 logging.info("xstream connection close %s %s", connection, len(self._connections))
                 return
 
