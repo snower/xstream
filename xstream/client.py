@@ -406,9 +406,9 @@ class Client(EventEmitter):
         if self._connecting == connection:
             self._connecting = None
 
-        if connection.is_connected_xstream and not connection.is_connected_session:
+        if connection.is_connected_xstream and not connection.is_connected_session and not self._connections:
             self._fork_auth_fail_count += 1
-            if self._fork_auth_fail_count >= 4:
+            if self._fork_auth_fail_count > 8:
                 self.remove_session()
                 if self._session:
                     self._session.close()

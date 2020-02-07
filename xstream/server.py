@@ -274,6 +274,9 @@ class Server(EventEmitter):
                                               '\x02\x00', struct.pack("!H", len(data)), data,
                                               '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', auth, key[28:], rand_string(8)]))
 
+                    if not is_loaded_session and session._status == 0x01:
+                        is_loaded_session = True
+
                     def add_connection(conn):
                         connection = session.add_connection(conn)
                         if connection:
