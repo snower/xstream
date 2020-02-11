@@ -9,6 +9,7 @@ import struct
 import socket
 from collections import deque
 from sevent import EventEmitter, current, Buffer
+from sevent.errors import SocketClosed
 from crypto import rand_string
 from utils import format_data_len
 from .frame import Frame, StreamFrame
@@ -137,7 +138,10 @@ class Connection(EventEmitter):
 
             self._wdata_count += len(data)
             self._wpdata_count += 1
-            self._connection.write(self._wbuffer.write(data))
+            try:
+                self._connection.write(self._wbuffer.write(data))
+            except SocketClosed:
+                pass
             self._flush_buffer.clear()
             self._wdata_len = 0
 
@@ -156,7 +160,10 @@ class Connection(EventEmitter):
         self._wdata_count += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1
-        return self._connection.write(self._wbuffer.write(data))
+        try:
+            return self._connection.write(self._wbuffer.write(data))
+        except SocketClosed:
+            return False
 
     def on_action(self, action, data):
         if action == ACTION_PING:

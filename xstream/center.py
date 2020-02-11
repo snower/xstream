@@ -61,10 +61,10 @@ class Center(EventEmitter):
             else:
                 send_frames.append(send_frame)
         self.send_frames = send_frames
-        current().add_async(self.write_frame)
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
+        current().add_async(self.write_frame)
 
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
@@ -141,19 +141,18 @@ class Center(EventEmitter):
 
     def get_write_connection_frame(self, connection):
         frame = self.frames.pop(0)
-        if frame.index > 0 and frame.index <= self.ack_index:
-            while frame.index > 0 and frame.index <= self.ack_index:
-                if not self.frames:
-                    return None
-                frame = self.frames.pop(0)
+        while frame.index <= self.ack_index and frame.index > 0:
+            if not self.frames:
+                return None
+            frame = self.frames.pop(0)
 
         if connection == frame.connection:
             frames = []
             while frame and connection == frame.connection:
                 bisect.insort(frames, frame)
                 frame = self.frames.pop(0) if self.frames else None
-            if frames:
-                self.frames = frames + self.frames
+            frames.extend(self.frames)
+            self.frames = frames
         return frame
 
     def write_next(self, connection, frame = None, first_write = True):
