@@ -54,10 +54,13 @@ class Center(EventEmitter):
         connection.on("drain", self.on_drain)
 
     def remove_connection(self, connection):
+        send_frames = []
         for send_frame in self.send_frames:
             if connection == send_frame.connection:
                 bisect.insort(self.frames, send_frame)
-                self.send_frames.remove(send_frame)
+            else:
+                send_frames.append(send_frame)
+        self.send_frames = send_frames
         current().add_async(self.write_frame)
 
         if connection in self.drain_connections:
@@ -384,10 +387,13 @@ class Center(EventEmitter):
             frame.ack_time = time.time()
 
         if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
+            send_frames = []
             for send_frame in self.send_frames:
                 if frame.connection == send_frame.connection:
                     bisect.insort(self.frames, send_frame)
-                    self.send_frames.remove(send_frame)
+                else:
+                    send_frames.append(send_frame)
+            self.send_frames = send_frames
             if frame.connection and frame.connection._connection and frame.send_timeout_count < 3:
                 connection = frame.connection._connection
                 connection.close()
