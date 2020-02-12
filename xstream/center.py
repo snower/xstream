@@ -158,8 +158,8 @@ class Center(EventEmitter):
         if connection == frame.connection:
             frames = []
             while frame and connection == frame.connection:
-                if not self.frames or frame.index >= self.frames[-1].index:
-                    self.frames.append(frame)
+                if not frames or frame.index >= frames[-1].index:
+                    frames.append(frame)
                 else:
                     bisect.insort(frames, frame)
                 frame = self.frames.pop(0) if self.frames else None
