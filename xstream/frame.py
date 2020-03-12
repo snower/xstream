@@ -30,11 +30,11 @@ class Frame(object):
 
     @classmethod
     def loads(cls, data, connection=None):
-        if data[11] == '\x00' and len(data) >= 18:
+        if data[11] == '\x00' and len(data) >= 16:
             unpack_data = struct.unpack("!BHBIHBHBB", data[1:16])
-            stream_frame = StreamFrame(*unpack_data[6:], data=data[16:-2])
+            stream_frame = StreamFrame(*unpack_data[6:], data=data[16:])
             return Frame(*unpack_data[:6], data=stream_frame, connection=connection)
-        return Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:-2], connection=connection)
+        return Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=connection)
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)

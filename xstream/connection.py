@@ -107,35 +107,36 @@ class Connection(EventEmitter):
                 self._data_len = 5
                 data = self._crypto.decrypt(data)
 
-                if data[-2:] != '\x0f\x0f':
-                    logging.info("xstream session %s connection %s verify error", self._session, self)
-                    return self._connection.close()
-
                 action = ord(data[0])
                 if action == 0:
                     self.emit_frame(self, data)
                     self._rfdata_count += 1
                 else:
-                    self.on_action(action, data[1:-2])
+                    self.on_action(action, data[1:])
                 self._rdata_count += len(data) + 5
                 read_count += 1
 
     def flush(self):
         if not self._closed:
-            data = ''
+            data = []
             while self._flush_buffer:
                 feg = self._flush_buffer.popleft()
                 if feg.__class__ == Frame:
                     if feg.data.__class__ == StreamFrame:
-                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action,
-                                             feg.data.stream_id, feg.data.flag, feg.data.action), feg.data.data, '\x0f\x0f']))
+                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index,
+                                                                                feg.timestamp & 0xffff, feg.action, feg.data.stream_id,
+                                                                                feg.data.flag, feg.data.action), feg.data.data]))
                     else:
-                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index, feg.timestamp & 0xffff, feg.action), feg.data, '\x0f\x0f']))
+                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
+                                                                                feg.timestamp & 0xffff, feg.action), feg.data]))
                 else:
-                    feg = self._crypto.encrypt("".join(['\x00', feg, '\x0f\x0f']))
-                feg = "".join(['\x17\x03\x03', struct.pack("!H", len(feg)), feg])
-                data += feg
+                    feg = self._crypto.encrypt("".join(['\x00', feg]))
 
+                data.append('\x17\x03\x03')
+                data.append(struct.pack("!H", len(feg)))
+                data.append(feg)
+
+            data = "".join(data)
             self._wdata_count += len(data)
             self._wpdata_count += 1
             try:
@@ -155,7 +156,7 @@ class Connection(EventEmitter):
 
     def write_action(self, action, data=''):
         data += rand_string(random.randint(1, 1024))
-        data = self._crypto.encrypt("".join([struct.pack("!B", action), data, '\x0f\x0f']))
+        data = self._crypto.encrypt("".join([struct.pack("!B", action), data]))
         data = "".join(['\x17\x03\x03', struct.pack("!H", len(data)), data])
         self._wdata_count += len(data)
         self._wpdata_count += 1
