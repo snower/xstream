@@ -32,7 +32,7 @@ class Stream(EventEmitter):
         self._start_time = time.time()
         self._data_time = time.time()
 
-        self._send_buffer = None
+        self._send_buffer = Buffer()
         self._send_frames = deque()
         self._send_frame_count = 0
         self._send_data_len = 0
@@ -97,7 +97,7 @@ class Stream(EventEmitter):
 
     def remove_all_send_frames(self):
         self._send_frames = deque()
-        self._send_buffer = None
+        self._send_buffer.read()
 
     def do_write(self):
         if len(self._send_frames) <= 1 and self._send_buffer:
@@ -164,15 +164,8 @@ class Stream(EventEmitter):
                 return
 
             if data.__class__ == Buffer:
-                if data != self._send_buffer:
-                    if not self._send_buffer:
-                        self._send_buffer = data
-                    else:
-                        while data:
-                            self._send_buffer.write(data.next())
+                self._send_buffer.extend(data)
             else:
-                if self._send_buffer is None:
-                    self._send_buffer = Buffer()
                 self._send_buffer.write(data)
 
             if not self._send_is_set_ready:

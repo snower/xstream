@@ -42,7 +42,6 @@ class Connection(EventEmitter):
         self._data_len = 5
         self._wdata_len = 0
         self._flush_buffer = deque()
-        self._wbuffer = Buffer()
         self._wait_head = True
         self._wait_read = False
         self._closed = False
@@ -140,7 +139,7 @@ class Connection(EventEmitter):
             self._wdata_count += len(data)
             self._wpdata_count += 1
             try:
-                self._connection.write(self._wbuffer.write(data))
+                self._connection.write(data)
             except SocketClosed:
                 pass
             self._flush_buffer.clear()
@@ -162,7 +161,7 @@ class Connection(EventEmitter):
         self._wpdata_count += 1
         self._wfdata_count += 1
         try:
-            return self._connection.write(self._wbuffer.write(data))
+            return self._connection.write(data)
         except SocketClosed:
             return False
 
