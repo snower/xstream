@@ -74,8 +74,7 @@ class Connection(EventEmitter):
             self.loop.add_async(self.read, buffer)
 
     def on_drain(self, connection):
-        if not self._closed:
-            self.emit_drain(self)
+        self.emit_drain(self)
 
     def on_close(self, connection):
         self.emit_close(self)

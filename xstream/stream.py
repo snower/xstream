@@ -69,6 +69,10 @@ class Stream(EventEmitter):
     def capped(self):
         return self._capped
 
+    @property
+    def buffer(self):
+        return (self._recv_buffer, self._send_buffer)
+
     def on_data(self):
         self.emit_data(self, self._recv_buffer)
         self._recv_wait_emit = False

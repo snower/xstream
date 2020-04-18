@@ -127,7 +127,7 @@ class Center(EventEmitter):
             else:
                 bisect.insort(self.frames, frame)
             if not self.writing_connection:
-                current().add_async(self.write_frame)
+                self.write_frame()
         else:
             if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
                 self.wait_reset_frames.append(frame)
@@ -278,7 +278,7 @@ class Center(EventEmitter):
 
         if self.frames:
             if not self.writing_connection:
-                current().add_async(self.write_frame)
+                self.write_frame()
         else:
             while not self.frames and self.wait_reset_frames is None and self.ready_streams:
                 stream = self.ready_streams[0]
