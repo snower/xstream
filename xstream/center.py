@@ -10,8 +10,8 @@ import math
 from collections import deque
 import bisect
 from sevent import EventEmitter, current
-from frame import Frame
-from crypto import rand_string
+from .frame import Frame
+from .crypto import rand_string
 
 ACTION_ACK = 0x01
 ACTION_RESEND = 0x02
@@ -83,12 +83,7 @@ class Center(EventEmitter):
         return frame
 
     def sort_stream(self):
-        def cmp_stream(x, y):
-            c = cmp(x.priority, y.priority)
-            if c == 0:
-                c = cmp(x._start_time, y._start_time)
-            return c
-        self.ready_streams = sorted(self.ready_streams, cmp_stream)
+        self.ready_streams = sorted(self.ready_streams, key=lambda s: s.priority)
 
     def ready_write(self, stream, is_ready=True):
         if self.closed:
@@ -351,7 +346,7 @@ class Center(EventEmitter):
 
             self.on_ttl_ack(time.time() * 1000 - float(start_time) / 1000)
 
-    def write_action(self, action, data='', index=None):
+    def write_action(self, action, data=b'', index=None):
         if index is True:
             self.session.write_action(action, data, index, True)
         else:
@@ -401,7 +396,7 @@ class Center(EventEmitter):
 
             if len(data) <= 4 or max_recv_timeout >= max(self.ttl * 4 / 1000, 3) \
                     or len(data) <= (current_index - self.recv_index) * (0.48 / len(self.session._connections)):
-                self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + "".join(data), index=0)
+                self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
             
         if self.recv_frames and not self.closed:
             current().add_timeout(min(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)

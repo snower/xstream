@@ -71,7 +71,7 @@ def get_cryptography():
         return os.urandom(length)
 
     def sign_string(data):
-        d = ''
+        d = b''
         for t in (MD5, SHA1, MD5):
             s = Hash(t(), backend=backend)
             s.update(data + d)
@@ -97,7 +97,7 @@ def get_m2crypto():
         return Rand.rand_bytes(length)
 
     def sign_string(data):
-        d = ''
+        d = b''
         for t in ("md5", "sha1", "md5"):
             s = EVP.MessageDigest(t)
             s.update(data + d)
@@ -122,7 +122,7 @@ def get_openssl():
         return os.urandom(length)
 
     def sign_string(data):
-        d = ''
+        d = b''
         for t in (hashlib.md5, hashlib.sha1, hashlib.md5):
             s = t()
             s.update(data + d)
@@ -142,21 +142,21 @@ else:
     get_evp, rand_string, sign_string, bytes_to_key_digest = get_openssl()
 
 def xor_string(key, data, encrypt=True):
-    if isinstance(key, basestring):
+    if isinstance(key, str):
         key = ord(key[0])
-    result = []
+    result = bytearray()
     iv = 0
     if encrypt:
         for c in data:
-            r = (ord(c) ^ iv) ^ key
-            result.append(chr(r))
-            iv = ord(c)
+            r = (c ^ iv) ^ key
+            result.append(r)
+            iv = c
     else:
         for c in data:
-            r = (ord(c) ^ key) ^ iv
-            result.append(chr(r))
+            r = (c ^ key) ^ iv
+            result.append(r)
             iv = r
-    return "".join(result)
+    return bytes(result)
 
 def get_crypto_time(t = None):
     if t is None:
@@ -193,7 +193,7 @@ class Crypto(object):
         self._key=key
         self._alg=alg
 
-    def init_encrypt(self, crypto_time, secret=None, session_secret = ""):
+    def init_encrypt(self, crypto_time, secret=None, session_secret=b""):
         if isinstance(secret, tuple):
             self._ensecret = secret
         else:
@@ -203,9 +203,9 @@ class Crypto(object):
             self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
             self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
             1)
-        return  "".join(self._ensecret)
+        return b"".join(self._ensecret)
 
-    def init_decrypt(self, crypto_time, secret, session_secret = ""):
+    def init_decrypt(self, crypto_time, secret, session_secret=b""):
         if isinstance(secret, tuple):
             self._ensecret = secret
         else:
@@ -223,11 +223,12 @@ class Crypto(object):
         return self._decipher.update(data)
 
     def bytes_to_key(self, salt, crypto_time, key_len):
-        key = self._key.encode('utf-8') if isinstance(self._key, unicode) else self._key
-        d1, d2 = key, ''
+        crypto_time = str(crypto_time).encode("utf-8")
+        key = self._key.encode('utf-8')
+        d1, d2 = key, b''
         for i in range(5):
             s = bytes_to_key_digest()
-            s.update("".join([d1, key, salt, str(crypto_time)]))
+            s.update(b"".join([d1, key, salt, crypto_time]))
             d2=d1
             d1=s.digest()
         return (d1+d2)[:key_len]

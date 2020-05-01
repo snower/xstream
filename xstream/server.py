@@ -12,9 +12,9 @@ import hashlib
 import pickle
 import base64
 from sevent import EventEmitter, tcp, current
-from session import Session
-from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
-from frame import StreamFrame
+from .session import Session
+from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from .frame import StreamFrame
 
 class Server(EventEmitter):
     def __init__(self, port, host='0.0.0.0', crypto_key='', crypto_alg=''):
@@ -37,7 +37,7 @@ class Server(EventEmitter):
         self._used_session_ids = {}
         self._sessions = {}
         self._current_session_id = 1
-        self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
+        self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
         self._fork_auth_fail_count = 0
 
@@ -65,7 +65,7 @@ class Server(EventEmitter):
         now = time.time()
         for filename in os.listdir(session_path + "/"):
             try:
-                with open(session_path + "/" + filename) as fp:
+                with open(session_path + "/" + filename, encoding="utf-8") as fp:
                     session = pickle.loads(base64.b64decode(fp.read()))
                     if not session["is_server"]:
                         continue
@@ -90,7 +90,7 @@ class Server(EventEmitter):
                 os.makedirs(session_path + "/")
             session_key = self.get_session_key(session_id)
             if os.path.exists(session_path + "/" + session_key):
-                with open(session_path + "/" + session_key) as fp:
+                with open(session_path + "/" + session_key, encoding="utf-8") as fp:
                     session = Session.loads(fp.read())
                     if session:
                         logging.info("xstream load session %s %s", self, session)
@@ -105,7 +105,7 @@ class Server(EventEmitter):
             os.makedirs(session_path + "/")
         session_key = self.get_session_key(session.id)
         session = session.dumps()
-        with open(session_path + "/" + session_key, "w") as fp:
+        with open(session_path + "/" + session_key, "w", encoding="utf-8") as fp:
             fp.write(session)
 
     def start(self):
@@ -130,9 +130,9 @@ class Server(EventEmitter):
 
     def on_data(self, connection, data):
         connection.is_connected_dataed = True
-        datas = str(data)
+        datas = data.join()
         action = datas[2]
-        if action == '\x01':
+        if action == 1:
             self.on_open_session(connection, data, datas)
         else:
             self.on_fork_connection(connection, data, datas)
@@ -153,19 +153,19 @@ class Server(EventEmitter):
             crypto.init_decrypt(crypto_time, key)
 
             auth_key = crypto.decrypt(auth_key)
-            if abs(crypto_time - time.time()) < 1800 and auth == sign_string(self._crypto_key + key + auth_key + str(crypto_time)):
+            if abs(crypto_time - time.time()) < 1800 and auth == sign_string(self._crypto_key.encode("utf-8") + key + auth_key + str(crypto_time).encode("utf-8")):
                 crypto_time = int(time.time())
                 key = crypto.init_encrypt(crypto_time)
                 session = self.create_session(connection, auth_key, crypto)
                 self._sessions[session.id] = session
 
                 session_id = xor_string(crypto_time & 0xff, struct.pack("!H", session.id))
-                auth = crypto.encrypt(sign_string(self._crypto_key + key + auth_key + str(crypto_time)))
+                auth = crypto.encrypt(sign_string(self._crypto_key.encode("utf-8") + key + auth_key + str(crypto_time).encode("utf-8")))
 
-                data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth, key[28:], session_id, '\x00\x00'])
-                connection.write("".join(['\x16\x03\x01', struct.pack("!H", len(data) + 4),
-                                          '\x02\x00', struct.pack("!H", len(data)), data,
-                                          '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
+                data = b"".join([b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', auth, key[28:], session_id, b'\x00\x00'])
+                connection.write(b"".join([b'\x16\x03\x01', struct.pack("!H", len(data) + 4),
+                                          b'\x02\x00', struct.pack("!H", len(data)), data,
+                                          b'\x14\x03\x03\x00\x01\x01', b'\x16\x03\x03\x00\x28', rand_string(40)]))
 
                 session.on("close", self.on_session_close)
                 session.on("keychange", self.save_session)
@@ -251,7 +251,7 @@ class Server(EventEmitter):
                 key = crypto.decrypt(key)
 
                 if abs(crypto_time - time.time()) < 1800 and session.get_last_auth_time() < crypto_time \
-                        and auth == sign_string(self._crypto_key + key + session.auth_key + str(crypto_time)):
+                        and auth == sign_string(self._crypto_key.encode("utf-8") + key + session.auth_key + str(crypto_time).encode("utf-8")):
                     session.set_last_auth_time(crypto_time)
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     setattr(connection, "crypto_time", crypto_time)
@@ -259,20 +259,20 @@ class Server(EventEmitter):
 
                     crypto_time = int(time.time())
                     key = connection.crypto.init_encrypt(crypto_time)
-                    auth = sign_string(self._crypto_key + key + session.auth_key + str(crypto_time))
+                    auth = sign_string(self._crypto_key.encode("utf-8") + key + session.auth_key + str(crypto_time).encode("utf-8"))
 
                     crypto = session.get_encrypt_crypto(crypto_time)
                     key = crypto.encrypt(key)
 
-                    data = "".join(['\x00\x05\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+                    data = b"".join([b'\x00\x05\x00\x00', b'\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
-                    data = "".join(
-                        ['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', fork_auth_session_id,
-                         xsession_id, '\x00', struct.pack("!H", len(data)), data])
+                    data = b"".join(
+                        [b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', fork_auth_session_id,
+                         xsession_id, b'\x00', struct.pack("!H", len(data)), data])
 
-                    connection.write("".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4),
-                                              '\x02\x00', struct.pack("!H", len(data)), data,
-                                              '\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', auth, key[28:], rand_string(8)]))
+                    connection.write(b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4),
+                                              b'\x02\x00', struct.pack("!H", len(data)), data,
+                                              b'\x14\x03\x03\x00\x01\x01', b'\x16\x03\x03\x00\x28', auth, key[28:], rand_string(8)]))
 
                     if not is_loaded_session and session._status == 0x01:
                         is_loaded_session = True

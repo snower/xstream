@@ -8,9 +8,9 @@ import math
 import logging
 from collections import deque
 from sevent import EventEmitter, current, Buffer
-from frame import StreamFrame
-from crypto import  rand_string
-from utils import format_data_len
+from .frame import StreamFrame
+from .crypto import  rand_string
+from .utils import format_data_len
 
 ACTION_OPEN  = 1
 ACTION_OPENED = 2
@@ -175,7 +175,7 @@ class Stream(EventEmitter):
             if not self._send_is_set_ready:
                 self.loop.add_async(self.on_write)
 
-    def write_action(self, action, data=''):
+    def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 256 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
         self.loop.add_async(self._session.write, frame)

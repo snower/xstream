@@ -10,9 +10,9 @@ import math
 import random
 import hashlib
 from sevent import EventEmitter, current, tcp
-from session import Session
-from crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
-from frame import StreamFrame
+from .session import Session
+from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from .frame import StreamFrame
 
 class Client(EventEmitter):
     def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
@@ -25,7 +25,7 @@ class Client(EventEmitter):
         self._connections = []
         self._session = None
         self._auth_key = None
-        self._crypto_key = crypto_key.encode("utf-8") if isinstance(crypto_key, unicode) else crypto_key
+        self._crypto_key = crypto_key
         self._crypto_alg = crypto_alg
         self.fork_auth_session_id = rand_string(32)
         self._connecting = None
@@ -63,7 +63,7 @@ class Client(EventEmitter):
 
         try:
             if os.path.exists(session_path + "/" + session_key):
-                with open(session_path + "/" + session_key) as fp:
+                with open(session_path + "/" + session_key, encoding="utf-8") as fp:
                     session = Session.loads(fp.read())
                     if session:
                         self._auth_key = session.auth_key
@@ -83,7 +83,7 @@ class Client(EventEmitter):
         session_key = self.get_session_key()
         session = self._session.dumps()
         if session:
-            with open(session_path + "/" + session_key, "w") as fp:
+            with open(session_path + "/" + session_key, "w", encoding="utf-8") as fp:
                 fp.write(session)
             self.init_connection()
             logging.info("xstream save session %s %s %s", self, session_key, self._session)
@@ -231,9 +231,9 @@ class Client(EventEmitter):
         crypto_time = int(time.time())
         key = connection.crypto.init_encrypt(crypto_time)
         auth_key = connection.crypto.encrypt(self._auth_key)
-        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
-        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, '\x01\x00\x00'])
-        connection.write("".join(['\x16\x03\x01', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
+        auth = sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8"))
+        data = b"".join([b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, b'\x01\x00\x00'])
+        connection.write(b"".join([b'\x16\x03\x01', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
         logging.info("xstream auth connection connect %s", connection)
 
     def on_data(self, connection, data):
@@ -249,7 +249,7 @@ class Client(EventEmitter):
         self.opening = False
         connection.crypto.init_decrypt(crypto_time, key)
         auth = connection.crypto.decrypt(auth)
-        if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
+        if auth == sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8")):
             self._session = Session(session_id, self._auth_key, False, connection.crypto, StreamFrame.FRAME_LEN)
             self._session.on("close", self.on_session_close)
             self._session.on("keychange", lambda session: self.save_session())
@@ -308,22 +308,22 @@ class Client(EventEmitter):
         session_id = xor_string(crypto_time & 0xff, struct.pack("!H", self._session.id))
 
         key = connection.crypto.init_encrypt(crypto_time)
-        auth = sign_string(self._crypto_key + key + self._auth_key + str(crypto_time))
+        auth = sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8"))
 
         crypto = self._session.get_encrypt_crypto(crypto_time)
         key = crypto.encrypt(key)
 
-        data = "".join(['\x00\x23\x00\xc0', auth, key[28:], rand_string(160), '\x00\x05\x00\x05\x01\x00\x00\x00\x00', '\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+        data = b"".join([b'\x00\x23\x00\xc0', auth, key[28:], rand_string(160), b'\x00\x05\x00\x05\x01\x00\x00\x00\x00', b'\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
-        ciphres = "".join(
-            [session_id, '\xc0\x2b', '\xc0\x2c', '\xc0\x2f', '\xc0\x30', '\xcc\xa9', '\xcc\xa8', '\xc0\x13', '\xc0\x14',
-             '\x00\x9c', '\x00\x9d', '\x00\x2f', '\x00\x35', '\x00\x0a'])
+        ciphres = b"".join(
+            [session_id, b'\xc0\x2b', b'\xc0\x2c', b'\xc0\x2f', b'\xc0\x30', b'\xcc\xa9', b'\xcc\xa8', b'\xc0\x13', b'\xc0\x14',
+             b'\x00\x9c', b'\x00\x9d', b'\x00\x2f', b'\x00\x35', b'\x00\x0a'])
 
-        data = "".join(['\x03\x03', struct.pack("!I", crypto_time), key[:28], '\x20', self.fork_auth_session_id,
-                        struct.pack("!H", len(ciphres)), ciphres, '\x01\x00', struct.pack("!H", len(data)), data])
+        data = b"".join([b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', self.fork_auth_session_id,
+                        struct.pack("!H", len(ciphres)), ciphres, b'\x01\x00', struct.pack("!H", len(data)), data])
 
         connection.write(
-            "".join(['\x16\x03\x03', struct.pack("!H", len(data) + 4), '\x01\x00', struct.pack("!H", len(data)), data]))
+            b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
 
         connection.is_connected_xstream = True
 
@@ -338,7 +338,7 @@ class Client(EventEmitter):
             extensions_len, = struct.unpack("!H", data.read(2))
             data.read(extensions_len)
 
-            last_data = str(data)
+            last_data = data.join()
             auth = last_data[11:27]
             key += last_data[27:43]
 
@@ -358,12 +358,12 @@ class Client(EventEmitter):
         crypto = self._session.get_decrypt_crypto(crypto_time)
         key = crypto.decrypt(key)
 
-        if auth == sign_string(self._crypto_key + key + self._auth_key + str(crypto_time)):
+        if auth == sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8")):
             self._session.set_last_auth_time(crypto_time)
             setattr(connection, "crypto_time", crypto_time)
             connection.crypto.init_decrypt(crypto_time, key)
 
-            connection.write("".join(['\x14\x03\x03\x00\x01\x01', '\x16\x03\x03\x00\x28', rand_string(40)]))
+            connection.write(b"".join([b'\x14\x03\x03\x00\x01\x01', b'\x16\x03\x03\x00\x28', rand_string(40)]))
 
             def add_connection(conn):
                 connection = self._session.add_connection(conn)

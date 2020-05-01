@@ -24,13 +24,13 @@ class Frame(object):
 
     def dumps(self):
         if self.data.__class__ == StreamFrame:
-            return "".join([struct.pack("!BHBIHBHBB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
+            return b"".join([struct.pack("!BHBIHBHBB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
                                         self.data.stream_id, self.data.flag, self.data.action), self.data.data])
-        return "".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
+        return b"".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
 
     @classmethod
     def loads(cls, data, connection=None):
-        if data[11] == '\x00' and len(data) >= 16:
+        if data[11] == 0 and len(data) >= 16:
             unpack_data = struct.unpack("!BHBIHBHBB", data[1:16])
             stream_frame = StreamFrame(*unpack_data[6:], data=data[16:])
             return Frame(*unpack_data[:6], data=stream_frame, connection=connection)
@@ -66,7 +66,7 @@ class Frame(object):
         return int(time.time() * 1000) - self.timestamp
 
     def close(self):
-        self.data = ''
+        self.data = b''
 
 class StreamFrame(object):
     HEADER_LEN = 23
@@ -79,7 +79,7 @@ class StreamFrame(object):
         self.data = data
 
     def dumps(self):
-        return "".join([struct.pack("!HBB", self.stream_id, self.flag, self.action), self.data])
+        return b"".join([struct.pack("!HBB", self.stream_id, self.flag, self.action), self.data])
 
     @classmethod
     def loads(cls, data):

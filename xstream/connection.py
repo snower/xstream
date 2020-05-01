@@ -10,8 +10,8 @@ import socket
 from collections import deque
 from sevent import EventEmitter, current, Buffer
 from sevent.errors import SocketClosed
-from crypto import rand_string
-from utils import format_data_len
+from .crypto import rand_string
+from .utils import format_data_len
 from .frame import Frame, StreamFrame
 
 ACTION_PING = 0x01
@@ -105,7 +105,7 @@ class Connection(EventEmitter):
                 self._data_len = 5
                 data = self._crypto.decrypt(data)
 
-                action = ord(data[0])
+                action = data[0]
                 if action == 0:
                     self.emit_frame(self, data)
                     self._rfdata_count += 1
@@ -121,20 +121,20 @@ class Connection(EventEmitter):
                 feg = self._flush_buffer.popleft()
                 if feg.__class__ == Frame:
                     if feg.data.__class__ == StreamFrame:
-                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index,
+                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action, feg.data.stream_id,
                                                                                 feg.data.flag, feg.data.action), feg.data.data]))
                     else:
-                        feg = self._crypto.encrypt("".join(['\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
+                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action), feg.data]))
                 else:
-                    feg = self._crypto.encrypt("".join(['\x00', feg]))
+                    feg = self._crypto.encrypt(b"".join([b'\x00', feg]))
 
-                data.append('\x17\x03\x03')
+                data.append(b'\x17\x03\x03')
                 data.append(struct.pack("!H", len(feg)))
                 data.append(feg)
 
-            data = "".join(data)
+            data = b"".join(data)
             self._wdata_count += len(data)
             self._wpdata_count += 1
             try:
@@ -152,10 +152,10 @@ class Connection(EventEmitter):
             return self._session._mss - self._wdata_len
         return 0
 
-    def write_action(self, action, data=''):
+    def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 1024))
-        data = self._crypto.encrypt("".join([struct.pack("!B", action), data]))
-        data = "".join(['\x17\x03\x03', struct.pack("!H", len(data)), data])
+        data = self._crypto.encrypt(b"".join([struct.pack("!B", action), data]))
+        data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
         self._wdata_count += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1

@@ -10,10 +10,11 @@ import struct
 import pickle
 import socket
 from sevent import EventEmitter, current, tcp
-from crypto import Crypto, rand_string
-from connection import Connection
-from center import Center
-from stream import Stream, StreamFrame
+from .crypto import Crypto, rand_string
+from .connection import Connection
+from .center import Center
+from .stream import Stream
+from .frame import StreamFrame
 
 STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
@@ -32,7 +33,7 @@ class Session(EventEmitter):
         self._crypto_ensecret = crypto._ensecret
         self._crypto_desecret = crypto._desecret
         self._crypto = crypto
-        self._current_crypto_key =  '0' * 64
+        self._current_crypto_key = b'0' * 64
         self._last_auth_time = 0
         self._mss = mss
         self._key_change = False
@@ -79,7 +80,7 @@ class Session(EventEmitter):
             "key_change": self._key_change,
             "mss": self._mss,
             "t": time.time()
-        }))
+        })).decode("utf-8")
 
     @classmethod
     def loads(cls, s):
@@ -208,7 +209,7 @@ class Session(EventEmitter):
     def on_controll_data(self, stream, buffer):
         data = buffer.next()
         while data:
-            self.on_action(ord(data[0]), data[1:])
+            self.on_action(data[0], data[1:])
             data = buffer.next()
 
     def get_stream_id(self):
@@ -311,7 +312,7 @@ class Session(EventEmitter):
                 self.emit_keychange(self)
                 logging.info("xstream session %s key change", self)
 
-    def write_action(self, action, data='', index=None, center = False):
+    def write_action(self, action, data=b'', index=None, center=False):
         if self._status == STATUS_CLOSED:
             return
 
@@ -319,7 +320,7 @@ class Session(EventEmitter):
             self._center.write_action(action | 0x80, data, 0)
         else:
             data += rand_string(random.randint(1, 256))
-            action = chr(action) if center else chr(action | 0x80)
+            action = struct.pack("!B", action if center else action | 0x80)
             self._controll_stream.write(action + data)
 
     def start_key_change(self):
