@@ -318,7 +318,7 @@ class Server(EventEmitter):
     def on_check_session_timeout(self):
         try:
             now = time.time()
-            for session_id, session in self._sessions.items():
+            for session_id, session in tuple(self._sessions.items()):
                 if now - session._data_time >= 15 * 60:
                     try:
                         session.close()

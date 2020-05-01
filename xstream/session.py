@@ -358,7 +358,7 @@ class Session(EventEmitter):
         if not self._streams:
             return self.do_close()
             
-        for stream_id, stream in self._streams.items():
+        for stream_id, stream in tuple(self._streams.items()):
             stream.do_close()
 
     def do_close(self):
