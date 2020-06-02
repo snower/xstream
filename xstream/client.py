@@ -11,7 +11,7 @@ import random
 import hashlib
 from sevent import EventEmitter, current, tcp
 from .session import Session
-from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code, CIPHER_SUITES
 from .frame import StreamFrame
 
 class Client(EventEmitter):
@@ -305,7 +305,16 @@ class Client(EventEmitter):
             return connection.close()
 
         crypto_time = int(time.time())
-        session_id = xor_string(crypto_time & 0xff, struct.pack("!H", self._session.id))
+        cipher_suites = {cs: True for cs in CIPHER_SUITES}
+        session_id = self._session.id
+        rcipher_suites = [struct.pack("!H", session_id)]
+        while cipher_suites:
+            cs = random.choice(list(cipher_suites.keys()))
+            cipher_suites.pop(cs)
+            if cs == session_id:
+                continue
+            rcipher_suites.append(struct.pack("!H", cs))
+        ciphres = b"".join(rcipher_suites)
 
         key = connection.crypto.init_encrypt(crypto_time)
         auth = sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8"))
@@ -313,17 +322,18 @@ class Client(EventEmitter):
         crypto = self._session.get_encrypt_crypto(crypto_time)
         key = crypto.encrypt(key)
 
-        data = b"".join([b'\x00\x23\x00\xc0', auth, key[28:], rand_string(160), b'\x00\x05\x00\x05\x01\x00\x00\x00\x00', b'\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
-
-        ciphres = b"".join(
-            [session_id, b'\xc0\x2b', b'\xc0\x2c', b'\xc0\x2f', b'\xc0\x30', b'\xcc\xa9', b'\xcc\xa8', b'\xc0\x13', b'\xc0\x14',
-             b'\x00\x9c', b'\x00\x9d', b'\x00\x2f', b'\x00\x35', b'\x00\x0a'])
+        data = b"".join([b'\x00\x23\x00\xb0', auth, key[28:], rand_string(144),
+                         b'\x00\x0b\x00\x04\x03\x00\x01\x02',
+                         b'\x00\x0a\x00\x0c\x00\x0a\x00\x1d\x00\x17\x00\x1e\x00\x19\x00\x18',
+                         b'\x00\x16\x00\x00', b'\x00\x17\x00\x00',
+                         b'\x00\x0d\x00\x30\x00\x2e\x04\x03\x05\x03\x06\x03\x08\x07\x08\x08\x08\x09\x08\x0a\x08\x0b\x08\x04\x08\x05\x08\x06\x04\x01\x05\x01\x06\x01\x03\x03\x02\x03\x03\x01\x02\x01\x03\x02\x02\x02\x04\x02\x05\x02\x06\x02',
+                         b'\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31',
+                         b'\x00\x2d\x00\x02\x01\x01', b'\x00\x33\x00\x26\x00\x24\x00\x1d\x00\x20', rand_string(32)])
 
         data = b"".join([b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', self.fork_auth_session_id,
                         struct.pack("!H", len(ciphres)), ciphres, b'\x01\x00', struct.pack("!H", len(data)), data])
 
-        connection.write(
-            b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
+        connection.write(b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
 
         connection.is_connected_xstream = True
 

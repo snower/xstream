@@ -30,6 +30,7 @@ class Session(EventEmitter):
         self._is_server = is_server
         self._session_id = session_id
         self._auth_key = auth_key
+        self._auth_cache = {}
         self._crypto_ensecret = crypto._ensecret
         self._crypto_desecret = crypto._desecret
         self._crypto = crypto
@@ -46,7 +47,7 @@ class Session(EventEmitter):
         self._center = Center(self)
         self._data_time = time.time()
         self._status = STATUS_INITED
-        self._controll_stream = self.create_stream(0, priority = 1, capped = True, expried_time = 0)
+        self._controll_stream = self.create_stream(0, priority=1, capped=True, expried_time=0)
         self._controll_stream.on("data", self.on_controll_data)
         self._center.on("frame", self.on_frame)
 

@@ -13,7 +13,7 @@ import pickle
 import base64
 from sevent import EventEmitter, tcp, current
 from .session import Session
-from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code
+from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code, CIPHER_SUITES
 from .frame import StreamFrame
 
 class Server(EventEmitter):
@@ -191,6 +191,12 @@ class Server(EventEmitter):
         return session
 
     def get_session_id(self):
+        for cs in CIPHER_SUITES:
+            if cs in self._used_session_ids:
+                continue
+            self._current_session_id = cs
+            return cs
+
         self._current_session_id = random.randint(0x0001, 0xffff)
         while self._current_session_id in self._used_session_ids:
             self._current_session_id = random.randint(0x0001, 0xffff)
@@ -205,8 +211,7 @@ class Server(EventEmitter):
             fork_auth_session_id = data.read(32)
             ciphres_len, = struct.unpack("!H", data.read(2))
             ciphres = data.read(ciphres_len)
-            xsession_id = xor_string(crypto_time & 0xff, ciphres[:2], False)
-            session_id, = struct.unpack("!H", xsession_id)
+            session_id, = struct.unpack("!H", ciphres[:2])
             data.read(2)
             extensions_len, = struct.unpack("!H", data.read(2))
             extensions = data.read(extensions_len)
@@ -252,6 +257,16 @@ class Server(EventEmitter):
 
                 if abs(crypto_time - time.time()) < 1800 and session.get_last_auth_time() < crypto_time \
                         and auth == sign_string(self._crypto_key.encode("utf-8") + key + session.auth_key + str(crypto_time).encode("utf-8")):
+
+                    for k, t in list(session._auth_cache.items()):
+                        if time.time() - t > 1800:
+                            session.pop(k)
+                    if key in session._auth_cache:
+                        logging.info("xstream connection auth reuse session closed %s %s %s", session_id, connection, time.time())
+                        connection.close()
+                        return
+                    session._auth_cache[key] = time.time()
+
                     session.set_last_auth_time(crypto_time)
                     setattr(connection, "crypto", Crypto(self._crypto_key, self._crypto_alg))
                     setattr(connection, "crypto_time", crypto_time)
@@ -264,11 +279,11 @@ class Server(EventEmitter):
                     crypto = session.get_encrypt_crypto(crypto_time)
                     key = crypto.encrypt(key)
 
-                    data = b"".join([b'\x00\x05\x00\x00', b'\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
+                    data = b"".join([b'\xff\x01\x00\x01\x00', b'\x00\x17\x00\x00', b'\x00\x10\x00\x05\x00\x03\x02\x68\x32'])
 
                     data = b"".join(
                         [b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', fork_auth_session_id,
-                         xsession_id, b'\x00', struct.pack("!H", len(data)), data])
+                         struct.pack("!H", session_id), b'\x00', struct.pack("!H", len(data)), data])
 
                     connection.write(b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4),
                                               b'\x02\x00', struct.pack("!H", len(data)), data,
