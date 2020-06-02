@@ -260,7 +260,7 @@ class Server(EventEmitter):
 
                     for k, t in list(session._auth_cache.items()):
                         if time.time() - t > 1800:
-                            session.pop(k)
+                            session._auth_cache.pop(k)
                     if key in session._auth_cache:
                         logging.info("xstream connection auth reuse session closed %s %s %s", session_id, connection, time.time())
                         connection.close()
