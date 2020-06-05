@@ -412,16 +412,20 @@ class Center(EventEmitter):
 
         if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
             send_frames = []
+            send_count = 0
             for send_frame in self.send_frames:
                 if frame.connection == send_frame.connection:
                     if not self.frames or send_frame.index >= self.frames[-1].index:
                         self.frames.append(send_frame)
                     else:
                         bisect.insort(self.frames, send_frame)
+                    send_count += 1
+                    if send_count >= 32:
+                        break
                 else:
                     send_frames.append(send_frame)
             self.send_frames = send_frames
-            if frame.connection and frame.connection._connection and frame.send_timeout_count < 3:
+            if frame.connection and frame.connection._connection and frame.send_timeout_count >= 2:
                 connection = frame.connection._connection
                 connection.close()
                 logging.info("xstream session %s center %s %s send timeout close %s %s %s %s", self.session, self, connection, frame.index, self.send_index, self.ack_index, frame.send_timeout_count)
