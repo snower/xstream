@@ -414,14 +414,12 @@ class Center(EventEmitter):
             send_frames = []
             send_count = 0
             for send_frame in self.send_frames:
-                if frame.connection == send_frame.connection:
+                if frame.connection == send_frame.connection and send_count < 32:
                     if not self.frames or send_frame.index >= self.frames[-1].index:
                         self.frames.append(send_frame)
                     else:
                         bisect.insort(self.frames, send_frame)
                     send_count += 1
-                    if send_count >= 32:
-                        break
                 else:
                     send_frames.append(send_frame)
             self.send_frames = send_frames
