@@ -46,6 +46,9 @@ class Center(EventEmitter):
         self.writing_connection = None
         self.waiting_read_frame = False
         self.ready_streams_lookup_timeout = None
+        self.droped_count = 0
+        self.resended_count = 0
+        self.merged_count = 0
 
         self.write_ttl()
 
@@ -198,6 +201,7 @@ class Center(EventEmitter):
                             self.writing_connection = connection
                             try:
                                 self.write_next(connection, frame, False)
+                                self.merged_count += 1
                             finally:
                                 self.writing_connection = None
                         else:
@@ -234,6 +238,8 @@ class Center(EventEmitter):
                 self.emit_frame(self, self.recv_frames[0])
                 self.recv_index += 1
                 read_frame_count += 1
+            else:
+                self.droped_count += 1
             self.recv_frames.pop(0)
 
     def on_frame(self, connection, data):
@@ -244,6 +250,7 @@ class Center(EventEmitter):
             return self.emit_frame(self, frame)
 
         if frame.index < self.recv_index or abs(frame.index - self.recv_index) > 0x7fffffff:
+            self.droped_count += 1
             return
 
         if frame.index == self.recv_index:
@@ -312,6 +319,7 @@ class Center(EventEmitter):
                             resend_frame_ids.append(frame.index)
                             frame.resend_time = now
                             frame.resend_count += 1
+                            self.resended_count += 1
                             break
                     waiting_frames.append(frame)
 
@@ -420,6 +428,7 @@ class Center(EventEmitter):
                     else:
                         bisect.insort(self.frames, send_frame)
                     send_count += 1
+                    self.resended_count += 1
                 else:
                     send_frames.append(send_frame)
             self.send_frames = send_frames
@@ -486,10 +495,11 @@ class Center(EventEmitter):
             self.ttls.pop(0)
         self.ttls.append(ack_time)
         self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-        logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) > ttl %s", self.session, self,
+        logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s) > ttl %s", self.session, self,
                      self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
                      self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,
                      self.recv_frames[-1].index if self.recv_frames else 0,
+                     self.droped_count, self.resended_count, self.merged_count,
                      self.ttl)
 
     def on_ready_streams_lookup(self):
