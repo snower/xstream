@@ -70,7 +70,7 @@ class Frame(object):
 
 class StreamFrame(object):
     HEADER_LEN = 23
-    FRAME_LEN = 1460 * 2 - HEADER_LEN
+    FRAME_LEN = 1440 * 2 - HEADER_LEN
 
     def __init__(self, stream_id, flag, action, data):
         self.stream_id = stream_id

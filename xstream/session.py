@@ -122,9 +122,10 @@ class Session(EventEmitter):
 
         for connection in self._connections:
             try:
-                mss = min((connection._connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1460) * 2 - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
+                mss = min((connection._connection._socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG) or 1440) * 2
+                          - StreamFrame.HEADER_LEN, StreamFrame.FRAME_LEN)
                 if mss < self._mss:
-                    self._mss = mss
+                    self._mss = mss if mss > 2793 else StreamFrame.FRAME_LEN
             except Exception as e:
                 logging.info("xstream update mss error %s", e)
 

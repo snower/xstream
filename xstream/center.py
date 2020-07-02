@@ -58,12 +58,14 @@ class Center(EventEmitter):
 
     def remove_connection(self, connection):
         send_frames = []
+        send_count = 0
         for send_frame in self.send_frames:
-            if connection == send_frame.connection:
+            if connection == send_frame.connection and send_count < 1024:
                 if not self.frames or send_frame.index >= self.frames[-1].index:
                     self.frames.append(send_frame)
                 else:
                     bisect.insort(self.frames, send_frame)
+                send_count += 1
             else:
                 send_frames.append(send_frame)
         self.send_frames = send_frames
