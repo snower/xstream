@@ -143,7 +143,7 @@ class Server(EventEmitter):
         if session_id == b'\x03\x03':
             session_id = 0
         else:
-            session_id, = struct.unpack("!I", session_id)
+            session_id, = struct.unpack("!H", session_id)
         crypto_time, = struct.unpack("!I", data.read(4))
         key = data.read(28)
         data.read(1)

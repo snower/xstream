@@ -233,7 +233,7 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt(crypto_time)
         auth_key = connection.crypto.encrypt(self._auth_key)
         auth = sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8"))
-        data = b"".join([struct.pack("!I", self._init_session_id) if self._init_session_id else b'\x03\x03', struct.pack("!I", crypto_time),
+        data = b"".join([struct.pack("!H", self._init_session_id) if self._init_session_id else b'\x03\x03', struct.pack("!I", crypto_time),
                          key[:28], b'\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, b'\x01\x00\x00'])
         connection.write(b"".join([b'\x16\x03\x01', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
         logging.info("xstream auth connection connect %s", connection)
