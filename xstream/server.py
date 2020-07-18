@@ -138,7 +138,12 @@ class Server(EventEmitter):
             self.on_fork_connection(connection, data, datas)
 
     def on_open_session(self, connection, data, datas):
-        data.read(11)
+        data.read(9)
+        session_id = data.read(2)
+        if session_id == b'\x03\x03':
+            session_id = 0
+        else:
+            session_id, = struct.unpack("!I", session_id)
         crypto_time, = struct.unpack("!I", data.read(4))
         key = data.read(28)
         data.read(1)
@@ -156,7 +161,7 @@ class Server(EventEmitter):
             if abs(crypto_time - time.time()) < 1800 and auth == sign_string(self._crypto_key.encode("utf-8") + key + auth_key + str(crypto_time).encode("utf-8")):
                 crypto_time = int(time.time())
                 key = crypto.init_encrypt(crypto_time)
-                session = self.create_session(connection, auth_key, crypto)
+                session = self.create_session(connection, auth_key, crypto, session_id)
                 self._sessions[session.id] = session
 
                 session_id = xor_string(crypto_time & 0xff, struct.pack("!H", session.id))
@@ -185,8 +190,13 @@ class Server(EventEmitter):
             self.emit_connection(self, connection, datas)
         logging.info("xstream session open auth fail %s %s %s", connection, time.time(), crypto_time)
 
-    def create_session(self, connection, auth_key, crypto):
-        session = Session(self.get_session_id(), auth_key, True, crypto, StreamFrame.FRAME_LEN)
+    def create_session(self, connection, auth_key, crypto, session_id=0):
+        if session_id:
+            if session_id in self._sessions and self._sessions[session_id]._connections:
+                session_id = self.get_session_id()
+        else:
+            session_id = self.get_session_id()
+        session = Session(session_id, auth_key, True, crypto, StreamFrame.FRAME_LEN)
         self._used_session_ids[session.id] = self.get_session_key(session.id)
         return session
 

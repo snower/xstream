@@ -15,7 +15,7 @@ from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_strin
 from .frame import StreamFrame
 
 class Client(EventEmitter):
-    def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg=''):
+    def __init__(self, host, port, max_connections=4, crypto_key='', crypto_alg='', session_id=0):
         super(Client, self).__init__()
 
         self._host = host
@@ -23,6 +23,7 @@ class Client(EventEmitter):
         self._host_index = 0
         self._max_connections = max_connections
         self._connections = []
+        self._init_session_id = session_id
         self._session = None
         self._auth_key = None
         self._crypto_key = crypto_key
@@ -232,7 +233,8 @@ class Client(EventEmitter):
         key = connection.crypto.init_encrypt(crypto_time)
         auth_key = connection.crypto.encrypt(self._auth_key)
         auth = sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8"))
-        data = b"".join([b'\x03\x03', struct.pack("!I", crypto_time), key[:28], b'\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, b'\x01\x00\x00'])
+        data = b"".join([struct.pack("!I", self._init_session_id) if self._init_session_id else b'\x03\x03', struct.pack("!I", crypto_time),
+                         key[:28], b'\x20', auth_key, key[28:], struct.pack("!H", len(auth)), auth, b'\x01\x00\x00'])
         connection.write(b"".join([b'\x16\x03\x01', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
         logging.info("xstream auth connection connect %s", connection)
 
