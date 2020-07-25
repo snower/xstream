@@ -497,12 +497,12 @@ class Center(EventEmitter):
             self.ttls.pop(0)
         self.ttls.append(ack_time)
         self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-        logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s) > ttl %s", self.session, self,
+        logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s) > ttl %.3fms %s", self.session, self,
                      self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
                      self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,
                      self.recv_frames[-1].index if self.recv_frames else 0,
                      self.droped_count, self.resended_count, self.merged_count,
-                     self.ttl)
+                     self.ttl, self.session.get_ttl_info() if self.session else "")
 
     def on_ready_streams_lookup(self):
         self.sort_stream()

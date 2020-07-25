@@ -15,6 +15,7 @@ from .connection import Connection
 from .center import Center
 from .stream import Stream
 from .frame import StreamFrame
+from .utils import format_data_len
 
 STATUS_INITED = 0x01
 STATUS_OPENING = 0x02
@@ -50,6 +51,13 @@ class Session(EventEmitter):
         self._controll_stream = self.create_stream(0, priority=1, capped=True, expried_time=0)
         self._controll_stream.on("data", self.on_controll_data)
         self._center.on("frame", self.on_frame)
+
+        self._rdata_len = 0
+        self._wdata_len = 0
+        self._rpdata_count = 0
+        self._wpdata_count = 0
+        self._rfdata_count = 0
+        self._wfdata_count = 0
 
     @property
     def id(self):
@@ -153,6 +161,13 @@ class Session(EventEmitter):
                 if self._center:
                     self._center.remove_connection(connection)
                 self._connections.remove(connection)
+
+                self._rdata_len = connection._rdata_len
+                self._wdata_len = connection._wdata_len
+                self._rpdata_count = connection._rpdata_count
+                self._wpdata_count = connection._wpdata_count
+                self._rfdata_count = connection._rfdata_count
+                self._wfdata_count = connection._wfdata_count
                 break
 
         if not self._connections:
@@ -380,6 +395,15 @@ class Session(EventEmitter):
             self.emit_close(self)
             self.remove_all_listeners()
         logging.info("xstream session %s close", self)
+
+    def get_ttl_info(self):
+        rdata_len, wdata_len = self._rdata_len, self._wdata_len
+        address = []
+        for connection in self._connections:
+            rdata_len += connection._rdata_len
+            wdata_len += connection._wdata_len
+            address.append(connection._connection.address)
+        return "%s %s %s" % (format_data_len(rdata_len), format_data_len(wdata_len), address)
 
     def __del__(self):
         self.close()

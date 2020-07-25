@@ -9,3 +9,6 @@ def format_data_len(data_len):
         return "%.3fK" % (data_len / 1024.0)
     elif data_len < 1024 * 1024 * 1024:
         return "%.3fM" % (data_len / (1024.0 * 1024.0))
+    elif data_len < 1024 * 1024 * 1024 * 1024:
+        return "%.3fG" % (data_len / (1024.0 * 1024.0 * 1024.0))
+    return "%.3fT" % (data_len / (1024.0 * 1024.0 * 1024.0 * 1024.0))

@@ -39,16 +39,16 @@ class Connection(EventEmitter):
 
         self._read_header = False
         self._start_time = time.time()
-        self._data_len = 5
-        self._wdata_len = 0
+        self._brdata_len = 5
+        self._bwdata_len = 0
         self._flush_buffer = deque()
         self._wait_head = True
         self._wait_read = False
         self._closed = False
         self._data_time = time.time()
         self._ping_time = 0
-        self._rdata_count = 0
-        self._wdata_count = 0
+        self._rdata_len = 0
+        self._wdata_len = 0
         self._rpdata_count = 0
         self._wpdata_count = 0
         self._rfdata_count = 0
@@ -69,7 +69,7 @@ class Connection(EventEmitter):
 
         self._data_time = time.time()
         self._rpdata_count += 1
-        if not self._wait_read and buffer._len >= self._data_len:
+        if not self._wait_read and buffer._len >= self._brdata_len:
             self._wait_read = True
             self.loop.add_async(self.read, buffer)
 
@@ -83,26 +83,26 @@ class Connection(EventEmitter):
         self.remove_all_listeners()
         logging.info("xstream session %s connection %s close %.2fs %s %s %s %s %s %s", session, self,
                      time.time() - self._start_time, 
-                     format_data_len(self._rdata_count), self._rfdata_count, self._rpdata_count,
-                     format_data_len(self._wdata_count), self._wfdata_count, self._wpdata_count,
+                     format_data_len(self._rdata_len), self._rfdata_count, self._rpdata_count,
+                     format_data_len(self._wdata_len), self._wfdata_count, self._wpdata_count,
                     )
 
     def read(self, buffer):
         self._wait_read = False
         read_count = 0
-        while buffer._len >= self._data_len:
-            data = buffer.read(self._data_len)
+        while buffer._len >= self._brdata_len:
+            data = buffer.read(self._brdata_len)
             if self._wait_head:
                 self._wait_head = False
-                self._data_len, = struct.unpack("!H", data[3:])
+                self._brdata_len, = struct.unpack("!H", data[3:])
                 if read_count >= 64:
-                    if buffer._len >= self._data_len:
+                    if buffer._len >= self._brdata_len:
                         self._wait_read = True
                         self.loop.add_async(self.read, buffer)
                     break
             else:
                 self._wait_head = True
-                self._data_len = 5
+                self._brdata_len = 5
                 data = self._crypto.decrypt(data)
 
                 action = data[0]
@@ -111,7 +111,7 @@ class Connection(EventEmitter):
                     self._rfdata_count += 1
                 else:
                     self.on_action(action, data[1:])
-                self._rdata_count += len(data) + 5
+                self._rdata_len += len(data) + 5
                 read_count += 1
 
     def flush(self):
@@ -135,28 +135,28 @@ class Connection(EventEmitter):
                 data.append(feg)
 
             data = b"".join(data)
-            self._wdata_count += len(data)
+            self._wdata_len += len(data)
             self._wpdata_count += 1
             try:
                 self._connection.write(data)
             except SocketClosed:
                 pass
             self._flush_buffer.clear()
-            self._wdata_len = 0
+            self._bwdata_len = 0
 
     def write(self, data):
         if not self._closed:
             self._flush_buffer.append(data)
-            self._wdata_len += len(data) + 8
+            self._bwdata_len += len(data) + 8
             self._wfdata_count += 1
-            return self._session._mss - self._wdata_len
+            return self._session._mss - self._bwdata_len
         return 0
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 1024))
         data = self._crypto.encrypt(b"".join([struct.pack("!B", action), data]))
         data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
-        self._wdata_count += len(data)
+        self._wdata_len += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1
         try:
@@ -207,12 +207,12 @@ class Connection(EventEmitter):
     def on_check_data_loop(self):
         if not self._closed:
             etime = time.time() - self._start_time
-            if self._rdata_count <= self._expried_data:
-                if self._rdata_count <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
+            if self._rdata_len <= self._expried_data:
+                if self._rdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
                     return current().add_timeout(5, self.on_check_data_loop)
 
             if etime < self._expried_seconds / 2.0:
-                if etime < self._expried_seconds / (2.0 * float(self._rdata_count) / float(self._expried_data)):
+                if etime < self._expried_seconds / (2.0 * float(self._rdata_len) / float(self._expried_data)):
                     return current().add_timeout(5, self.on_check_data_loop)
 
             self.close()
