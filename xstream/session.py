@@ -162,12 +162,12 @@ class Session(EventEmitter):
                     self._center.remove_connection(connection)
                 self._connections.remove(connection)
 
-                self._rdata_len = connection._rdata_len
-                self._wdata_len = connection._wdata_len
-                self._rpdata_count = connection._rpdata_count
-                self._wpdata_count = connection._wpdata_count
-                self._rfdata_count = connection._rfdata_count
-                self._wfdata_count = connection._wfdata_count
+                self._rdata_len += connection._rdata_len
+                self._wdata_len += connection._wdata_len
+                self._rpdata_count += connection._rpdata_count
+                self._wpdata_count += connection._wpdata_count
+                self._rfdata_count += connection._rfdata_count
+                self._wfdata_count += connection._wfdata_count
                 break
 
         if not self._connections:
