@@ -334,7 +334,7 @@ class Session(EventEmitter):
             return
 
         if not index:
-            self._center.write_action(action | 0x80, data, 0)
+            return self._center.write_action(action | 0x80, data, 0)
         else:
             data += rand_string(random.randint(1, 256))
             action = struct.pack("!B", action if center else action | 0x80)

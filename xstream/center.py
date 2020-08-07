@@ -57,22 +57,24 @@ class Center(EventEmitter):
         connection.on("drain", self.on_drain)
 
     def remove_connection(self, connection):
-        send_frames = []
-        send_count = 0
-        for send_frame in self.send_frames:
-            if connection == send_frame.connection and send_count < 320:
-                if not self.frames or send_frame.index >= self.frames[-1].index:
-                    self.frames.append(send_frame)
+        def check_send_frames():
+            send_frames, send_count = [], 0
+            for send_frame in self.send_frames:
+                if connection == send_frame.connection:
+                    if not self.frames or send_frame.index >= self.frames[-1].index:
+                        self.frames.append(send_frame)
+                    else:
+                        bisect.insort(self.frames, send_frame)
+                    send_count += 1
                 else:
-                    bisect.insort(self.frames, send_frame)
-                send_count += 1
-            else:
-                send_frames.append(send_frame)
-        self.send_frames = send_frames
+                    send_frames.append(send_frame)
+            self.send_frames = send_frames
+            if send_count:
+                current().add_async(self.write_frame)
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
-        current().add_async(self.write_frame)
+        current().add_timeout(5, check_send_frames)
 
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
@@ -172,8 +174,8 @@ class Center(EventEmitter):
             frame = self.get_write_connection_frame(connection)
 
         if frame:
+            frame.connection = connection
             if frame.index != 0:
-                frame.connection = connection
                 frame.send_time = time.time()
                 frame.ack_time = 0
                 if not self.send_frames or frame.index >= self.send_frames[-1].index:
@@ -358,27 +360,51 @@ class Center(EventEmitter):
 
     def write_action(self, action, data=b'', index=None):
         if index is True:
-            self.session.write_action(action, data, index, True)
-        else:
-            data += rand_string(random.randint(1, 256))
-            frame = self.create_frame(data, action = action, index = index)
-            if self.wait_reset_frames is None:
-                if not self.frames or frame.index >= self.frames[-1].index:
-                    self.frames.append(frame)
-                else:
-                    bisect.insort(self.frames, frame)
-                self.write_frame()
-            else:
-                if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
-                    self.wait_reset_frames.append(frame)
-                else:
-                    bisect.insort(self.wait_reset_frames, frame)
+            return self.session.write_action(action, data, index, True)
 
-    def on_ack_loop(self):
-        data = struct.pack("!I", self.recv_index - 1)
-        self.write_action(ACTION_ACK, data, index=0)
-        self.ack_time = time.time()
-        self.ack_loop = False
+        data += rand_string(random.randint(1, 256))
+        frame = self.create_frame(data, action=action, index=index)
+        if self.wait_reset_frames is None:
+            if not self.frames or frame.index >= self.frames[-1].index:
+                self.frames.append(frame)
+            else:
+                bisect.insort(self.frames, frame)
+            self.write_frame()
+        else:
+            if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
+                self.wait_reset_frames.append(frame)
+            else:
+                bisect.insort(self.wait_reset_frames, frame)
+        return frame
+
+    def on_ack_loop(self, frame=None, last_ack_index=None):
+        if frame:
+            if not frame.connection:
+                if last_ack_index != self.recv_index:
+                    frame.data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
+                self.write_frame()
+                self.ack_time = time.time()
+                self.ack_loop = False
+                return
+
+            if last_ack_index == self.recv_index:
+                self.ack_time = time.time()
+                self.ack_loop = False
+                return
+
+        data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
+        frame = self.create_frame(data, action=ACTION_ACK, index=0)
+        if self.wait_reset_frames is None:
+            if not self.frames or frame.index >= self.frames[-1].index:
+                self.frames.append(frame)
+            else:
+                bisect.insort(self.frames, frame)
+        else:
+            if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
+                self.wait_reset_frames.append(frame)
+            else:
+                bisect.insort(self.wait_reset_frames, frame)
+        current().add_timeout(1, self.on_ack_loop, frame, self.recv_index)
 
     def on_ack_timeout_loop(self, recv_index):
         if recv_index == self.recv_index and self.recv_frames \
