@@ -192,8 +192,12 @@ class Server(EventEmitter):
 
     def create_session(self, connection, auth_key, crypto, session_id=0):
         if session_id:
-            if session_id in self._sessions and self._sessions[session_id]._connections:
-                session_id = self.get_session_id()
+            if session_id in self._sessions:
+                if self._sessions[session_id]._connections:
+                    session_id = self.get_session_id()
+                else:
+                    self._sessions[session_id].close()
+                    self._sessions.pop(session_id)
         else:
             session_id = self.get_session_id()
         session = Session(session_id, auth_key, True, crypto, StreamFrame.FRAME_LEN)
@@ -344,16 +348,18 @@ class Server(EventEmitter):
         try:
             now = time.time()
             for session_id, session in tuple(self._sessions.items()):
-                if now - session._data_time >= 15 * 60:
+                if session._data_time and now - session._data_time >= 15 * 60:
                     try:
                         session.close()
                     except Exception as e:
                         logging.info("xstream session timeout close error %s %s", session, e)
+                    else:
+                        logging.info("xstream session timeout close %s %s", session)
         finally:
             current().add_timeout(120, self.on_check_session_timeout)
 
     def on_session_close(self, session):
-        if session.id in self._sessions:
+        if session.id in self._sessions and self._sessions[session.id] == session:
             self.save_session(session)
             self._sessions.pop(session.id)
             logging.info("xstream session close %s", session)

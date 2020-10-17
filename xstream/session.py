@@ -214,6 +214,7 @@ class Session(EventEmitter):
                 elif stream_frame.action == 0x03:
                     data = rand_string(random.randint(1, 256))
                     frame = StreamFrame(stream_frame.stream_id, 0, 0x04, data)
+                    frame.send_time = time.time()
                     self.write(frame)
             else:
                 if stream_frame.action == 0x01:

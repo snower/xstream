@@ -177,6 +177,7 @@ class Stream(EventEmitter):
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 256 - len(data)))
         frame = StreamFrame(self._stream_id, 0, action, data)
+        frame.send_time = time.time()
         self.loop.add_async(self._session.write, frame)
 
     def on_action(self, frame):
