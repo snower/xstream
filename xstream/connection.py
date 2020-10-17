@@ -105,12 +105,17 @@ class Connection(EventEmitter):
                 self._brdata_len = 5
                 data = self._crypto.decrypt(data)
 
-                action = data[0]
-                if action == 0:
-                    self.emit_frame(self, data)
+                if data[0] == 0:
+                    if data[11] == 0 and len(data) >= 16:
+                        unpack_data = struct.unpack("!BHBIHBHBB", data[1:16])
+                        stream_frame = StreamFrame(*unpack_data[6:], data=data[16:])
+                        frame = Frame(*unpack_data[:6], data=stream_frame, connection=self)
+                    else:
+                        frame = Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=self)
+                    self.emit_frame(self, frame)
                     self._rfdata_count += 1
                 else:
-                    self.on_action(action, data[1:])
+                    self.on_action(data[0], data[1:])
                 self._rdata_len += len(data) + 5
                 read_count += 1
 

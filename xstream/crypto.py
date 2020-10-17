@@ -209,8 +209,8 @@ def unpack_protocel_code(protecol_code):
 
 class Crypto(object):
     def __init__(self, key, alg='aes_256_cfb'):
-        self._key=key
-        self._alg=alg
+        self._key = key
+        self._alg = alg
 
     def init_encrypt(self, crypto_time, secret=None, session_secret=b""):
         if isinstance(secret, tuple):
@@ -222,6 +222,7 @@ class Crypto(object):
             self.bytes_to_key(self._ensecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
             self.bytes_to_key(self._ensecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
             1)
+        self.encrypt = self._encipher.update
         return b"".join(self._ensecret)
 
     def init_decrypt(self, crypto_time, secret, session_secret=b""):
@@ -234,6 +235,7 @@ class Crypto(object):
             self.bytes_to_key(self._desecret[0] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[0]),
             self.bytes_to_key(self._desecret[1] + session_secret, crypto_time, ALG_KEY_IV_LEN.get(self._alg)[1]),
             0)
+        self.decrypt = self._decipher.update
 
     def encrypt(self, data):
         return self._encipher.update(data)

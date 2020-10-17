@@ -77,6 +77,8 @@ class StreamFrame(object):
         self.flag = flag
         self.action = action
         self.data = data
+        self.send_time = 0
+        self.recv_time = 0
 
     def dumps(self):
         return b"".join([struct.pack("!HBB", self.stream_id, self.flag, self.action), self.data])

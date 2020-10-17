@@ -21,6 +21,8 @@ class Stream(EventEmitter):
     def __init__(self, stream_id, session, is_server = False, priority = 0, capped = False, expried_time = 900):
         super(Stream, self).__init__()
 
+        now = time.time()
+
         self.loop = current()
         self._stream_id = stream_id
         self._session = session
@@ -29,20 +31,19 @@ class Stream(EventEmitter):
         self._capped = capped
         self._closed = False
         self._expried_time = expried_time
-        self._start_time = time.time()
-        self._data_time = time.time()
+        self._start_time = now
 
         self._send_buffer = Buffer()
         self._send_frames = deque()
         self._send_frame_count = 0
         self._send_data_len = 0
-        self._send_time = time.time()
+        self._send_time = now
         self._send_is_set_ready = False
 
         self._recv_buffer = Buffer()
         self._recv_frame_count = 0
         self._recv_data_len = 0
-        self._recv_time = time.time()
+        self._recv_time = now
         self._recv_wait_emit = False
 
         if self._expried_time:
@@ -78,8 +79,6 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
     def on_frame(self, frame):
-        self._data_time = time.time()
-
         if frame.action == 0:
             self.on_read(frame)
         else:
@@ -92,7 +91,7 @@ class Stream(EventEmitter):
         self._recv_buffer.write(frame.data)
         self._recv_frame_count += 1
         self._recv_data_len += len(frame.data)
-        self._recv_time = time.time()
+        self._recv_time = frame.recv_time
 
     def remove_send_frame(self, frame):
         try:
@@ -119,10 +118,11 @@ class Stream(EventEmitter):
                 if self._expried_time == 0:
                     frame.flag |= 0x08
 
+            frame.send_time = time.time()
             self._session.write(frame)
             self._send_frame_count += 1
             self._send_data_len += len(frame)
-            self._send_time = time.time()
+            self._send_time = frame.send_time
 
         self._send_is_set_ready = bool(self._send_frames)
         return self._send_is_set_ready
@@ -163,7 +163,6 @@ class Stream(EventEmitter):
 
     def write(self, data):
         if not self._closed:
-            self._data_time = time.time()
             if not data:
                 return
 
@@ -252,7 +251,7 @@ class Stream(EventEmitter):
 
     def on_time_out_loop(self):
         if not self._closed:
-            if time.time() - self._data_time > self._expried_time:
+            if time.time() - max(self._send_time, self._recv_time) > self._expried_time:
                 self.close()
             else:
                 self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)

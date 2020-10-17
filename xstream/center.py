@@ -246,8 +246,7 @@ class Center(EventEmitter):
                 self.droped_count += 1
             self.recv_frames.pop(0)
 
-    def on_frame(self, connection, data):
-        frame = Frame.loads(data, connection)
+    def on_frame(self, connection, frame):
         frame.recv_time = time.time()
 
         if frame.index == 0:

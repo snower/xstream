@@ -191,14 +191,15 @@ class Session(EventEmitter):
         return connection
 
     def on_frame(self, center, frame):
-        self._data_time = time.time()
+        self._data_time = frame.recv_time
         if frame.action == 0:
             if not frame.data:
                 return
             if self._status == STATUS_CLOSED:
                 return
 
-            stream_frame = StreamFrame.loads(frame.data)
+            stream_frame = frame.data
+            stream_frame.recv_time = frame.recv_time
             if stream_frame.stream_id not in self._streams:
                 if stream_frame.action == 0x01:
                     priority, capped = 0, False
@@ -207,9 +208,9 @@ class Session(EventEmitter):
                     if stream_frame.flag & 0x04:
                         capped = True
                     if stream_frame.flag & 0x08:
-                        self.create_stream(stream_frame.stream_id, priority = priority, capped = capped, expried_time = 0)
+                        self.create_stream(stream_frame.stream_id, priority=priority, capped=capped, expried_time=0)
                     else:
-                        self.create_stream(stream_frame.stream_id, priority = priority, capped = capped)
+                        self.create_stream(stream_frame.stream_id, priority=priority, capped=capped)
                 elif stream_frame.action == 0x03:
                     data = rand_string(random.randint(1, 256))
                     frame = StreamFrame(stream_frame.stream_id, 0, 0x04, data)
@@ -279,7 +280,7 @@ class Session(EventEmitter):
                 current().add_async(self._streams[frame.stream_id].do_close)
             return False
         
-        self._data_time = time.time()
+        self._data_time = frame.send_time
         return self._center.write(frame)
 
     def on_action(self, action, data):
