@@ -60,14 +60,20 @@ class Center(EventEmitter):
         def check_send_frames():
             send_frames, send_count = [], 0
             for send_frame in self.send_frames:
-                if connection == send_frame.connection:
-                    if not self.frames or send_frame.index >= self.frames[-1].index:
-                        self.frames.append(send_frame)
-                    else:
-                        bisect.insort(self.frames, send_frame)
-                    send_count += 1
-                else:
+                if connection != send_frame.connection:
                     send_frames.append(send_frame)
+                    continue
+
+                if connection._finaled and send_frame.index <= connection._wlast_index:
+                    send_frames.append(send_frame)
+                    continue
+
+                if not self.frames or send_frame.index >= self.frames[-1].index:
+                    self.frames.append(send_frame)
+                else:
+                    bisect.insort(self.frames, send_frame)
+                send_count += 1
+
             self.send_frames = send_frames
             if send_count:
                 current().add_async(self.write_frame)

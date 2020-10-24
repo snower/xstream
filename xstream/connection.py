@@ -16,7 +16,7 @@ from .frame import Frame, StreamFrame
 
 ACTION_PING = 0x01
 ACTION_PINGACK = 0x02
-ACTION_CLOSE  = 0x03
+ACTION_CLOSE = 0x03
 ACTION_CLOSE_ACK = 0x04
 ACTION_READY = 0x05
 ACTION_NOISE = 0x06
@@ -45,6 +45,7 @@ class Connection(EventEmitter):
         self._wait_head = True
         self._wait_read = False
         self._closed = False
+        self._finaled = False
         self._data_time = time.time()
         self._ping_time = 0
         self._rdata_len = 0
@@ -53,6 +54,8 @@ class Connection(EventEmitter):
         self._wpdata_count = 0
         self._rfdata_count = 0
         self._wfdata_count = 0
+        self._rlast_index = 0
+        self._wlast_index = 0
         self._expried_seconds = random.randint(180, 1800)
         self._expried_data = random.randint(8 * 1024 * 1024, 16 * 1024 * 1024)
         current().add_timeout(15, self.on_check_data_loop)
@@ -112,6 +115,7 @@ class Connection(EventEmitter):
                         frame = Frame(*unpack_data[:6], data=stream_frame, connection=self)
                     else:
                         frame = Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=self)
+                    self._rlast_index = frame.index or self._rlast_index
                     self.emit_frame(self, frame)
                     self._rfdata_count += 1
                 else:
@@ -132,6 +136,7 @@ class Connection(EventEmitter):
                     else:
                         feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action), feg.data]))
+                    self._wlast_index = feg.index or self._wlast_index
                 else:
                     feg = self._crypto.encrypt(b"".join([b'\x00', feg]))
 
@@ -158,7 +163,7 @@ class Connection(EventEmitter):
         return 0
 
     def write_action(self, action, data=b''):
-        data += rand_string(random.randint(1, 1024))
+        data += rand_string(random.randint(1, 128))
         data = self._crypto.encrypt(b"".join([struct.pack("!B", action), data]))
         data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
         self._wdata_len += len(data)
@@ -176,13 +181,15 @@ class Connection(EventEmitter):
             self._ping_time = time.time()
         elif action == ACTION_CLOSE:
             self._closed = True
+            self._finaled = True
             self.write_action(ACTION_CLOSE_ACK)
         elif action == ACTION_CLOSE_ACK:
             self._closed = True
+            self._finaled = True
             self._connection.end()
             self.remove_all_listeners()
         elif action == ACTION_READY:
-            self.write_action(ACTION_NOISE, rand_string(random.randint(128, 1024)))
+            self.write_action(ACTION_NOISE, rand_string(random.randint(16, 128)))
             logging.info('xstream session %s connection ready', self)
 
     def on_expried(self):
