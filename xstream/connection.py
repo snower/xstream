@@ -23,7 +23,7 @@ ACTION_NOISE = 0x06
 
 class Connection(EventEmitter):
     def __init__(self, connection, session):
-        super(Connection,self).__init__()
+        super(Connection, self).__init__()
         self.loop = current()
         self._connection = connection
         self._session = session
@@ -33,9 +33,9 @@ class Connection(EventEmitter):
             connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_KEEPINTVL, 0)
         except: pass
 
-        self._connection.on("close",self.on_close)
-        self._connection.on("data",self.on_data)
-        self._connection.on("drain",self.on_drain)
+        self._connection.on_close(self.on_close)
+        self._connection.on_data(self.on_data)
+        self._connection.on_drain(self.on_drain)
 
         self._read_header = False
         self._start_time = time.time()
@@ -87,8 +87,7 @@ class Connection(EventEmitter):
         logging.info("xstream session %s connection %s close %.2fs %s %s %s %s %s %s", session, self,
                      time.time() - self._start_time, 
                      format_data_len(self._rdata_len), self._rfdata_count, self._rpdata_count,
-                     format_data_len(self._wdata_len), self._wfdata_count, self._wpdata_count,
-                    )
+                     format_data_len(self._wdata_len), self._wfdata_count, self._wpdata_count)
 
     def read(self, buffer):
         self._wait_read = False
@@ -129,6 +128,7 @@ class Connection(EventEmitter):
             while self._flush_buffer:
                 feg = self._flush_buffer.popleft()
                 if feg.__class__ == Frame:
+                    self._wlast_index = feg.index or self._wlast_index
                     if feg.data.__class__ == StreamFrame:
                         feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action, feg.data.stream_id,
@@ -136,7 +136,6 @@ class Connection(EventEmitter):
                     else:
                         feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action), feg.data]))
-                    self._wlast_index = feg.index or self._wlast_index
                 else:
                     feg = self._crypto.encrypt(b"".join([b'\x00', feg]))
 
@@ -231,13 +230,10 @@ class Connection(EventEmitter):
             logging.info("xstream session %s connection %s data len out", self._session, self)
 
     def close(self):
-        if self._closed:
-            self._connection.end()
-            self.remove_all_listeners()
-        else:
+        if not self._closed:
             self._closed = True
             self.write_action(ACTION_CLOSE)
-            current().add_timeout(5, self._connection.close)
+            current().add_timeout(30, self._connection.close)
 
     def __del__(self):
         self.close()
