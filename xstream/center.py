@@ -426,11 +426,12 @@ class Center(EventEmitter):
             now = time.time()
             index, max_recv_timeout = 0, 0
             while current_index < last_index:
+                if index >= len(self.recv_frames):
+                    break
+
                 recv_frame = self.recv_frames[index]
                 if recv_frame.index < current_index:
                     index += 1
-                    if index >= len(self.recv_frames):
-                        break
                     continue
 
                 if recv_frame.index == current_index:
