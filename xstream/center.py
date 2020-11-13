@@ -192,7 +192,7 @@ class Center(EventEmitter):
                 if not self.send_timeout_loop:
                     for send_frame in self.send_frames:
                         if send_frame.index != 0:
-                            current().add_timeout(max(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
+                            current().add_timeout(min(60, math.sqrt(self.ttl * 20)), self.on_send_timeout_loop, send_frame, self.ack_index)
                             self.send_timeout_loop = True
                             break
 
@@ -281,7 +281,7 @@ class Center(EventEmitter):
                 bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().add_timeout(min(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().add_timeout(max(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -330,6 +330,8 @@ class Center(EventEmitter):
                             frame.resend_count += 1
                             self.resended_count += 1
                             break
+                        waiting_frames.append(frame)
+                        break
                     waiting_frames.append(frame)
 
             if waiting_frames:
@@ -425,6 +427,12 @@ class Center(EventEmitter):
             index, max_recv_timeout = 0, 0
             while current_index < last_index:
                 recv_frame = self.recv_frames[index]
+                if recv_frame.index < current_index:
+                    index += 1
+                    if index >= len(self.recv_frames):
+                        break
+                    continue
+
                 if recv_frame.index == current_index:
                     if now - recv_frame.recv_time > max_recv_timeout:
                         max_recv_timeout = now - recv_frame.recv_time
@@ -435,12 +443,12 @@ class Center(EventEmitter):
                 if len(data) >= 320:
                     break
 
-            if len(data) <= 4 or max_recv_timeout >= max(self.ttl * 4 / 1000, 3) \
+            if len(data) <= 8 or max_recv_timeout >= max(self.ttl * 4 / 1000, 3) \
                     or len(data) <= (current_index - self.recv_index) * (0.48 / len(self.session._connections)):
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
             
         if self.recv_frames and not self.closed:
-            current().add_timeout(min(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().add_timeout(max(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
         else:
             self.ack_timeout_loop = False
 
@@ -474,7 +482,7 @@ class Center(EventEmitter):
         if self.send_frames:
             for send_frame in self.send_frames:
                 if send_frame.index != 0:
-                    current().add_timeout(min(max(60, math.sqrt(self.ttl * 20) - (time.time() - send_frame.send_time)), 20), self.on_send_timeout_loop, send_frame, self.ack_index)
+                    current().add_timeout(max(min(60, math.sqrt(self.ttl * 20) - (time.time() - send_frame.send_time)), 20), self.on_send_timeout_loop, send_frame, self.ack_index)
                     self.send_timeout_loop = True
                     send_frame.send_timeout_count += 1
                     return
