@@ -414,8 +414,8 @@ class Center(EventEmitter):
         current().add_timeout(1, self.on_ack_loop, frame, self.recv_index)
 
     def on_ack_timeout_loop(self, recv_index):
-        if recv_index == self.recv_index and self.recv_frames \
-                and self.session and len(self.session._connections) > 1:
+        if self.session and len(self.session._connections) > 1 and (recv_index == self.recv_index
+            or (len(self.recv_frames) > 64 and self.recv_index - recv_index < 16)):
             data = []
             current_index = self.recv_index
             if self.recv_frames[-1].index - self.recv_index > 128:
@@ -444,7 +444,7 @@ class Center(EventEmitter):
                 if len(data) >= 320:
                     break
 
-            if len(data) <= 8 or max_recv_timeout >= max(self.ttl * 4 / 1000, 3) \
+            if len(data) <= 8 or max_recv_timeout >= max(self.ttl * 3 / 1000, 5) \
                     or len(data) <= (current_index - self.recv_index) * (0.48 / len(self.session._connections)):
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
             
