@@ -281,7 +281,7 @@ class Center(EventEmitter):
                 bisect.insort_left(self.recv_frames, frame)
 
         if self.recv_frames and not self.ack_timeout_loop:
-            current().add_timeout(max(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop, self.recv_index)
+            current().add_timeout(max(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -413,20 +413,17 @@ class Center(EventEmitter):
                 bisect.insort(self.wait_reset_frames, frame)
         current().add_timeout(1, self.on_ack_loop, frame, self.recv_index)
 
-    def on_ack_timeout_loop(self, recv_index):
+    def on_ack_timeout_loop(self):
         if not self.recv_frames or self.closed or not self.session:
             self.ack_timeout_loop = False
             return
 
-        if len(self.session._connections) > 1 and (self.recv_index - recv_index < 2
-                                                   or (len(self.recv_frames) > 8 and self.recv_index - recv_index < 16
-                                                       and self.recv_frames[-1].index - self.recv_index > 64)):
+        if len(self.session._connections) > 1 and self.ttl < 2000:
             data = []
-            current_index = self.recv_index
-            last_index = self.recv_frames[-1].index
+            current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
             now = time.time()
-            index, max_recv_timeout = 0, 0
+            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 6, 5)
             while current_index < last_index:
                 if index >= len(self.recv_frames):
                     break
@@ -437,21 +434,31 @@ class Center(EventEmitter):
                     continue
 
                 if recv_frame.index == current_index:
-                    if now - recv_frame.recv_time > max_recv_timeout:
-                        max_recv_timeout = now - recv_frame.recv_time
+                    if not cdata:
+                        index += 1
+                        continue
+
+                    if recv_frame.resend_time:
+                        if now - recv_frame.resend_time > max(max_timeout / 2, 5):
+                            data.extend(cdata)
+                            recv_frame.resend_time = now
+                    else:
+                        if now - recv_frame.recv_time <= max_timeout:
+                            break
+                        data.extend(cdata)
+                        recv_frame.resend_time = now
+
+                    cdata = []
                     index += 1
                 else:
-                    data.append(struct.pack("!I", current_index))
+                    cdata.append(struct.pack("!I", current_index))
                 current_index += 1
-                if len(data) >= 300:
-                    break
 
-            if len(data) <= 8 or max_recv_timeout >= max(self.ttl * 3 / 1000, 3) \
-                    or len(data) <= (current_index - self.recv_index) * (0.48 / len(self.session._connections)):
+            if len(data) > 0:
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
-                current().add_timeout(max(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop, self.recv_index)
+                current().add_timeout(max(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop)
                 return
-        current().add_timeout(max(1, self.ttl / 1000), self.on_ack_timeout_loop, self.recv_index)
+        current().add_timeout(max(1, self.ttl / 1000), self.on_ack_timeout_loop)
 
     def on_send_timeout_loop(self, frame, ack_index):
         if self.closed:
