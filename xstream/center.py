@@ -175,7 +175,7 @@ class Center(EventEmitter):
             self.frames = frames
         return frame
 
-    def write_next(self, connection, frame = None, first_write = True):
+    def write_next(self, connection, frame=None, first_write=True):
         if frame is None:
             frame = self.get_write_connection_frame(connection)
 
@@ -452,6 +452,8 @@ class Center(EventEmitter):
                 else:
                     cdata.append(struct.pack("!I", current_index))
                 current_index += 1
+                if len(data) >= 5776:
+                    break
 
             if len(data) > 0:
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
@@ -495,7 +497,7 @@ class Center(EventEmitter):
                     return
         self.send_timeout_loop = False
 
-    def write_ttl(self, last_write_ttl_time = 0, last_send_index = 0, last_recv_index = 0):
+    def write_ttl(self, last_write_ttl_time=0, last_send_index=0, last_recv_index=0):
         if self.closed:
             return
 
