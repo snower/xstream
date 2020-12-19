@@ -181,6 +181,7 @@ class Connection(EventEmitter):
         elif action == ACTION_PINGACK:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
+            logging.info("xstream session %s connection %s ping ack", self._session, self)
         elif action == ACTION_CLOSE:
             self._closed = True
             self._finaled = True
@@ -209,6 +210,7 @@ class Connection(EventEmitter):
                 self._ping_time = time.time()
                 self._ping_ack_time = 0
                 current().add_timeout(5, self.on_ping_timeout)
+                logging.info("xstream session %s connection %s ping", self._session, self)
             else:
                 current().add_timeout(5, self.on_ping_loop)
 
