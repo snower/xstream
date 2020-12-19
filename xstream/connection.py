@@ -48,6 +48,8 @@ class Connection(EventEmitter):
         self._finaled = False
         self._data_time = time.time()
         self._ping_time = 0
+        self._ping_ack_time = 0
+        self._ttl = 0
         self._rdata_len = 0
         self._wdata_len = 0
         self._rpdata_count = 0
@@ -177,7 +179,8 @@ class Connection(EventEmitter):
         if action == ACTION_PING:
             self.write_action(ACTION_PINGACK)
         elif action == ACTION_PINGACK:
-            self._ping_time = time.time()
+            self._ping_ack_time = time.time()
+            self._ttl = (self._ping_ack_time - self._ping_time) * 1000
         elif action == ACTION_CLOSE:
             self._closed = True
             self._finaled = True
@@ -199,16 +202,22 @@ class Connection(EventEmitter):
     def on_ping_loop(self):
         if not self._closed:
             timeout = 180 if self._session._center.ttl <= 500 else (60 if self._session._center.ttl <= 1000 else 15)
-            if time.time() - self._data_time >= timeout:
+            if self._ttl <= 0 or time.time() - self._data_time >= timeout \
+                    or (len(self._session._connections) > 2 and time.time() - self._ping_time >= timeout
+                        and self._session._center.ttl >= 1000):
                 self.write_action(ACTION_PING)
-                self._ping_time = 0
-                current().add_timeout(2, self.on_ping_timeout)
+                self._ping_time = time.time()
+                self._ping_ack_time = 0
+                current().add_timeout(5, self.on_ping_timeout)
             else:
                 current().add_timeout(5, self.on_ping_loop)
 
     def on_ping_timeout(self):
         if not self._closed:
-            if self._ping_time == 0:
+            if self._ping_ack_time == 0:
+                if time.time() - self._ping_time < 60:
+                    current().add_timeout(5, self.on_ping_timeout)
+                    return
                 self._closed = True
                 self._connection.close()
                 logging.info("xstream session %s connection %s ping timeout", self._session, self)
@@ -239,4 +248,4 @@ class Connection(EventEmitter):
         self.close()
 
     def __str__(self):
-        return "<%s %s>" % (super(Connection, self).__str__(), self._connection.address)
+        return "<%s %s %.2fms>" % (super(Connection, self).__str__(), self._connection.address, self._ttl)

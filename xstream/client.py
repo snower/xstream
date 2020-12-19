@@ -389,7 +389,7 @@ class Client(EventEmitter):
                         else:
                             connection.on_expried()
                     current().add_timeout(connection._expried_seconds, on_expried)
-                    current().add_timeout(30, connection.on_ping_loop)
+                    current().add_timeout(5, connection.on_ping_loop)
 
             current().add_async(add_connection, connection)
             self._connecting = None

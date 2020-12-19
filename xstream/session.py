@@ -404,7 +404,7 @@ class Session(EventEmitter):
         for connection in self._connections:
             rdata_len += connection._rdata_len
             wdata_len += connection._wdata_len
-            address.append(connection._connection.address)
+            address.append((connection._connection.address, "%.2fms" % connection._ttl))
         return "%s %s %s" % (format_data_len(rdata_len), format_data_len(wdata_len), address)
 
     def __del__(self):
