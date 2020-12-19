@@ -217,7 +217,7 @@ class Connection(EventEmitter):
     def on_ping_timeout(self):
         if not self._closed:
             if self._ping_ack_time == 0:
-                if time.time() - self._ping_time < 60:
+                if time.time() - self._ping_time < 30:
                     current().add_timeout(5, self.on_ping_timeout)
                     return
                 self._closed = True
