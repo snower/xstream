@@ -202,10 +202,22 @@ class Connection(EventEmitter):
 
     def on_ping_loop(self):
         if not self._closed:
-            timeout = 180 if self._session._center.ttl <= 500 else (60 if self._session._center.ttl <= 1000 else 15)
+            if self._session._center.ttl <= 500:
+                timeout = 180
+            elif self._session._center.ttl <= 1000:
+                timeout = 120
+            elif self._session._center.ttl <= 2000:
+                timeout = 60
+            elif self._session._center.ttl <= 3000:
+                timeout = 30
+            elif self._session._center.ttl <= 4000:
+                timeout = 20
+            else:
+                timeout = 15
             if self._ttl <= 0 or time.time() - self._data_time >= timeout \
-                    or (len(self._session._connections) > 2 and time.time() - self._ping_time >= timeout
-                        and self._session._center.ttl >= 1000):
+                    or (time.time() - self._ping_time >= timeout
+                        and ((len(self._session._connections) == 2 or self._session._center.ttl >= 3000)
+                        or (len(self._session._connections) > 2 or self._session._center.ttl >= 1000))):
                 self.write_action(ACTION_PING)
                 self._ping_time = time.time()
                 self._ping_ack_time = 0
@@ -217,7 +229,7 @@ class Connection(EventEmitter):
     def on_ping_timeout(self):
         if not self._closed:
             if self._ping_ack_time == 0:
-                if time.time() - self._ping_time < 30:
+                if time.time() - self._ping_time <= 15:
                     current().add_timeout(5, self.on_ping_timeout)
                     return
                 self._closed = True
