@@ -80,7 +80,7 @@ class Center(EventEmitter):
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
-        current().add_timeout(5, check_send_frames)
+        current().add_timeout(2, check_send_frames)
 
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
@@ -240,7 +240,7 @@ class Center(EventEmitter):
         read_frame_count = 0
         while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
             if self.recv_frames[0].index == self.recv_index:
-                if read_frame_count >= 64:
+                if read_frame_count >= 128:
                     self.waiting_read_frame = True
                     current().add_async(self.on_read_frame)
                     return
@@ -399,7 +399,7 @@ class Center(EventEmitter):
                 self.ack_loop = False
                 return
 
-        data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
+        data = struct.pack("!I", self.recv_index - 1)
         frame = self.create_frame(data, action=ACTION_ACK, index=0)
         if self.wait_reset_frames is None:
             if not self.frames or frame.index >= self.frames[-1].index:

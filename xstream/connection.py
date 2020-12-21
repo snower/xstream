@@ -99,7 +99,7 @@ class Connection(EventEmitter):
             if self._wait_head:
                 self._wait_head = False
                 self._brdata_len, = struct.unpack("!H", data[3:])
-                if read_count >= 64:
+                if read_count >= 128:
                     if buffer._len >= self._brdata_len:
                         self._wait_read = True
                         self.loop.add_async(self.read, buffer)
@@ -216,8 +216,8 @@ class Connection(EventEmitter):
                 timeout = 15
             if self._ttl <= 0 or time.time() - self._data_time >= timeout \
                     or (time.time() - self._ping_time >= timeout
-                        and ((len(self._session._connections) == 2 or self._session._center.ttl >= 3000)
-                        or (len(self._session._connections) > 2 or self._session._center.ttl >= 1000))):
+                        and ((len(self._session._connections) == 2 and self._session._center.ttl >= 3000)
+                        or (len(self._session._connections) > 2 and self._session._center.ttl >= 1000))):
                 self.write_action(ACTION_PING)
                 self._ping_time = time.time()
                 self._ping_ack_time = 0
