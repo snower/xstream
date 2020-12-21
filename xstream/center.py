@@ -80,7 +80,7 @@ class Center(EventEmitter):
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
-        current().add_timeout(2, check_send_frames)
+        current().add_timeout(2.2, check_send_frames)
 
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
@@ -280,8 +280,8 @@ class Center(EventEmitter):
             else:
                 bisect.insort_left(self.recv_frames, frame)
 
-        if self.recv_frames and not self.ack_timeout_loop:
-            current().add_timeout(max(1, self.ttl * 1.5 / 1000), self.on_ack_timeout_loop)
+        if not self.ack_timeout_loop and self.recv_frames:
+            current().add_timeout(3, self.on_ack_timeout_loop)
             self.ack_timeout_loop = True
 
     def on_drain(self, connection):
@@ -422,7 +422,7 @@ class Center(EventEmitter):
             current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
             now = time.time()
-            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 6, 5)
+            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 3, 5)
             while current_index <= last_index:
                 if index >= len(self.recv_frames):
                     break
@@ -438,7 +438,7 @@ class Center(EventEmitter):
                         continue
 
                     if recv_frame.resend_time:
-                        if now - recv_frame.resend_time > max(max_timeout / 2, 5):
+                        if now - recv_frame.resend_time > max_timeout * 2:
                             data.extend(cdata)
                             recv_frame.resend_time = now
                     else:
@@ -456,9 +456,9 @@ class Center(EventEmitter):
 
             if len(data) > 0:
                 self.write_action(ACTION_RESEND, struct.pack("!II", self.recv_index - 1, len(data)) + b"".join(data), index=0)
-                current().add_timeout(max(1, self.ttl * 2 / 1000), self.on_ack_timeout_loop)
+                current().add_timeout(2, self.on_ack_timeout_loop)
                 return
-        current().add_timeout(max(1, self.ttl / 1000), self.on_ack_timeout_loop)
+        current().add_timeout(2, self.on_ack_timeout_loop)
 
     def on_send_timeout_loop(self, frame, ack_index):
         if self.closed:
@@ -523,6 +523,8 @@ class Center(EventEmitter):
                 elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 28:
                     require_write = True
                 elif now - last_write_ttl_time >= random.randint(58, 118):
+                    require_write = True
+                elif len(self.recv_frames) >= 16 and p_recv_index < 16 and now - last_write_ttl_time >= 8 and self.ttl < 1000:
                     require_write = True
             else:
                 require_write = True
