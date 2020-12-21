@@ -387,8 +387,7 @@ class Center(EventEmitter):
     def on_ack_loop(self, frame=None, last_ack_index=None):
         if frame:
             if not frame.connection:
-                if last_ack_index != self.recv_index:
-                    frame.data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
+                frame.data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
                 self.write_frame()
                 self.ack_time = time.time()
                 self.ack_loop = False
