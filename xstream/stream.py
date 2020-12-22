@@ -34,7 +34,7 @@ class Stream(EventEmitter):
         self._expried_time = expried_time
         self._start_time = now
 
-        self._send_index = 0
+        self._send_index = 1
         self._send_buffer = Buffer()
         self._send_frames = deque()
         self._send_frame_count = 0
@@ -42,7 +42,7 @@ class Stream(EventEmitter):
         self._send_time = now
         self._send_is_set_ready = False
 
-        self._recv_index = 0
+        self._recv_index = 1
         self._recv_buffer = Buffer()
         self._recv_frames = []
         self._recv_frame_count = 0
@@ -83,10 +83,17 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
     def on_frame(self, frame):
-        if frame.index < self._recv_index:
+        if frame.index == 0:
+            if frame.action == 0:
+                self.on_read(frame)
+            else:
+                self.on_action(frame)
             return
 
-        if frame.index > self._recv_index:
+        if frame.index != self._recv_index:
+            if frame.index < self._recv_index:
+                return
+
             if not self._recv_frames or frame.index >= self._recv_frames[-1].index:
                 self._recv_frames.append(frame)
             else:
@@ -99,21 +106,26 @@ class Stream(EventEmitter):
             self.on_action(frame)
         self._recv_index += 1
 
+        read_frame_count = 0
         while self._recv_frames:
             frame = self._recv_frames[0]
-            if frame.index < self._recv_index:
-                self._recv_frames.pop(0)
-                continue
-
-            if frame.index > self._recv_index:
+            if frame.index != self._recv_index:
+                if frame.index < self._recv_index:
+                    self._recv_frames.pop(0)
+                    continue
                 break
 
             self._recv_frames.pop(0)
+            if read_frame_count >= 128:
+                current().add_async(self.on_frame, frame)
+                return
+
             if frame.action == 0:
                 self.on_read(frame)
             else:
                 self.on_action(frame)
             self._recv_index += 1
+            read_frame_count += 1
 
     def on_read(self, frame):
         if not self._recv_wait_emit:
