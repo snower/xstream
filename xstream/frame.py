@@ -90,5 +90,26 @@ class StreamFrame(object):
             return data
         return StreamFrame(*struct.unpack("!HBIB", data[:8]), data=data[8:])
 
+    def __cmp__(self, other):
+        return cmp(self.index, other.index)
+
+    def __eq__(self, other):
+        return self.index == other.index
+
+    def __gt__(self, other):
+        return self.index > other.index
+
+    def __lt__(self, other):
+        return self.index < other.index
+
+    def __ge__(self, other):
+        return self.index >= other.index
+
+    def __le__(self, other):
+        return self.index <= other.index
+
+    def __ne__(self, other):
+        return self.index != other.index
+
     def __len__(self):
         return len(self.data) + 8
