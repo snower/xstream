@@ -24,15 +24,15 @@ class Frame(object):
 
     def dumps(self):
         if self.data.__class__ == StreamFrame:
-            return b"".join([struct.pack("!BHBIHBHBB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
-                                        self.data.stream_id, self.data.flag, self.data.action), self.data.data])
+            return b"".join([struct.pack("!BHBIHBHBIB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
+                                        self.data.stream_id, self.data.flag, self.data.index, self.data.action), self.data.data])
         return b"".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
 
     @classmethod
     def loads(cls, data, connection=None):
         if data[11] == 0 and len(data) >= 16:
-            unpack_data = struct.unpack("!BHBIHBHBB", data[1:16])
-            stream_frame = StreamFrame(*unpack_data[6:], data=data[16:])
+            unpack_data = struct.unpack("!BHBIHBHBIB", data[1:20])
+            stream_frame = StreamFrame(*unpack_data[6:], data=data[20:])
             return Frame(*unpack_data[:6], data=stream_frame, connection=connection)
         return Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=connection)
 
@@ -59,7 +59,7 @@ class Frame(object):
 
     def __len__(self):
         if self.data.__class__ == StreamFrame:
-            return len(self.data.data) + 15
+            return len(self.data.data) + 19
         return len(self.data) + 11
 
     def ttl(self):
@@ -69,25 +69,26 @@ class Frame(object):
         self.data = b''
 
 class StreamFrame(object):
-    HEADER_LEN = 23
-    FRAME_LEN = 1440 * 2 - HEADER_LEN
+    HEADER_LEN = 25
+    FRAME_LEN = 1455 * 2 - HEADER_LEN
 
-    def __init__(self, stream_id, flag, action, data):
+    def __init__(self, stream_id, flag, index, action, data):
         self.stream_id = stream_id
         self.flag = flag
+        self.index = index
         self.action = action
         self.data = data
         self.send_time = 0
         self.recv_time = 0
 
     def dumps(self):
-        return b"".join([struct.pack("!HBB", self.stream_id, self.flag, self.action), self.data])
+        return b"".join([struct.pack("!HBIB", self.stream_id, self.flag, self.index, self.action), self.data])
 
     @classmethod
     def loads(cls, data):
         if data.__class__ == StreamFrame:
             return data
-        return StreamFrame(*struct.unpack("!HBB", data[:4]), data=data[4:])
+        return StreamFrame(*struct.unpack("!HBIB", data[:8]), data=data[8:])
 
     def __len__(self):
-        return len(self.data) + 4
+        return len(self.data) + 8

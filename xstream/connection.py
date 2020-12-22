@@ -110,9 +110,9 @@ class Connection(EventEmitter):
                 data = self._crypto.decrypt(data)
 
                 if data[0] == 0:
-                    if data[11] == 0 and len(data) >= 16:
-                        unpack_data = struct.unpack("!BHBIHBHBB", data[1:16])
-                        stream_frame = StreamFrame(*unpack_data[6:], data=data[16:])
+                    if data[11] == 0 and len(data) >= 20:
+                        unpack_data = struct.unpack("!BHBIHBHBIB", data[1:20])
+                        stream_frame = StreamFrame(*unpack_data[6:], data=data[20:])
                         frame = Frame(*unpack_data[:6], data=stream_frame, connection=self)
                     else:
                         frame = Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=self)
@@ -132,9 +132,9 @@ class Connection(EventEmitter):
                 if feg.__class__ == Frame:
                     self._wlast_index = feg.index or self._wlast_index
                     if feg.data.__class__ == StreamFrame:
-                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHBHBB", feg.version, feg.session_id, feg.flag, feg.index,
+                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHBHBIB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action, feg.data.stream_id,
-                                                                                feg.data.flag, feg.data.action), feg.data.data]))
+                                                                                feg.data.flag, feg.data.index, feg.data.action), feg.data.data]))
                     else:
                         feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
                                                                                 feg.timestamp & 0xffff, feg.action), feg.data]))

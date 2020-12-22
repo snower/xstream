@@ -28,6 +28,7 @@ class Center(EventEmitter):
         self.ready_streams = []
         self.frames = []
         self.recv_frames = []
+        self.recv_uframes = {}
         self.recv_index = 1
         self.send_frames = []
         self.send_index = 1
@@ -245,7 +246,7 @@ class Center(EventEmitter):
                     current().add_async(self.on_read_frame)
                     return
 
-                self.emit_frame(self, self.recv_frames[0])
+                self.recv_uframes.pop(self.recv_frames[0].index, None)
                 self.recv_index += 1
                 read_frame_count += 1
             else:
@@ -258,12 +259,13 @@ class Center(EventEmitter):
         if frame.index == 0:
             return self.emit_frame(self, frame)
 
-        if frame.index < self.recv_index or abs(frame.index - self.recv_index) > 0x7fffffff:
+        if frame.index < self.recv_index or frame.index in self.recv_uframes \
+                or abs(frame.index - self.recv_index) > 0x7fffffff:
             self.droped_count += 1
             return
 
+        self.emit_frame(self, frame)
         if frame.index == self.recv_index:
-            self.emit_frame(self, frame)
             self.recv_index += 1
 
             if self.recv_frames and self.recv_frames[0].index <= self.recv_index:
@@ -279,6 +281,7 @@ class Center(EventEmitter):
                 self.recv_frames.append(frame)
             else:
                 bisect.insort_left(self.recv_frames, frame)
+            self.recv_uframes[frame.index] = frame
 
         if not self.ack_timeout_loop and self.recv_frames:
             current().add_timeout(3, self.on_ack_timeout_loop)

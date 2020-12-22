@@ -6,10 +6,11 @@ import time
 import random
 import math
 import logging
+import bisect
 from collections import deque
 from sevent import EventEmitter, current, Buffer
 from .frame import StreamFrame
-from .crypto import  rand_string
+from .crypto import rand_string
 from .utils import format_data_len
 
 ACTION_OPEN  = 1
@@ -33,6 +34,7 @@ class Stream(EventEmitter):
         self._expried_time = expried_time
         self._start_time = now
 
+        self._send_index = 0
         self._send_buffer = Buffer()
         self._send_frames = deque()
         self._send_frame_count = 0
@@ -40,7 +42,9 @@ class Stream(EventEmitter):
         self._send_time = now
         self._send_is_set_ready = False
 
+        self._recv_index = 0
         self._recv_buffer = Buffer()
+        self._recv_frames = []
         self._recv_frame_count = 0
         self._recv_data_len = 0
         self._recv_time = now
@@ -79,10 +83,37 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
     def on_frame(self, frame):
+        if frame.index < self.recv_index:
+            return
+
+        if frame.index > self.recv_index:
+            if not self._recv_frames or frame.index >= self._recv_frames[-1].index:
+                self._recv_frames.append(frame)
+            else:
+                bisect.insort_left(self._recv_frames, frame)
+            return
+
         if frame.action == 0:
             self.on_read(frame)
         else:
             self.on_action(frame)
+        self._recv_index += 1
+
+        while self._recv_frames:
+            frame = self._recv_frames[0]
+            if frame.index < self.recv_index:
+                self._recv_frames.pop(0)
+                continue
+
+            if frame.index > self.recv_index:
+                break
+
+            self._recv_frames.pop(0)
+            if frame.action == 0:
+                self.on_read(frame)
+            else:
+                self.on_action(frame)
+            self._recv_index += 1
 
     def on_read(self, frame):
         if not self._recv_wait_emit:
@@ -134,7 +165,8 @@ class Stream(EventEmitter):
         if self._capped:
             for _ in range(64):
                 if self._send_buffer:
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.next())
+                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.next())
+                    self._send_index += 1
                     self._send_frames.append(frame)
                 else:
                     break
@@ -142,10 +174,12 @@ class Stream(EventEmitter):
             for _ in range(64):
                 blen = len(self._send_buffer)
                 if blen > self._session._mss:
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(self._session._mss))
+                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.read(self._session._mss))
+                    self._send_index += 1
                     self._send_frames.append(frame)
                 elif blen > 0 and (flush_all or len(self._send_frames) < 2):
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_buffer.read(-1))
+                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.read(-1))
+                    self._send_index += 1
                     self._send_frames.append(frame)
                     break
                 else:
@@ -176,7 +210,8 @@ class Stream(EventEmitter):
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 256 - len(data)))
-        frame = StreamFrame(self._stream_id, 0, action, data)
+        frame = StreamFrame(self._stream_id, 0, self._send_index, action, data)
+        self._send_index += 1
         frame.send_time = time.time()
         self.loop.add_async(self._session.write, frame)
 
