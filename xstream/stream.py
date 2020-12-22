@@ -83,10 +83,10 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
     def on_frame(self, frame):
-        if frame.index < self.recv_index:
+        if frame.index < self._recv_index:
             return
 
-        if frame.index > self.recv_index:
+        if frame.index > self._recv_index:
             if not self._recv_frames or frame.index >= self._recv_frames[-1].index:
                 self._recv_frames.append(frame)
             else:
@@ -101,11 +101,11 @@ class Stream(EventEmitter):
 
         while self._recv_frames:
             frame = self._recv_frames[0]
-            if frame.index < self.recv_index:
+            if frame.index < self._recv_index:
                 self._recv_frames.pop(0)
                 continue
 
-            if frame.index > self.recv_index:
+            if frame.index > self._recv_index:
                 break
 
             self._recv_frames.pop(0)

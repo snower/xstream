@@ -240,13 +240,17 @@ class Center(EventEmitter):
         self.waiting_read_frame = False
         read_frame_count = 0
         while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
-            if self.recv_frames[0].index == self.recv_index:
+            frame = self.recv_frames[0]
+            if frame.index == self.recv_index:
                 if read_frame_count >= 128:
                     self.waiting_read_frame = True
                     current().add_async(self.on_read_frame)
                     return
 
-                self.recv_uframes.pop(self.recv_frames[0].index, None)
+                if frame.index in self.recv_uframes:
+                    self.recv_uframes.pop(self.recv_frames[0].index, None)
+                else:
+                    self.emit_frame(self, frame)
                 self.recv_index += 1
                 read_frame_count += 1
             else:
@@ -264,8 +268,8 @@ class Center(EventEmitter):
             self.droped_count += 1
             return
 
-        self.emit_frame(self, frame)
         if frame.index == self.recv_index:
+            self.emit_frame(self, frame)
             self.recv_index += 1
 
             if self.recv_frames and self.recv_frames[0].index <= self.recv_index:
@@ -281,7 +285,9 @@ class Center(EventEmitter):
                 self.recv_frames.append(frame)
             else:
                 bisect.insort_left(self.recv_frames, frame)
-            self.recv_uframes[frame.index] = frame
+            if frame.action == 0 and (frame.data.action == 0x01 or frame.data.stream_id in self.session._streams):
+                self.emit_frame(self, frame)
+                self.recv_uframes[frame.index] = frame
 
         if not self.ack_timeout_loop and self.recv_frames:
             current().add_timeout(3, self.on_ack_timeout_loop)
