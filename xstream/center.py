@@ -164,16 +164,15 @@ class Center(EventEmitter):
                 return None
             frame = self.frames.pop(0)
 
-        if connection == frame.connection:
+        if id(connection) in frame.used_connections:
             frames = []
-            while frame and connection == frame.connection:
+            while frame and id(connection) in frame.used_connections:
                 if not frames or frame.index >= frames[-1].index:
                     frames.append(frame)
                 else:
                     bisect.insort(frames, frame)
                 frame = self.frames.pop(0) if self.frames else None
-            frames.extend(self.frames)
-            self.frames = frames
+            self.frames = frames + self.frames
         return frame
 
     def write_next(self, connection, frame=None, first_write=True):
@@ -183,6 +182,7 @@ class Center(EventEmitter):
         if frame:
             frame.connection = connection
             if frame.index != 0:
+                frame.used_connections.add(id(connection))
                 frame.send_time = time.time()
                 frame.ack_time = 0
                 if not self.send_frames or frame.index >= self.send_frames[-1].index:
@@ -320,6 +320,7 @@ class Center(EventEmitter):
             now = time.time()
             resend_frame_ids = []
             waiting_frames = []
+            connections = {id(connection) for connection in self.session._connections} if self.session else set([])
 
             for i in range(resend_count):
                 resend_index, = struct.unpack("!I", data[8 + i * 4: 12 + i * 4])
@@ -329,7 +330,8 @@ class Center(EventEmitter):
                         if frame.resend_count >= 60:
                             return self.session.close()
 
-                        if now - frame.send_time >= self.ttl / 1000.0 and now - frame.resend_time >= self.ttl / 1000.0 and frame.resend_time <= frame.send_time:
+                        if now - frame.send_time >= self.ttl / 1000.0 and now - frame.resend_time >= self.ttl / 1000.0 \
+                                and frame.resend_time <= frame.send_time and (connections - frame.used_connections):
                             if not self.frames or frame.index >= self.frames[-1].index:
                                 self.frames.append(frame)
                             else:
@@ -479,8 +481,9 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
             send_frames = []
             send_count = 0
+            connections = {id(connection) for connection in self.session._connections} if self.session else set([])
             for send_frame in self.send_frames:
-                if frame.connection == send_frame.connection and send_count < 32:
+                if frame.connection == send_frame.connection and send_count < 32 and (connections - frame.used_connections):
                     if not self.frames or send_frame.index >= self.frames[-1].index:
                         self.frames.append(send_frame)
                     else:

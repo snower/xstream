@@ -15,6 +15,7 @@ class Frame(object):
         self.action = action
         self.data = data
         self.connection = connection
+        self.used_connections = set([])
         self.send_time = 0
         self.recv_time = 0
         self.ack_time = 0
