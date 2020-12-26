@@ -205,29 +205,29 @@ class Center(EventEmitter):
             next_data_len = connection.write(frame)
             if next_data_len > 32:
                 def on_write_next_full(self, connection, next_data_len):
-                    frame = self.get_write_connection_frame(connection) if self.frames else None
-                    while not frame and self.ready_streams and self.wait_reset_frames is None:
-                        stream = self.ready_streams[0]
-                        if not stream.do_write():
-                            self.ready_streams.pop(0)
+                    self.writing_connection = connection
+                    try:
                         frame = self.get_write_connection_frame(connection) if self.frames else None
+                        while not frame and self.ready_streams and self.wait_reset_frames is None:
+                            stream = self.ready_streams[0]
+                            if not stream.do_write():
+                                self.ready_streams.pop(0)
+                            frame = self.get_write_connection_frame(connection) if self.frames else None
 
-                    if frame:
-                        if len(frame.data) + 11 <= next_data_len:
-                            self.writing_connection = connection
-                            try:
+                        if frame:
+                            if len(frame) <= next_data_len:
                                 self.write_next(connection, frame, False)
                                 self.merged_count += 1
-                            finally:
-                                self.writing_connection = None
-                        else:
-                            if not self.frames or frame.index >= self.frames[-1].index:
-                                self.frames.append(frame)
                             else:
-                                bisect.insort(self.frames, frame)
+                                if not self.frames or frame.index >= self.frames[-1].index:
+                                    self.frames.append(frame)
+                                else:
+                                    bisect.insort(self.frames, frame)
+                                connection.flush()
+                        else:
                             connection.flush()
-                    else:
-                        connection.flush()
+                    finally:
+                        self.writing_connection = None
                 current().add_async(on_write_next_full, self, connection, next_data_len)
             else:
                 connection.flush()
