@@ -60,12 +60,17 @@ class Center(EventEmitter):
     def remove_connection(self, connection):
         def check_send_frames():
             send_frames, send_count = [], 0
+            connections = {id(c) for c in self.session._connections} if self.session else set([])
             for send_frame in self.send_frames:
                 if connection != send_frame.connection:
                     send_frames.append(send_frame)
                     continue
 
                 if connection._finaled and send_frame.index <= connection._wlast_index:
+                    send_frames.append(send_frame)
+                    continue
+
+                if not (connections - send_frame.used_connections):
                     send_frames.append(send_frame)
                     continue
 
@@ -320,7 +325,7 @@ class Center(EventEmitter):
             now = time.time()
             resend_frame_ids = []
             waiting_frames = []
-            connections = {id(connection) for connection in self.session._connections} if self.session else set([])
+            connections = {id(c) for c in self.session._connections} if self.session else set([])
 
             for i in range(resend_count):
                 resend_index, = struct.unpack("!I", data[8 + i * 4: 12 + i * 4])
@@ -481,7 +486,7 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
             send_frames = []
             send_count = 0
-            connections = {id(connection) for connection in self.session._connections} if self.session else set([])
+            connections = {id(c) for c in self.session._connections} if self.session else set([])
             for send_frame in self.send_frames:
                 if frame.connection == send_frame.connection and send_count < 32 and (connections - frame.used_connections):
                     if not self.frames or send_frame.index >= self.frames[-1].index:
