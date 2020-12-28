@@ -382,7 +382,7 @@ class Center(EventEmitter):
                         min_ttl_connection = connection
                     else:
                         self.drain_connections.append(connection)
-                        
+
                 if min_ttl_connection:
                     self.write_next(min_ttl_connection)
 
@@ -547,7 +547,7 @@ class Center(EventEmitter):
                      self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
                      self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,
                      self.recv_frames[-1].index if self.recv_frames else 0,
-                     self.droped_count, self.resended_count, self.rframe_count, self.sframe_count,
+                     self.droped_count, self.resended_count, self.sframe_count, self.rframe_count,
                      self.ttl, self.session.get_ttl_info() if self.session else "")
 
     def on_ready_streams_lookup(self):
