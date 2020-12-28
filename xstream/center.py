@@ -295,7 +295,7 @@ class Center(EventEmitter):
         if action == ACTION_ACK:
             pass
         elif action == ACTION_RESEND:
-            resend_count = struct.unpack("!I", data[:4])
+            resend_count, = struct.unpack("!I", data[:4])
             now = time.time()
             resend_frame_ids = []
             waiting_frames = []
