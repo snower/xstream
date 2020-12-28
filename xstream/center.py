@@ -34,6 +34,7 @@ class Center(EventEmitter):
         self.send_index = 1
         self.drain_connections = deque()
         self.ack_index = 0
+        self.send_ack_index = 0
         self.ack_loop = False
         self.ack_timeout_loop = False
         self.send_timeout_loop = False
@@ -94,10 +95,12 @@ class Center(EventEmitter):
                 self.wait_reset_frames = []
                 self.send_index = 1
                 logging.info("stream session %s center %s index reset", self.session, self)
-            frame = Frame(action, flag, self.send_index, self.recv_index - 1, data)
+            self.send_ack_index = self.recv_index - 1
+            frame = Frame(action, flag, self.send_index, self.send_ack_index, data)
             self.send_index += 1
         else:
-            frame = Frame(action, flag, index, self.recv_index - 1, data)
+            self.send_ack_index = self.recv_index - 1
+            frame = Frame(action, flag, index, self.send_ack_index, data)
         return frame
 
     def sort_stream(self):
@@ -263,7 +266,7 @@ class Center(EventEmitter):
                     current().add_async(self.on_read_frame)
 
             if not self.ack_loop:
-                current().add_timeout(2, self.on_ack_loop, self.sframe_count, self.recv_index)
+                current().add_timeout(2, self.on_ack_loop, self.sframe_count)
                 self.ack_loop = True
         else:
             if not self.recv_frames or frame.index >= self.recv_frames[-1].index:
@@ -290,10 +293,7 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            self.ack_index, = struct.unpack("!I", data[:4])
-            while self.send_frames and self.send_frames[0].index <= self.ack_index:
-                frame = self.send_frames.pop(0)
-                frame.ack_time = time.time()
+            pass
         elif action == ACTION_RESEND:
             resend_count = struct.unpack("!I", data[:4])
             now = time.time()
@@ -374,29 +374,17 @@ class Center(EventEmitter):
                 bisect.insort(self.wait_reset_frames, frame)
         return frame
 
-    def on_ack_loop(self, last_sframe_count=None, last_recv_index=None):
-        if self.recv_index == last_recv_index:
+    def on_ack_loop(self, last_sframe_count=None):
+        if self.send_ack_index + 1 == self.recv_index:
             self.ack_loop = False
             return
 
         if self.sframe_count != last_sframe_count:
-            current().add_timeout(2, self.on_ack_loop, self.sframe_count, self.recv_index)
+            current().add_timeout(2, self.on_ack_loop, self.sframe_count)
             return
 
-        data = b"".join([struct.pack("!I", self.recv_index - 1), rand_string(random.randint(1, 256))])
-        frame = self.create_frame(data, action=ACTION_ACK, index=0)
-        if self.wait_reset_frames is None:
-            if not self.frames or frame.index >= self.frames[-1].index:
-                self.frames.append(frame)
-            else:
-                bisect.insort(self.frames, frame)
-        else:
-            if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
-                self.wait_reset_frames.append(frame)
-            else:
-                bisect.insort(self.wait_reset_frames, frame)
-        self.write_frame()
-        current().add_timeout(2, self.on_ack_loop, self.sframe_count, self.recv_index)
+        current().add_timeout(2, self.on_ack_loop, self.sframe_count + 1)
+        self.write_action(ACTION_ACK, b'', 0)
 
     def on_ack_timeout_loop(self):
         if not self.recv_frames or self.closed or not self.session:
