@@ -347,7 +347,7 @@ class Center(EventEmitter):
                 current().add_async(self.write_frame)
             logging.info("stream session %s center %s index reset ack action", self.session, self)
         elif action == ACTION_TTL:
-            self.write_action(ACTION_TTL_ACK, data[:12], index=0)
+            self.write_action(ACTION_TTL_ACK, data[:12], index=0, sort_ttl=False)
         elif action == ACTION_TTL_ACK:
             start_time, ttl_index = struct.unpack("!QI", data[:12])
             if ttl_index < self.ttl_index:
@@ -355,7 +355,7 @@ class Center(EventEmitter):
 
             self.on_ttl_ack(time.time() * 1000 - float(start_time) / 1000)
 
-    def write_action(self, action, data=b'', index=None):
+    def write_action(self, action, data=b'', index=None, sort_ttl=True):
         if index is True:
             return self.session.write_action(action, data, index, True)
 
@@ -366,12 +366,34 @@ class Center(EventEmitter):
                 self.frames.append(frame)
             else:
                 bisect.insort(self.frames, frame)
-            self.write_frame()
+
+            if not sort_ttl:
+                self.write_frame()
+                return frame
+
+            while self.frames and self.frames[0].index == 0 and self.drain_connections:
+                min_ttl_connection = None
+                for _ in range(len(self.drain_connections)):
+                    connection = self.drain_connections.popleft()
+                    if connection._closed:
+                        continue
+
+                    if not min_ttl_connection or min_ttl_connection._ttl > connection._ttl:
+                        min_ttl_connection = connection
+                    else:
+                        self.drain_connections.append(connection)
+                        
+                if min_ttl_connection:
+                    self.write_next(min_ttl_connection)
+
+            if self.frames and self.drain_connections:
+                self.write_frame()
+            return frame
+
+        if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
+            self.wait_reset_frames.append(frame)
         else:
-            if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
-                self.wait_reset_frames.append(frame)
-            else:
-                bisect.insort(self.wait_reset_frames, frame)
+            bisect.insort(self.wait_reset_frames, frame)
         return frame
 
     def on_ack_loop(self, last_sframe_count=None):
@@ -509,7 +531,7 @@ class Center(EventEmitter):
                 if self.ttl_index > 0xffffffff:
                     self.ttl_index = 0
                 data = struct.pack("!QI", int(now * 1000000), self.ttl_index)
-                self.write_action(ACTION_TTL, data, index=0)
+                self.write_action(ACTION_TTL, data, index=0, sort_ttl=False)
                 self.ttl_changing = True
                 last_write_ttl_time = now
         finally:
