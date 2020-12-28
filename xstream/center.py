@@ -302,7 +302,7 @@ class Center(EventEmitter):
             connections = {id(c) for c in self.session._connections} if self.session else set([])
 
             for i in range(resend_count):
-                resend_index, = struct.unpack("!I", data[8 + i * 4: 12 + i * 4])
+                resend_index, = struct.unpack("!I", data[4 + i * 4: 8 + i * 4])
                 while self.send_frames:
                     frame = self.send_frames.pop(0)
                     if resend_index == frame.index:
