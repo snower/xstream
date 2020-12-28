@@ -177,7 +177,7 @@ class Stream(EventEmitter):
         if self._capped:
             for _ in range(64):
                 if self._send_buffer:
-                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.next())
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.next())
                     self._send_index += 1
                     self._send_frames.append(frame)
                 else:
@@ -186,11 +186,11 @@ class Stream(EventEmitter):
             for _ in range(64):
                 blen = len(self._send_buffer)
                 if blen > self._session._mss:
-                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.read(self._session._mss))
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.read(self._session._mss))
                     self._send_index += 1
                     self._send_frames.append(frame)
                 elif blen > 0 and (flush_all or len(self._send_frames) < 2):
-                    frame = StreamFrame(self._stream_id, 0, self._send_index, 0, self._send_buffer.read(-1))
+                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.read(-1))
                     self._send_index += 1
                     self._send_frames.append(frame)
                     break
@@ -222,7 +222,7 @@ class Stream(EventEmitter):
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 256 - len(data)))
-        frame = StreamFrame(self._stream_id, 0, self._send_index, action, data)
+        frame = StreamFrame(self._stream_id, action, 0, self._send_index, data)
         self._send_index += 1
         frame.send_time = time.time()
         self.loop.add_async(self._session.write, frame)

@@ -213,7 +213,7 @@ class Session(EventEmitter):
                         self.create_stream(stream_frame.stream_id, priority=priority, capped=capped)
                 elif stream_frame.action == 0x03:
                     data = rand_string(random.randint(1, 256))
-                    frame = StreamFrame(stream_frame.stream_id, 0, 0, 0x04, data)
+                    frame = StreamFrame(stream_frame.stream_id, 0x04, 0, 0, data)
                     frame.send_time = time.time()
                     self.write(frame)
             else:

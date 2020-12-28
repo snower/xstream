@@ -6,13 +6,11 @@ import time
 import struct
 
 class Frame(object):
-    def __init__(self, version, session_id, flag, index, timestamp, action, data, connection=None):
-        self.version = version
-        self.session_id = session_id
+    def __init__(self, action, flag, index, ack, data, connection=None):
+        self.action = action
         self.flag = flag
         self.index = index
-        self.timestamp = 0 #((int(time.time() * 1000) & 0xffffffff0000) | (timestamp & 0xffff)) if timestamp is not None else int(time.time() * 1000)
-        self.action = action
+        self.ack = ack
         self.data = data
         self.connection = connection
         self.used_connections = set([])
@@ -25,17 +23,17 @@ class Frame(object):
 
     def dumps(self):
         if self.data.__class__ == StreamFrame:
-            return b"".join([struct.pack("!BHBIHBHBIB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action,
-                                        self.data.stream_id, self.data.flag, self.data.index, self.data.action), self.data.data])
-        return b"".join([struct.pack("!BHBIHB", self.version, self.session_id, self.flag, self.index, self.timestamp & 0xffff, self.action), self.data])
+            return b"".join([struct.pack("!BBIIHBBI", self.action, self.flag, self.index, self.ack,
+                                        self.data.stream_id, self.data.action, self.data.flag, self.data.index), self.data.data])
+        return b"".join([struct.pack("!BBII", self.action, self.flag, self.index, self.ack), self.data])
 
     @classmethod
     def loads(cls, data, connection=None):
         if data[11] == 0 and len(data) >= 16:
-            unpack_data = struct.unpack("!BHBIHBHBIB", data[1:20])
-            stream_frame = StreamFrame(*unpack_data[6:], data=data[20:])
+            unpack_data = struct.unpack("!BBIIHBBI", data[1:19])
+            stream_frame = StreamFrame(*unpack_data[4:], data=data[19:])
             return Frame(*unpack_data[:6], data=stream_frame, connection=connection)
-        return Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=connection)
+        return Frame(*struct.unpack("!BBII", data[1:11]), data=data[11:], connection=connection)
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)
@@ -60,11 +58,8 @@ class Frame(object):
 
     def __len__(self):
         if self.data.__class__ == StreamFrame:
-            return len(self.data.data) + 19
-        return len(self.data) + 11
-
-    def ttl(self):
-        return int(time.time() * 1000) - self.timestamp
+            return len(self.data.data) + 18
+        return len(self.data) + 10
 
     def close(self):
         self.data = b''
@@ -73,23 +68,23 @@ class StreamFrame(object):
     HEADER_LEN = 25
     FRAME_LEN = 1455 * 2 - HEADER_LEN
 
-    def __init__(self, stream_id, flag, index, action, data):
+    def __init__(self, stream_id, action, flag, index, data):
+        self.action = action
         self.stream_id = stream_id
         self.flag = flag
         self.index = index
-        self.action = action
         self.data = data
         self.send_time = 0
         self.recv_time = 0
 
     def dumps(self):
-        return b"".join([struct.pack("!HBIB", self.stream_id, self.flag, self.index, self.action), self.data])
+        return b"".join([struct.pack("!HBBI", self.stream_id, self.action, self.flag, self.index), self.data])
 
     @classmethod
     def loads(cls, data):
         if data.__class__ == StreamFrame:
             return data
-        return StreamFrame(*struct.unpack("!HBIB", data[:8]), data=data[8:])
+        return StreamFrame(*struct.unpack("!HBBI", data[:8]), data=data[8:])
 
     def __cmp__(self, other):
         return cmp(self.index, other.index)

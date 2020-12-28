@@ -41,7 +41,6 @@ class Connection(EventEmitter):
         self._start_time = time.time()
         self._brdata_len = 5
         self._bwdata_len = 0
-        self._flush_buffer = deque()
         self._wait_head = True
         self._wait_read = False
         self._closed = False
@@ -110,12 +109,12 @@ class Connection(EventEmitter):
                 data = self._crypto.decrypt(data)
 
                 if data[0] == 0:
-                    if data[11] == 0 and len(data) >= 20:
-                        unpack_data = struct.unpack("!BHBIHBHBIB", data[1:20])
-                        stream_frame = StreamFrame(*unpack_data[6:], data=data[20:])
-                        frame = Frame(*unpack_data[:6], data=stream_frame, connection=self)
+                    if data[1] == 0 and len(data) >= 19:
+                        unpack_data = struct.unpack("!BBIIHBBI", data[1:19])
+                        stream_frame = StreamFrame(*unpack_data[4:], data=data[19:])
+                        frame = Frame(*unpack_data[:4], data=stream_frame, connection=self)
                     else:
-                        frame = Frame(*struct.unpack("!BHBIHB", data[1:12]), data=data[12:], connection=self)
+                        frame = Frame(*struct.unpack("!BBII", data[1:11]), data=data[11:], connection=self)
                     self._rlast_index = frame.index or self._rlast_index
                     self.emit_frame(self, frame)
                     self._rfdata_count += 1
@@ -124,44 +123,29 @@ class Connection(EventEmitter):
                 self._rdata_len += len(data) + 5
                 read_count += 1
 
-    def flush(self):
+    def write(self, data):
         if not self._closed:
-            data = []
-            while self._flush_buffer:
-                feg = self._flush_buffer.popleft()
-                if feg.__class__ == Frame:
-                    self._wlast_index = feg.index or self._wlast_index
-                    if feg.data.__class__ == StreamFrame:
-                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHBHBIB", feg.version, feg.session_id, feg.flag, feg.index,
-                                                                                feg.timestamp & 0xffff, feg.action, feg.data.stream_id,
-                                                                                feg.data.flag, feg.data.index, feg.data.action), feg.data.data]))
-                    else:
-                        feg = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BHBIHB", feg.version, feg.session_id, feg.flag, feg.index,
-                                                                                feg.timestamp & 0xffff, feg.action), feg.data]))
+            if data.__class__ == Frame:
+                self._wlast_index = data.index or self._wlast_index
+                if data.data.__class__ == StreamFrame:
+                    data = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BBIIHBBI", data.action, data.flag, data.index,
+                                                                              data.ack, data.data.stream_id, data.data.action,
+                                                                              data.data.flag, data.data.index), data.data.data]))
                 else:
-                    feg = self._crypto.encrypt(b"".join([b'\x00', feg]))
-
-                data.append(b'\x17\x03\x03')
-                data.append(struct.pack("!H", len(feg)))
-                data.append(feg)
-
-            data = b"".join(data)
+                    data = self._crypto.encrypt(b"".join([b'\x00', struct.pack("!BBII", data.action, data.flag, data.index,
+                                                                              data.ack), data.data]))
+            else:
+                data = self._crypto.encrypt(b"".join([b'\x00', data]))
+            data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
             self._wdata_len += len(data)
             self._wpdata_count += 1
+            self._wfdata_count += 1
             try:
                 self._connection.write(data)
             except SocketClosed:
-                pass
-            self._flush_buffer.clear()
-            self._bwdata_len = 0
-
-    def write(self, data):
-        if not self._closed:
-            self._flush_buffer.append(data)
-            self._bwdata_len += len(data) + 8
-            self._wfdata_count += 1
-            return self._session._mss - self._bwdata_len
-        return 0
+                return False
+            return True
+        return False
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 128))
@@ -171,9 +155,10 @@ class Connection(EventEmitter):
         self._wpdata_count += 1
         self._wfdata_count += 1
         try:
-            return self._connection.write(data)
+            self._connection.write(data)
         except SocketClosed:
             return False
+        return True
 
     def on_action(self, action, data):
         if action == ACTION_PING:
