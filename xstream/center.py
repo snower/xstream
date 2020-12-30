@@ -402,14 +402,14 @@ class Center(EventEmitter):
             return
 
         if self.sframe_count != last_sframe_count:
-            current().add_timeout(2, self.on_ack_loop, self.sframe_count, start_time or time.time())
+            current().add_timeout(5, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
         if self.recv_index - self.send_ack_index <= 16 and time.time() - start_time <= 300:
             current().add_timeout(5, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
-        current().add_timeout(2, self.on_ack_loop, self.sframe_count + 1, start_time or time.time())
+        current().add_timeout(5, self.on_ack_loop, self.sframe_count + 1, start_time or time.time())
         self.write_action(ACTION_ACK, b'', 0)
 
     def on_ack_timeout_loop(self):
@@ -422,7 +422,7 @@ class Center(EventEmitter):
             current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
             now = time.time()
-            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 3, 5)
+            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 4, 8)
             while current_index <= last_index:
                 if index >= len(self.recv_frames):
                     break
