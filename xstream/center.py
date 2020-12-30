@@ -519,13 +519,17 @@ class Center(EventEmitter):
                     require_write = True
                 elif (p_send_index >= 718 or p_recv_index >= 718) and now - last_write_ttl_time >= 8:
                     require_write = True
-                elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
+                elif (p_send_index >= 200 or p_recv_index >= 200) and now - last_write_ttl_time >= 13:
                     require_write = True
-                elif (p_send_index >= 10 or p_recv_index >= 10) and now - last_write_ttl_time >= 28:
+                elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 28:
+                    require_write = True
+                elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 58:
                     require_write = True
                 elif now - last_write_ttl_time >= random.randint(178, 298):
                     require_write = True
                 elif len(self.recv_frames) >= 16 and p_recv_index <= 16 and now - last_write_ttl_time >= 8:
+                    require_write = True
+                elif len(self.send_frames) >= 64 and p_send_index <= 16 and now - last_write_ttl_time >= 8:
                     require_write = True
             else:
                 require_write = True
