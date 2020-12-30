@@ -14,12 +14,13 @@ from .crypto import rand_string
 from .utils import format_data_len
 from .frame import Frame, StreamFrame
 
-ACTION_PING = 0x01
-ACTION_PINGACK = 0x02
 ACTION_CLOSE = 0x03
 ACTION_CLOSE_ACK = 0x04
 ACTION_READY = 0x05
 ACTION_NOISE = 0x06
+ACTION_PING = 0x11
+ACTION_PINGACKPING = 0x12
+ACTION_PINGACK = 0x13
 
 class Connection(EventEmitter):
     def __init__(self, connection, session):
@@ -162,7 +163,15 @@ class Connection(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_PING:
+            self._ping_time = time.time()
+            self._ping_ack_time = 0
+            self.write_action(ACTION_PINGACKPING)
+            logging.info("xstream session %s connection %s ping", self._session, self)
+        elif action == ACTION_PINGACKPING:
+            self._ping_ack_time = time.time()
+            self._ttl = (self._ping_ack_time - self._ping_time) * 1000
             self.write_action(ACTION_PINGACK)
+            logging.info("xstream session %s connection %s ping ack", self._session, self)
         elif action == ACTION_PINGACK:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
