@@ -396,16 +396,20 @@ class Center(EventEmitter):
             bisect.insort(self.wait_reset_frames, frame)
         return frame
 
-    def on_ack_loop(self, last_sframe_count=None):
+    def on_ack_loop(self, last_sframe_count=None, start_time=None):
         if self.send_ack_index + 1 == self.recv_index:
             self.ack_loop = False
             return
 
         if self.sframe_count != last_sframe_count:
-            current().add_timeout(2, self.on_ack_loop, self.sframe_count)
+            current().add_timeout(2, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
-        current().add_timeout(2, self.on_ack_loop, self.sframe_count + 1)
+        if self.recv_index - self.send_ack_index <= 16 and time.time() - start_time <= 300:
+            current().add_timeout(5, self.on_ack_loop, self.sframe_count, start_time or time.time())
+            return
+
+        current().add_timeout(2, self.on_ack_loop, self.sframe_count + 1, start_time or time.time())
         self.write_action(ACTION_ACK, b'', 0)
 
     def on_ack_timeout_loop(self):
@@ -463,7 +467,7 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and frame.index <= self.ack_index:
             frame.ack_time = time.time()
 
-        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and self.send_frames:
+        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 16:
             send_frames = []
             send_count = 0
             connections = {id(c) for c in self.session._connections} if self.session else set([])
@@ -517,11 +521,11 @@ class Center(EventEmitter):
                     require_write = True
                 elif (p_send_index >= 100 or p_recv_index >= 100) and now - last_write_ttl_time >= 13:
                     require_write = True
-                elif (p_send_index >= 20 or p_recv_index >= 20) and now - last_write_ttl_time >= 28:
+                elif (p_send_index >= 10 or p_recv_index >= 10) and now - last_write_ttl_time >= 28:
                     require_write = True
-                elif now - last_write_ttl_time >= random.randint(58, 118):
+                elif now - last_write_ttl_time >= random.randint(178, 298):
                     require_write = True
-                elif len(self.recv_frames) >= 16 and p_recv_index < 16 and now - last_write_ttl_time >= 8 and self.ttl < 1000:
+                elif len(self.recv_frames) >= 16 and p_recv_index <= 16 and now - last_write_ttl_time >= 8:
                     require_write = True
             else:
                 require_write = True
