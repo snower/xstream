@@ -396,7 +396,7 @@ class Center(EventEmitter):
             bisect.insort(self.wait_reset_frames, frame)
         return frame
 
-    def on_ack_loop(self, last_sframe_count=None, start_time=None):
+    def on_ack_loop(self, last_sframe_count=None, start_time=0):
         if self.send_ack_index + 1 == self.recv_index:
             self.ack_loop = False
             return
