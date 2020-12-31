@@ -543,7 +543,7 @@ class Center(EventEmitter):
                     if p_send_index >= 20 or p_recv_index >= 20:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= random.randint(178, 298):
+                if not require_write and now - last_write_ttl_time >= random.randint(240, 300):
                     require_write = True
             else:
                 require_write = True
