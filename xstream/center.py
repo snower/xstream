@@ -405,7 +405,7 @@ class Center(EventEmitter):
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
-        if self.recv_index - self.send_ack_index < 8 and time.time() - start_time <= 300:
+        if self.recv_index - self.send_ack_index < 16 and time.time() - start_time <= 300:
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
@@ -520,9 +520,9 @@ class Center(EventEmitter):
                         require_write = True
                     elif p_send_index >= 718 or p_recv_index >= 718:
                         require_write = True
-                    elif len(self.recv_frames) >= 4 and now - self.recv_frames[0].recv_time >= 8:
+                    elif len(self.recv_frames) >= 8 and now - self.recv_frames[0].recv_time >= 8:
                         require_write = True
-                    elif len(self.send_frames) >= 8 and now - self.send_frames[0].send_time >= 8:
+                    elif len(self.send_frames) >= 16 and now - self.send_frames[0].send_time >= 8:
                         require_write = True
 
                 if not require_write and now - last_write_ttl_time >= 13:
