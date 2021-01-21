@@ -422,7 +422,7 @@ class Center(EventEmitter):
             current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
             now = time.time()
-            index, cdata, max_timeout = 0, data, max(self.ttl / 500 * 4, 8)
+            index, cdata, max_timeout = 0, [], max(self.ttl / 500 * 4, 8)
             while current_index <= last_index:
                 if index >= len(self.recv_frames):
                     break
@@ -433,18 +433,13 @@ class Center(EventEmitter):
                     continue
 
                 if recv_frame.index == current_index:
-                    if not cdata:
-                        index += 1
-                        continue
-
-                    if recv_frame.resend_time:
+                    if cdata and recv_frame.resend_time:
                         if now - recv_frame.resend_time > max_timeout * 2:
                             data.extend(cdata)
                             recv_frame.resend_time = now
-                    else:
-                        if now - recv_frame.recv_time > max_timeout:
-                            data.extend(cdata)
-                            recv_frame.resend_time = now
+                    elif cdata and now - recv_frame.recv_time > max_timeout:
+                        data.extend(cdata)
+                        recv_frame.resend_time = now
 
                     cdata = []
                     index += 1
