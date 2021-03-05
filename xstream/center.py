@@ -85,7 +85,8 @@ class Center(EventEmitter):
 
         if connection in self.drain_connections:
             self.drain_connections.remove(connection)
-        current().add_timeout(2.2, check_send_frames)
+        if not connection._finaled:
+            current().add_timeout(2.2, check_send_frames)
 
     def create_frame(self, data, action=0, index=None):
         if index is None:
@@ -405,7 +406,7 @@ class Center(EventEmitter):
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
-        if self.recv_index - self.send_ack_index < 16 and time.time() - start_time <= 300:
+        if self.recv_index - self.send_ack_index < 256 and time.time() - start_time <= 300:
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
@@ -462,7 +463,7 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and frame.index <= self.ack_index:
             frame.ack_time = time.time()
 
-        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 16:
+        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 256:
             send_frames = []
             send_count = 0
             connections = {id(c) for c in self.session._connections} if self.session else set([])

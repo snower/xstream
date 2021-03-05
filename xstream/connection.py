@@ -125,27 +125,29 @@ class Connection(EventEmitter):
                 read_count += 1
 
     def write(self, data):
-        if not self._closed:
-            if data.__class__ == Frame:
-                self._wlast_index = data.index or self._wlast_index
-                if data.data.__class__ == StreamFrame:
-                    data = self._crypto.encrypt(struct.pack("!BBIIHBI", 0, data.action, data.index, data.ack,
-                                                            data.data.stream_id, data.data.flag,
-                                                            data.data.index) + data.data.data)
-                else:
-                    data = self._crypto.encrypt(struct.pack("!BBII", 0, data.action, data.index, data.ack) + data.data)
+        if self._closed:
+            return False
+
+        if data.__class__ == Frame:
+            if data.index > 0:
+                self._wlast_index = data.index
+            if data.data.__class__ == StreamFrame:
+                data = self._crypto.encrypt(struct.pack("!BBIIHBI", 0, data.action, data.index, data.ack,
+                                                        data.data.stream_id, data.data.flag,
+                                                        data.data.index) + data.data.data)
             else:
-                data = self._crypto.encrypt(b'\x00' + data)
-            data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
-            self._wdata_len += len(data)
-            self._wpdata_count += 1
-            self._wfdata_count += 1
-            try:
-                self._connection.write(data)
-            except SocketClosed:
-                return False
-            return True
-        return False
+                data = self._crypto.encrypt(struct.pack("!BBII", 0, data.action, data.index, data.ack) + data.data)
+        else:
+            data = self._crypto.encrypt(b'\x00' + data)
+        data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
+        self._wdata_len += len(data)
+        self._wpdata_count += 1
+        self._wfdata_count += 1
+        try:
+            self._connection.write(data)
+        except SocketClosed:
+            return False
+        return True
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 128))
@@ -189,67 +191,77 @@ class Connection(EventEmitter):
             logging.info('xstream session %s connection ready', self)
 
     def on_expried(self):
-        if not self._closed:
-            self.close()
-            logging.info("xstream session %s connection %s expried timeout", self._session, self)
+        if self._closed:
+            return
+
+        self.close()
+        logging.info("xstream session %s connection %s expried timeout", self._session, self)
 
     def on_ping_loop(self):
-        if not self._closed:
-            if self._session._center.ttl <= 500:
-                timeout = 180
-            elif self._session._center.ttl <= 1000:
-                timeout = 120
-            elif self._session._center.ttl <= 2000:
-                timeout = 60
-            elif self._session._center.ttl <= 3000:
-                timeout = 30
-            elif self._session._center.ttl <= 4000:
-                timeout = 20
-            else:
-                timeout = 15
-            if self._ttl <= 0 or time.time() - self._data_time >= timeout \
-                    or (time.time() - self._ping_time >= timeout
-                        and ((len(self._session._connections) == 2 and self._session._center.ttl >= 3000)
-                        or (len(self._session._connections) > 2 and self._session._center.ttl >= 1000))):
-                self.write_action(ACTION_PING)
-                self._ping_time = time.time()
-                self._ping_ack_time = 0
-                current().add_timeout(5, self.on_ping_timeout)
-                logging.info("xstream session %s connection %s ping", self._session, self)
-            else:
-                current().add_timeout(5, self.on_ping_loop)
+        if self._closed:
+            return
+
+        if self._session._center.ttl <= 500:
+            timeout = 180
+        elif self._session._center.ttl <= 1000:
+            timeout = 120
+        elif self._session._center.ttl <= 2000:
+            timeout = 60
+        elif self._session._center.ttl <= 3000:
+            timeout = 30
+        elif self._session._center.ttl <= 4000:
+            timeout = 20
+        else:
+            timeout = 15
+        if self._ttl <= 0 or time.time() - self._data_time >= timeout \
+                or (time.time() - self._ping_time >= timeout
+                    and ((len(self._session._connections) == 2 and self._session._center.ttl >= 3000)
+                    or (len(self._session._connections) > 2 and self._session._center.ttl >= 1000))):
+            self.write_action(ACTION_PING)
+            self._ping_time = time.time()
+            self._ping_ack_time = 0
+            current().add_timeout(5, self.on_ping_timeout)
+            logging.info("xstream session %s connection %s ping", self._session, self)
+        else:
+            current().add_timeout(5, self.on_ping_loop)
 
     def on_ping_timeout(self):
-        if not self._closed:
-            if self._ping_ack_time == 0:
-                if time.time() - self._ping_time <= 15:
-                    current().add_timeout(5, self.on_ping_timeout)
-                    return
-                self._closed = True
-                self._connection.close()
-                logging.info("xstream session %s connection %s ping timeout", self._session, self)
-            else:
-                current().add_timeout(5, self.on_ping_loop)
+        if self._closed:
+            return
+
+        if self._ping_ack_time == 0:
+            if time.time() - self._ping_time <= 15:
+                current().add_timeout(5, self.on_ping_timeout)
+                return
+            self._closed = True
+            self._connection.close()
+            logging.info("xstream session %s connection %s ping timeout", self._session, self)
+        else:
+            current().add_timeout(5, self.on_ping_loop)
 
     def on_check_data_loop(self):
-        if not self._closed:
-            etime = time.time() - self._start_time
-            if self._rdata_len <= self._expried_data:
-                if self._rdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
-                    return current().add_timeout(5, self.on_check_data_loop)
+        if self._closed:
+            return
 
-            if etime < self._expried_seconds / 2.0:
-                if etime < self._expried_seconds / (2.0 * float(self._rdata_len) / float(self._expried_data)):
-                    return current().add_timeout(5, self.on_check_data_loop)
+        etime = time.time() - self._start_time
+        if self._rdata_len <= self._expried_data:
+            if self._rdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
+                return current().add_timeout(5, self.on_check_data_loop)
 
-            self.close()
-            logging.info("xstream session %s connection %s data len out", self._session, self)
+        if etime < self._expried_seconds / 2.0:
+            if etime < self._expried_seconds / (2.0 * float(self._rdata_len) / float(self._expried_data)):
+                return current().add_timeout(5, self.on_check_data_loop)
+
+        self.close()
+        logging.info("xstream session %s connection %s data len out", self._session, self)
 
     def close(self):
-        if not self._closed:
-            self._closed = True
-            self.write_action(ACTION_CLOSE)
-            current().add_timeout(30, self._connection.close)
+        if self._closed:
+            return
+
+        self._closed = True
+        self.write_action(ACTION_CLOSE)
+        current().add_timeout(30, self._connection.close)
 
     def __del__(self):
         self.close()
