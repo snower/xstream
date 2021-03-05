@@ -266,7 +266,7 @@ class Center(EventEmitter):
                 self.recv_frames.append(frame)
             else:
                 bisect.insort_left(self.recv_frames, frame)
-            if frame.action == 0 and (frame.data.action == 0x01 or frame.data.stream_id in self.session._streams):
+            if frame.action == 0 and (frame.data.flag & 0x02 != 0 or frame.data.stream_id in self.session._streams):
                 self.emit_frame(self, frame)
                 self.recv_uframes[frame.index] = frame
 
