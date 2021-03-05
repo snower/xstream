@@ -58,6 +58,8 @@ class Stream(EventEmitter):
 
         if self._expried_time:
             self._expried_timer = self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
+        else:
+            self._expried_timer = None
 
     @property
     def id(self):
