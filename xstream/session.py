@@ -201,23 +201,23 @@ class Session(EventEmitter):
             stream_frame = frame.data
             stream_frame.recv_time = frame.recv_time
             if stream_frame.stream_id not in self._streams:
-                if stream_frame.action == 0x01:
+                if stream_frame.flag & 0x02 != 0:
                     priority, capped = 0, False
-                    if stream_frame.flag & 0x02:
+                    if stream_frame.flag & 0x10 != 0:
                         priority = 1
-                    if stream_frame.flag & 0x04:
+                    if stream_frame.flag & 0x20 != 0:
                         capped = True
-                    if stream_frame.flag & 0x08:
+                    if stream_frame.flag & 0x40 != 0:
                         self.create_stream(stream_frame.stream_id, priority=priority, capped=capped, expried_time=0)
                     else:
                         self.create_stream(stream_frame.stream_id, priority=priority, capped=capped)
-                elif stream_frame.action == 0x03:
-                    data = rand_string(random.randint(1, 256))
-                    frame = StreamFrame(stream_frame.stream_id, 0x04, 0, 0, data)
+                elif stream_frame.flag & 0x04 != 0:
+                    data = rand_string(random.randint(1, 64))
+                    frame = StreamFrame(stream_frame.stream_id, 0x04, 0, data)
                     frame.send_time = time.time()
                     self.write(frame)
             else:
-                if stream_frame.action == 0x01:
+                if stream_frame.flag & 0x02 != 0:
                     return self._streams[stream_frame.stream_id].close()
 
             if stream_frame.stream_id in self._streams:
@@ -244,7 +244,7 @@ class Session(EventEmitter):
                 self._current_stream_id = 1 if self._is_server else 2
         return stream_id
 
-    def create_stream(self, stream_id = None, **kwargs):
+    def create_stream(self, stream_id=None, **kwargs):
         is_server = stream_id is not None
         if stream_id is None:
             stream_id = self.get_stream_id()

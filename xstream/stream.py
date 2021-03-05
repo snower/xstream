@@ -13,13 +13,19 @@ from .frame import StreamFrame
 from .crypto import rand_string
 from .utils import format_data_len
 
-ACTION_OPEN  = 1
-ACTION_OPENED = 2
-ACTION_CLIOSE = 3
-ACTION_CLIOSED = 4
+STATE_INITED = 0x01
+STATE_OPENED = 0x02
+STATE_CLOSED = 0x04
+
+FLAG_DATA = 0x01
+FLAG_OPEN = 0x02
+FLAG_CLOSE = 0x04
+FLAG_NONE_PRIORITY = 0x10
+FLAG_CAPPED = 0x20
+FLAG_NONE_EXPRIED = 0x40
 
 class Stream(EventEmitter):
-    def __init__(self, stream_id, session, is_server = False, priority = 0, capped = False, expried_time = 900):
+    def __init__(self, stream_id, session, is_server=False, priority=0, capped=False, expried_time=900):
         super(Stream, self).__init__()
 
         now = time.time()
@@ -30,7 +36,7 @@ class Stream(EventEmitter):
         self._is_server = is_server
         self._priority = priority
         self._capped = capped
-        self._closed = False
+        self._state = STATE_INITED if not is_server else STATE_OPENED
         self._expried_time = expried_time
         self._start_time = now
 
@@ -51,7 +57,7 @@ class Stream(EventEmitter):
         self._recv_wait_emit = False
 
         if self._expried_time:
-            self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
+            self._expried_timer = self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     @property
     def id(self):
@@ -84,10 +90,10 @@ class Stream(EventEmitter):
 
     def on_frame(self, frame):
         if frame.index == 0:
-            if frame.action == 0:
-                self.on_read(frame)
-            else:
+            if frame.flag & 0xfe != 0:
                 self.on_action(frame)
+            if frame.flag & 0x01 != 0:
+                self.on_read(frame)
             return
 
         if frame.index != self._recv_index:
@@ -100,10 +106,10 @@ class Stream(EventEmitter):
                 bisect.insort_left(self._recv_frames, frame)
             return
 
-        if frame.action == 0:
-            self.on_read(frame)
-        else:
+        if frame.flag & 0xfe != 0:
             self.on_action(frame)
+        if frame.flag & 0x01 != 0:
+            self.on_read(frame)
         self._recv_index += 1
 
         read_frame_count = 0
@@ -120,10 +126,10 @@ class Stream(EventEmitter):
                 current().add_async(self.on_frame, frame)
                 return
 
-            if frame.action == 0:
-                self.on_read(frame)
-            else:
+            if frame.flag & 0xfe != 0:
                 self.on_action(frame)
+            if frame.flag & 0x01 != 0:
+                self.on_read(frame)
             self._recv_index += 1
             read_frame_count += 1
 
@@ -147,22 +153,24 @@ class Stream(EventEmitter):
 
     def do_write(self):
         if len(self._send_frames) <= 1 and self._send_buffer:
-            if not self._closed:
+            if self._state != STATE_CLOSED:
                 self.flush()
 
         if self._send_frames:
             frame = self._send_frames.popleft()
-            if self._send_frame_count == 0 and frame.action == 0 and not self._is_server:
-                frame.action = ACTION_OPEN
-                if self._priority != 0:
-                    frame.flag |= 0x02
-                if self._capped:
-                    frame.flag |= 0x04
-                if self._expried_time == 0:
-                    frame.flag |= 0x08
-
             frame.send_time = time.time()
-            self._session.write(frame)
+            if self._state == STATE_INITED:
+                frame.flag |= FLAG_OPEN
+                if self._priority != 0:
+                    frame.flag |= FLAG_NONE_PRIORITY
+                if self._capped:
+                    frame.flag |= FLAG_CAPPED
+                if self._expried_time == 0:
+                    frame.flag |= FLAG_NONE_EXPRIED
+                if self._session.write(frame):
+                    self._state = STATE_OPENED
+            else:
+                self._session.write(frame)
             self._send_frame_count += 1
             self._send_data_len += len(frame)
             self._send_time = frame.send_time
@@ -170,14 +178,14 @@ class Stream(EventEmitter):
         self._send_is_set_ready = bool(self._send_frames)
         return self._send_is_set_ready
         
-    def flush(self, flush_all = False):
+    def flush(self, flush_all=False):
         if not self._send_buffer:
             return 
 
         if self._capped:
             for _ in range(64):
                 if self._send_buffer:
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.next())
+                    frame = StreamFrame(self._stream_id, 0x01, self._send_index, self._send_buffer.next())
                     self._send_index += 1
                     self._send_frames.append(frame)
                 else:
@@ -185,12 +193,12 @@ class Stream(EventEmitter):
         else:
             for _ in range(64):
                 blen = len(self._send_buffer)
-                if blen > self._session._mss:
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.read(self._session._mss))
+                if blen >= self._session._mss:
+                    frame = StreamFrame(self._stream_id, 0x01, self._send_index, self._send_buffer.read(self._session._mss))
                     self._send_index += 1
                     self._send_frames.append(frame)
                 elif blen > 0 and (flush_all or len(self._send_frames) < 2):
-                    frame = StreamFrame(self._stream_id, 0, 0, self._send_index, self._send_buffer.read(-1))
+                    frame = StreamFrame(self._stream_id, 0x01, self._send_index, self._send_buffer.read(-1))
                     self._send_index += 1
                     self._send_frames.append(frame)
                     break
@@ -208,7 +216,7 @@ class Stream(EventEmitter):
                 self.do_close()
 
     def write(self, data):
-        if not self._closed:
+        if self._state != STATE_CLOSED:
             if not data:
                 return
 
@@ -221,53 +229,53 @@ class Stream(EventEmitter):
                 self.loop.add_async(self.on_write)
 
     def write_action(self, action, data=b''):
-        data += rand_string(random.randint(1, 256 - len(data)))
-        frame = StreamFrame(self._stream_id, action, 0, self._send_index, data)
+        data += rand_string(random.randint(1, 128))
+        frame = StreamFrame(self._stream_id, action, self._send_index, data)
         self._send_index += 1
         frame.send_time = time.time()
         self.loop.add_async(self._session.write, frame)
 
     def on_action(self, frame):
-        if frame.action == ACTION_OPEN:
-            if frame.flag & 0x01:
-                self.write_action(ACTION_OPENED)
-
-            self.on_read(frame)
-        elif frame.action == ACTION_OPENED:
-            pass
-        elif frame.action == ACTION_CLIOSE:
-            if frame.flag & 0x01:
-                self.on_read(frame)
-            self.write_action(ACTION_CLIOSED)
-            self.remove_all_send_frames()
-            self.do_close()
-        elif frame.action == ACTION_CLIOSED:
-            self.do_close()
+        if frame.flag & FLAG_OPEN != 0:
+            if self._state == STATE_INITED:
+                self._state = STATE_OPENED
+        if frame.flag & FLAG_CLOSE != 0:
+            def do_close():
+                if self._state == STATE_OPENED:
+                    self.write_action(FLAG_CLOSE)
+                    self.remove_all_send_frames()
+                self.do_close()
+            self.loop.add_async(do_close)
+        if frame.flag & FLAG_NONE_PRIORITY != 0:
+            self._priority = 0
+        if frame.flag & FLAG_CAPPED != 0:
+            self._capped = True
+        if frame.flag & FLAG_NONE_EXPRIED != 0:
+            self._expried_time = 0
 
     def close(self):
-        if self._closed:
+        if self._state == STATE_CLOSED:
             return
 
-        self._closed = True
-
-        if self._session.closed or self._send_frame_count <= 0:
+        if self._session.closed or self._state != STATE_OPENED:
+            self._state = STATE_CLOSED
             return self.do_close()
 
+        self._state = STATE_CLOSED
         while self._send_buffer:
             self.flush(True)
 
         if self._send_frames:
             frame = self._send_frames[-1]
-            frame.action = ACTION_CLIOSE
-            frame.flag = 0x01
+            frame.flag |= FLAG_CLOSE
 
             if not self._send_is_set_ready and self._send_frames:
                 self._send_time = time.time()
                 self._send_is_set_ready = True
                 if not self._session.ready_write(self):
-                    self.do_close()
+                    return self.do_close()
         else:
-            self.write_action(ACTION_CLIOSE)
+            self.write_action(FLAG_CLOSE)
 
         def do_colse_timeout():
             if self._session:
@@ -278,7 +286,7 @@ class Stream(EventEmitter):
         if not self._session:
             return
         
-        self._closed = True
+        self._state = STATE_CLOSED
         def do_close():
             if self._send_is_set_ready:
                 self._session.ready_write(self, False)
@@ -290,19 +298,23 @@ class Stream(EventEmitter):
                 self._session.close_stream(self)
                 self.remove_all_listeners()
                 self._session = None
+            if self._expried_timer:
+                self.loop.cancel_timeout(self._expried_timer)
+                self._expried_timer = None
             logging.info("xstream session %s stream %s close %s(%s) %s(%s) %.2fms", session, self,
                          format_data_len(self._send_data_len), self._send_frame_count,
                          format_data_len(self._recv_data_len), self._recv_frame_count,
                          (time.time() - self._start_time) * 1000)
-
         self.loop.add_async(do_close)
 
     def on_time_out_loop(self):
-        if not self._closed:
-            if time.time() - max(self._send_time, self._recv_time) > self._expried_time:
-                self.close()
-            else:
-                self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
+        if self._state == STATE_CLOSED or self._expried_time == 0:
+            return
+
+        if time.time() - max(self._send_time, self._recv_time) > self._expried_time:
+            self.close()
+        else:
+            self._expried_timer = self.loop.add_timeout(self._expried_time / 5.0, self.on_time_out_loop)
 
     def __del__(self):
         self.close()

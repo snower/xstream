@@ -87,7 +87,7 @@ class Center(EventEmitter):
             self.drain_connections.remove(connection)
         current().add_timeout(2.2, check_send_frames)
 
-    def create_frame(self, data, action=0, flag=0, index=None):
+    def create_frame(self, data, action=0, index=None):
         if index is None:
             if self.send_index == 0x7fffffff:
                 self.write_action(ACTION_INDEX_RESET, index=self.send_index)
@@ -95,11 +95,11 @@ class Center(EventEmitter):
                 logging.info("stream session %s center %s index reset", self.session, self)
 
             self.send_ack_index = self.recv_index - 1
-            frame = Frame(action, flag, self.send_index, self.send_ack_index, data)
+            frame = Frame(action, self.send_index, self.send_ack_index, data)
             self.send_index += 1
         else:
             self.send_ack_index = self.recv_index - 1
-            frame = Frame(action, flag, index, self.send_ack_index, data)
+            frame = Frame(action, index, self.send_ack_index, data)
         return frame
 
     def sort_stream(self):
