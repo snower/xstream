@@ -42,7 +42,6 @@ class Center(EventEmitter):
         self.ttl = 1000
         self.ttl_index = 0
         self.ttl_changing = False
-        self.wait_reset_frames = None
         self.closed = False
         self.waiting_read_frame = False
         self.ready_streams_lookup_timeout = None
@@ -90,11 +89,11 @@ class Center(EventEmitter):
 
     def create_frame(self, data, action=0, flag=0, index=None):
         if index is None:
-            if self.send_index >= 0xffffffff:
+            if self.send_index == 0x7fffffff:
                 self.write_action(ACTION_INDEX_RESET, index=self.send_index)
-                self.wait_reset_frames = []
-                self.send_index = 1
+                self.send_index += 1
                 logging.info("stream session %s center %s index reset", self.session, self)
+
             self.send_ack_index = self.recv_index - 1
             frame = Frame(action, flag, self.send_index, self.send_ack_index, data)
             self.send_index += 1
@@ -121,38 +120,31 @@ class Center(EventEmitter):
                 self.ready_streams_lookup_timeout = current().add_timeout(2, self.on_ready_streams_lookup)
 
         def do_stream_write():
+            if not self.drain_connections:
+                return
+            if self.frames:
+                return self.write_frame()
             if not self.ready_streams:
                 return
-
             self.sort_stream()
-            if self.drain_connections and self.wait_reset_frames is None:
-                if self.frames:
-                    self.write_frame()
-                else:
-                    stream = self.ready_streams[0]
-                    if not stream.do_write():
-                        self.ready_streams.pop(0)
+            stream = self.ready_streams[0]
+            if not stream.do_write():
+                self.ready_streams.pop(0)
         current().add_async(do_stream_write)
         return True
 
     def write(self, data):
         frame = self.create_frame(data)
-        if self.wait_reset_frames is None:
-            if not self.frames or frame.index >= self.frames[-1].index:
-                self.frames.append(frame)
-            else:
-                bisect.insort(self.frames, frame)
-            self.write_frame()
+        if not self.frames or frame.index >= self.frames[-1].index:
+            self.frames.append(frame)
         else:
-            if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
-                self.wait_reset_frames.append(frame)
-            else:
-                bisect.insort(self.wait_reset_frames, frame)
+            bisect.insort(self.frames, frame)
+        self.write_frame()
         return frame
 
     def write_frame(self):
         for _ in range(len(self.drain_connections)):
-            if not self.frames:
+            if not self.frames or self.frames[0].index > 0x7fffffff:
                 return
             
             connection = self.drain_connections.popleft()
@@ -182,9 +174,9 @@ class Center(EventEmitter):
         frame = self.get_write_connection_frame(connection)
         if not frame:
             self.drain_connections.append(connection)
-            if self.ready_streams and self.wait_reset_frames is None:
+            if self.ready_streams:
                 def continue_write_next():
-                    if self.ready_streams and self.wait_reset_frames is None:
+                    if self.ready_streams:
                         stream = self.ready_streams[0]
                         if not stream.do_write():
                             self.ready_streams.pop(0)
@@ -286,7 +278,7 @@ class Center(EventEmitter):
         if self.frames:
             return self.write_frame()
 
-        while not self.frames and self.wait_reset_frames is None and self.ready_streams:
+        while not self.frames and self.ready_streams:
             stream = self.ready_streams[0]
             if not stream.do_write():
                 self.ready_streams.pop(0)
@@ -330,15 +322,30 @@ class Center(EventEmitter):
                 current().add_async(self.write_frame)
             logging.info("stream session %s center %s index resend action %s %s %s", self.session, self, self.ack_index, resend_count, resend_frame_ids)
         elif action == ACTION_INDEX_RESET:
-            self.write_action(ACTION_INDEX_RESET_ACK)
-            self.recv_index = 0
+            if self.send_index >= 0x7fffffff:
+                self.write_action(ACTION_INDEX_RESET_ACK)
+            else:
+                self.write_action(ACTION_INDEX_RESET_ACK, index=self.send_index)
+                self.send_index += 1
+            self.recv_index = 1
+            self.send_ack_index = 0
+            if self.recv_frames:
+                self.recv_frames = []
+            if self.recv_uframes:
+                self.recv_uframes = {}
             logging.info("stream session %s center %s index reset action", self.session, self)
         elif action == ACTION_INDEX_RESET_ACK:
-            self.send_frames = []
-            self.frames += self.wait_reset_frames
-            self.wait_reset_frames = None
+            self.send_index = 1
+            for frame in self.frames:
+                if frame.index > 0x7fffffff:
+                    frame.index -= 0x7fffffff
+                if frame.index + 1 > self.send_index:
+                    self.send_index = frame.index + 1
+            self.ack_index = 0
+            if self.send_frames:
+                self.send_frames = []
 
-            if self.ready_streams:
+            if not self.frames and self.ready_streams:
                 stream = self.ready_streams[0]
                 if not stream.do_write():
                     self.ready_streams.pop(0)
@@ -361,39 +368,32 @@ class Center(EventEmitter):
 
         data += rand_string(random.randint(1, 256)) if len(data) < 512 else b''
         frame = self.create_frame(data, action=action, index=index)
-        if self.wait_reset_frames is None:
-            if not self.frames or frame.index >= self.frames[-1].index:
-                self.frames.append(frame)
-            else:
-                bisect.insort(self.frames, frame)
+        if not self.frames or frame.index >= self.frames[-1].index:
+            self.frames.append(frame)
+        else:
+            bisect.insort(self.frames, frame)
 
-            if not sort_ttl:
-                self.write_frame()
-                return frame
-
-            while self.frames and self.frames[0].index == 0 and self.drain_connections:
-                min_ttl_connection = None
-                for _ in range(len(self.drain_connections)):
-                    connection = self.drain_connections.popleft()
-                    if connection._closed:
-                        continue
-
-                    if not min_ttl_connection or min_ttl_connection._ttl > connection._ttl:
-                        min_ttl_connection = connection
-                    else:
-                        self.drain_connections.append(connection)
-
-                if min_ttl_connection:
-                    self.write_next(min_ttl_connection)
-
-            if self.frames and self.drain_connections:
-                self.write_frame()
+        if not sort_ttl:
+            self.write_frame()
             return frame
 
-        if not self.wait_reset_frames or frame.index >= self.wait_reset_frames[-1].index:
-            self.wait_reset_frames.append(frame)
-        else:
-            bisect.insort(self.wait_reset_frames, frame)
+        while self.frames and self.frames[0].index == 0 and self.drain_connections:
+            min_ttl_connection = None
+            for _ in range(len(self.drain_connections)):
+                connection = self.drain_connections.popleft()
+                if connection._closed:
+                    continue
+
+                if not min_ttl_connection or min_ttl_connection._ttl > connection._ttl:
+                    min_ttl_connection = connection
+                else:
+                    self.drain_connections.append(connection)
+
+            if min_ttl_connection:
+                self.write_next(min_ttl_connection)
+
+        if self.frames and self.drain_connections:
+            self.write_frame()
         return frame
 
     def on_ack_loop(self, last_sframe_count=None, start_time=0):
