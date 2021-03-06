@@ -43,7 +43,6 @@ class Center(EventEmitter):
         self.ttl_index = 0
         self.ttl_changing = False
         self.closed = False
-        self.waiting_read_frame = False
         self.ready_streams_lookup_timeout = None
         self.droped_count = 0
         self.resended_count = 0
@@ -210,27 +209,6 @@ class Center(EventEmitter):
         self.sframe_count += 1
         return frame
 
-    def on_read_frame(self):
-        self.waiting_read_frame = False
-        read_frame_count = 0
-        while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
-            frame = self.recv_frames[0]
-            if frame.index == self.recv_index:
-                if read_frame_count >= 128:
-                    self.waiting_read_frame = True
-                    current().add_async(self.on_read_frame)
-                    return
-
-                if frame.index in self.recv_uframes:
-                    self.recv_uframes.pop(self.recv_frames[0].index, None)
-                else:
-                    self.emit_frame(self, frame)
-                self.recv_index += 1
-                read_frame_count += 1
-            else:
-                self.droped_count += 1
-            self.recv_frames.pop(0)
-
     def on_frame(self, connection, frame):
         frame.recv_time = time.time()
         self.rframe_count += 1
@@ -253,10 +231,17 @@ class Center(EventEmitter):
             self.emit_frame(self, frame)
             self.recv_index += 1
 
-            if self.recv_frames and self.recv_frames[0].index <= self.recv_index:
-                if not self.waiting_read_frame:
-                    self.waiting_read_frame = True
-                    current().add_async(self.on_read_frame)
+            while self.recv_frames and self.recv_frames[0].index <= self.recv_index:
+                frame = self.recv_frames[0]
+                if frame.index == self.recv_index:
+                    if frame.index in self.recv_uframes:
+                        self.recv_uframes.pop(self.recv_frames[0].index, None)
+                    else:
+                        self.emit_frame(self, frame)
+                    self.recv_index += 1
+                else:
+                    self.droped_count += 1
+                self.recv_frames.pop(0)
 
             if not self.ack_loop:
                 current().add_timeout(2, self.on_ack_loop, self.sframe_count)
@@ -406,7 +391,7 @@ class Center(EventEmitter):
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
-        if self.recv_index - self.send_ack_index < 256 and time.time() - start_time <= 300:
+        if self.recv_index - self.send_ack_index <= 8 and time.time() - start_time <= 300:
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
             return
 
@@ -463,7 +448,7 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and frame.index <= self.ack_index:
             frame.ack_time = time.time()
 
-        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 256:
+        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 16:
             send_frames = []
             send_count = 0
             connections = {id(c) for c in self.session._connections} if self.session else set([])
@@ -524,7 +509,7 @@ class Center(EventEmitter):
                 if not require_write and now - last_write_ttl_time >= 13:
                     if self.ttl > 1000:
                         require_write = True
-                    elif p_send_index >= 200 or p_recv_index >= 200:
+                    elif p_send_index >= 359 or p_recv_index >= 359:
                         require_write = True
                     elif len(self.recv_frames) >= 16 and p_recv_index <= 16:
                         require_write = True
@@ -532,11 +517,11 @@ class Center(EventEmitter):
                         require_write = True
 
                 if not require_write and now - last_write_ttl_time >= 28:
-                    if p_send_index >= 100 or p_recv_index >= 100:
+                    if p_send_index >= 200 or p_recv_index >= 200:
                         require_write = True
 
                 if not require_write and now - last_write_ttl_time >= 58:
-                    if p_send_index >= 20 or p_recv_index >= 20:
+                    if p_send_index >= 100 or p_recv_index >= 100:
                         require_write = True
 
                 if not require_write and now - last_write_ttl_time >= random.randint(240, 300):

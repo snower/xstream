@@ -7,8 +7,7 @@ import logging
 import random
 import struct
 import socket
-from collections import deque
-from sevent import EventEmitter, current, Buffer
+from sevent import EventEmitter, current
 from sevent.errors import SocketClosed
 from .crypto import rand_string
 from .utils import format_data_len
@@ -43,7 +42,6 @@ class Connection(EventEmitter):
         self._brdata_len = 5
         self._bwdata_len = 0
         self._wait_head = True
-        self._wait_read = False
         self._closed = False
         self._finaled = False
         self._data_time = time.time()
@@ -74,9 +72,8 @@ class Connection(EventEmitter):
 
         self._data_time = time.time()
         self._rpdata_count += 1
-        if not self._wait_read and buffer._len >= self._brdata_len:
-            self._wait_read = True
-            self.loop.add_async(self.read, buffer)
+        if buffer._len >= self._brdata_len:
+            self.read(buffer)
 
     def on_drain(self, connection):
         self.emit_drain(self)
@@ -92,18 +89,11 @@ class Connection(EventEmitter):
                      format_data_len(self._wdata_len), self._wfdata_count, self._wpdata_count)
 
     def read(self, buffer):
-        self._wait_read = False
-        read_count = 0
         while buffer._len >= self._brdata_len:
             data = buffer.read(self._brdata_len)
             if self._wait_head:
                 self._wait_head = False
                 self._brdata_len, = struct.unpack("!H", data[3:])
-                if read_count >= 128:
-                    if buffer._len >= self._brdata_len:
-                        self._wait_read = True
-                        self.loop.add_async(self.read, buffer)
-                    break
             else:
                 self._wait_head = True
                 self._brdata_len = 5
@@ -122,7 +112,6 @@ class Connection(EventEmitter):
                 else:
                     self.on_action(data[0], data[1:])
                 self._rdata_len += len(data) + 5
-                read_count += 1
 
     def write(self, data):
         if self._closed:
@@ -201,8 +190,10 @@ class Connection(EventEmitter):
         if self._closed:
             return
 
-        if self._session._center.ttl <= 500:
-            timeout = 180
+        if self._session._center.ttl <= 250:
+            timeout = random.randint(240, 300)
+        elif self._session._center.ttl <= 500:
+            timeout = random.randint(120, 180)
         elif self._session._center.ttl <= 1000:
             timeout = 120
         elif self._session._center.ttl <= 2000:

@@ -114,7 +114,6 @@ class Stream(EventEmitter):
             self.on_read(frame)
         self._recv_index += 1
 
-        read_frame_count = 0
         while self._recv_frames:
             frame = self._recv_frames[0]
             if frame.index != self._recv_index:
@@ -124,16 +123,11 @@ class Stream(EventEmitter):
                 break
 
             self._recv_frames.pop(0)
-            if read_frame_count >= 128:
-                current().add_async(self.on_frame, frame)
-                return
-
             if frame.flag & 0xfe != 0:
                 self.on_action(frame)
             if frame.flag & 0x01 != 0:
                 self.on_read(frame)
             self._recv_index += 1
-            read_frame_count += 1
 
     def on_read(self, frame):
         if not self._recv_wait_emit:
@@ -155,8 +149,7 @@ class Stream(EventEmitter):
 
     def do_write(self):
         if len(self._send_frames) <= 1 and self._send_buffer:
-            if self._state != STATE_CLOSED:
-                self.flush()
+            self.flush()
 
         if self._send_frames:
             frame = self._send_frames.popleft()
@@ -181,9 +174,6 @@ class Stream(EventEmitter):
         return self._send_is_set_ready
         
     def flush(self, flush_all=False):
-        if not self._send_buffer:
-            return 
-
         if self._capped:
             for _ in range(64):
                 if self._send_buffer:
@@ -199,13 +189,12 @@ class Stream(EventEmitter):
                     frame = StreamFrame(self._stream_id, 0x01, self._send_index, self._send_buffer.read(self._session._mss))
                     self._send_index += 1
                     self._send_frames.append(frame)
+                    continue
                 elif blen > 0 and (flush_all or len(self._send_frames) < 2):
                     frame = StreamFrame(self._stream_id, 0x01, self._send_index, self._send_buffer.read(-1))
                     self._send_index += 1
                     self._send_frames.append(frame)
-                    break
-                else:
-                    break
+                break
             
     def on_write(self):
         if self._send_is_set_ready:
@@ -215,20 +204,18 @@ class Stream(EventEmitter):
             self._send_time = time.time()
             self._send_is_set_ready = True
             if not self._session.ready_write(self):
-                self.do_close()
+                self.loop.add_async(self.do_close)
 
     def write(self, data):
-        if self._state != STATE_CLOSED:
-            if not data:
-                return
+        if self._state == STATE_CLOSED or not data:
+            return
 
-            if data.__class__ == Buffer:
-                self._send_buffer.extend(data)
-            else:
-                self._send_buffer.write(data)
-
-            if not self._send_is_set_ready:
-                self.loop.add_async(self.on_write)
+        if data.__class__ == Buffer:
+            self._send_buffer.extend(data)
+        else:
+            self._send_buffer.write(data)
+        if not self._send_is_set_ready:
+            self.loop.add_async(self.on_write)
 
     def write_action(self, action, data=b''):
         data += rand_string(random.randint(1, 128))
