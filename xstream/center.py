@@ -119,18 +119,17 @@ class Center(EventEmitter):
             if not self.ready_streams_lookup_timeout and len(self.ready_streams) > 1:
                 self.ready_streams_lookup_timeout = current().add_timeout(2, self.on_ready_streams_lookup)
 
-        def do_stream_write():
-            if not self.drain_connections:
-                return
-            if self.frames:
-                return self.write_frame()
-            if not self.ready_streams:
-                return
-            self.sort_stream()
-            stream = self.ready_streams[0]
-            if not stream.do_write():
-                self.ready_streams.pop(0)
-        current().add_async(do_stream_write)
+        if not self.drain_connections:
+            return True
+        if self.frames:
+            self.write_frame()
+            return True
+        if not self.ready_streams:
+            return True
+        self.sort_stream()
+        stream = self.ready_streams[0]
+        if not stream.do_write():
+            self.ready_streams.pop(0)
         return True
 
     def write(self, data):
