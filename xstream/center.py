@@ -485,7 +485,7 @@ class Center(EventEmitter):
                     return
         self.send_timeout_loop = False
 
-    def write_ttl(self, last_write_ttl_time=0, last_send_index=0, last_recv_index=0):
+    def write_ttl(self, last_write_ttl_time=0, last_send_index=0, last_recv_index=0, rewrite_timeout=0):
         if self.closed:
             return
 
@@ -499,11 +499,12 @@ class Center(EventEmitter):
             if last_write_ttl_time and last_send_index and last_recv_index:
                 p_send_index = self.send_index - last_send_index
                 p_recv_index = self.recv_index - last_recv_index
-                if now - last_write_ttl_time >= 3:
+                last_write_ttl_timeout = now - last_write_ttl_time
+                if last_write_ttl_timeout >= 3:
                     if p_send_index >= 2872 or p_recv_index >= 2872:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= 8:
+                if not require_write and last_write_ttl_timeout >= 8:
                     if self.ttl > 2000:
                         require_write = True
                     elif p_send_index >= 718 or p_recv_index >= 718:
@@ -513,7 +514,7 @@ class Center(EventEmitter):
                     elif len(self.send_frames) >= 16 and now - self.send_frames[0].send_time >= 8:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= 13:
+                if not require_write and last_write_ttl_timeout >= 13:
                     if self.ttl > 1000:
                         require_write = True
                     elif p_send_index >= 359 or p_recv_index >= 359:
@@ -523,35 +524,37 @@ class Center(EventEmitter):
                     elif len(self.send_frames) >= 16 and p_send_index <= 16:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= 28:
+                if not require_write and last_write_ttl_timeout >= 28:
                     if p_send_index >= 200 or p_recv_index >= 200:
                         require_write = True
                     elif len(self.recv_frames) >= 2 and now - self.recv_frames[0].recv_time >= 45:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= 58:
+                if not require_write and last_write_ttl_timeout >= 58:
                     if p_send_index >= 100 or p_recv_index >= 100:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= random.randint(300, 600):
+                if not require_write and last_write_ttl_timeout >= rewrite_timeout:
                     require_write = True
             else:
                 require_write = True
 
-            if require_write:
-                self.ttl_index += 1
-                if self.ttl_index > 0xffffffff:
-                    self.ttl_index = 0
-                data = struct.pack("!QII", int(now * 1000000), self.ttl_index, int(self.ttl * 1000))
-                self.write_action(ACTION_TTL, data, index=0, sort_ttl=False)
-                self.ttl_changing = True
-                last_write_ttl_time = now
+            if not require_write:
+                return
+            self.ttl_index += 1
+            if self.ttl_index > 0xffffffff:
+                self.ttl_index = 0
+            data = struct.pack("!QII", int(now * 1000000), self.ttl_index, int(self.ttl * 1000))
+            self.write_action(ACTION_TTL, data, index=0, sort_ttl=False)
+            self.ttl_changing = True
+            last_write_ttl_time, rewrite_timeout = now, random.randint(300, 600)
         finally:
-            current().add_timeout(5, self.write_ttl, last_write_ttl_time, self.send_index, self.recv_index)
+            current().add_timeout(5, self.write_ttl, last_write_ttl_time, self.send_index,
+                                  self.recv_index, rewrite_timeout)
 
     def on_ttl_ack(self, ack_time):
         self.ttl_changing = False
-        self.ttl = max((float(self.ttl) + float(ack_time)) / 2.0, 50)
+        self.ttl = max(float(self.ttl + ack_time) / 2.0, 50)
         logging.info("stream session %s center proactive <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s %s) > ttl %.3fms %s", self.session, self,
                      self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
                      self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,

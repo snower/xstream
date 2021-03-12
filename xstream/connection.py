@@ -186,12 +186,15 @@ class Connection(EventEmitter):
         self.close()
         logging.info("xstream session %s connection %s expried timeout", self._session, self)
 
-    def on_ping_loop(self):
+    def on_ping_loop(self, reping_timeout=0):
         if self._closed:
             return
 
+        if reping_timeout <= 0:
+            reping_timeout = random.randint(240, 300)
+
         if self._session._center.ttl <= 250:
-            timeout = random.randint(240, 300)
+            timeout = reping_timeout
         elif self._session._center.ttl <= 500:
             timeout = random.randint(120, 180)
         elif self._session._center.ttl <= 1000:
@@ -214,7 +217,7 @@ class Connection(EventEmitter):
             current().add_timeout(5, self.on_ping_timeout)
             logging.info("xstream session %s connection %s ping", self._session, self)
         else:
-            current().add_timeout(5, self.on_ping_loop)
+            current().add_timeout(5, self.on_ping_loop, reping_timeout)
 
     def on_ping_timeout(self):
         if self._closed:
