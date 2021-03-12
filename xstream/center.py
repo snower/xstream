@@ -38,8 +38,7 @@ class Center(EventEmitter):
         self.ack_loop = False
         self.ack_timeout_loop = False
         self.send_timeout_loop = False
-        self.ttls = [0]
-        self.ttl = 1000
+        self.ttl = 50
         self.ttl_index = 0
         self.ttl_changing = False
         self.closed = False
@@ -340,6 +339,15 @@ class Center(EventEmitter):
             logging.info("stream session %s center %s index reset ack action", self.session, self)
         elif action == ACTION_TTL:
             self.write_action(ACTION_TTL_ACK, data[:12], index=0, sort_ttl=False)
+            ttl, = struct.unpack("!I", data[12:16])
+            self.ttl = max((self.ttl + float(ttl) / 1000.0) / 2.0, 50)
+            logging.info("stream session %s center passive <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s %s) > ttl %.3fms %s",
+                         self.session, self,
+                         self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
+                         self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,
+                         self.recv_frames[-1].index if self.recv_frames else 0,
+                         self.droped_count, self.resended_count, self.sframe_count, self.rframe_count,
+                         self.ttl, self.session.get_ttl_info() if self.session else "")
         elif action == ACTION_TTL_ACK:
             start_time, ttl_index = struct.unpack("!QI", data[:12])
             if ttl_index < self.ttl_index:
@@ -518,12 +526,14 @@ class Center(EventEmitter):
                 if not require_write and now - last_write_ttl_time >= 28:
                     if p_send_index >= 200 or p_recv_index >= 200:
                         require_write = True
+                    elif len(self.recv_frames) >= 2 and now - self.recv_frames[0].recv_time >= 45:
+                        require_write = True
 
                 if not require_write and now - last_write_ttl_time >= 58:
                     if p_send_index >= 100 or p_recv_index >= 100:
                         require_write = True
 
-                if not require_write and now - last_write_ttl_time >= random.randint(240, 300):
+                if not require_write and now - last_write_ttl_time >= random.randint(300, 600):
                     require_write = True
             else:
                 require_write = True
@@ -532,7 +542,7 @@ class Center(EventEmitter):
                 self.ttl_index += 1
                 if self.ttl_index > 0xffffffff:
                     self.ttl_index = 0
-                data = struct.pack("!QI", int(now * 1000000), self.ttl_index)
+                data = struct.pack("!QII", int(now * 1000000), self.ttl_index, int(self.ttl * 1000))
                 self.write_action(ACTION_TTL, data, index=0, sort_ttl=False)
                 self.ttl_changing = True
                 last_write_ttl_time = now
@@ -541,11 +551,8 @@ class Center(EventEmitter):
 
     def on_ttl_ack(self, ack_time):
         self.ttl_changing = False
-        if len(self.ttls) >= 3:
-            self.ttls.pop(0)
-        self.ttls.append(ack_time)
-        self.ttl = max(float(sum(self.ttls)) / float(len(self.ttls)), 50)
-        logging.info("stream session %s center <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s %s) > ttl %.3fms %s", self.session, self,
+        self.ttl = max((float(self.ttl) + float(ack_time)) / 2.0, 50)
+        logging.info("stream session %s center proactive <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s %s) > ttl %.3fms %s", self.session, self,
                      self.send_index, self.ack_index, len(self.frames), len(self.send_frames),
                      self.recv_index, len(self.recv_frames), self.recv_frames[0].index if self.recv_frames else 0,
                      self.recv_frames[-1].index if self.recv_frames else 0,
