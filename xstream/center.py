@@ -410,7 +410,7 @@ class Center(EventEmitter):
             self.ack_timeout_loop = False
             return
 
-        if len(self.session._connections) > 1 and self.ttl < 2000:
+        if len(self.session._connections) > 1 and self.ttl < 2200:
             data = []
             current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
@@ -455,7 +455,7 @@ class Center(EventEmitter):
         if frame.ack_time == 0 and frame.index <= self.ack_index:
             frame.ack_time = time.time()
 
-        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 16:
+        if frame.ack_time == 0 and abs(self.ack_index - ack_index) < 250 and len(self.send_frames) >= 32:
             send_frames = []
             send_count = 0
             connections = {id(c) for c in self.session._connections} if self.session else set([])
@@ -527,7 +527,9 @@ class Center(EventEmitter):
                 if not require_write and last_write_ttl_timeout >= 28:
                     if p_send_index >= 200 or p_recv_index >= 200:
                         require_write = True
-                    elif len(self.recv_frames) >= 2 and now - self.recv_frames[0].recv_time >= 45:
+                    elif len(self.recv_frames) >= 2 and now - self.recv_frames[0].recv_time >= 43:
+                        require_write = True
+                    elif len(self.send_frames) >= 4 and now - self.send_frames[0].send_time >= 43:
                         require_write = True
 
                 if not require_write and last_write_ttl_timeout >= 58:

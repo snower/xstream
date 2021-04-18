@@ -99,13 +99,13 @@ class Stream(EventEmitter):
             return
 
         if frame.index != self._recv_index:
-            if frame.index < self._recv_index:
-                return
-
             if not self._recv_frames or frame.index >= self._recv_frames[-1].index:
                 self._recv_frames.append(frame)
             else:
                 bisect.insort_left(self._recv_frames, frame)
+
+            if self._capped and frame.flag & 0x01 != 0:
+                self.on_read(frame)
             return
 
         if frame.flag & 0xfe != 0:
@@ -117,15 +117,12 @@ class Stream(EventEmitter):
         while self._recv_frames:
             frame = self._recv_frames[0]
             if frame.index != self._recv_index:
-                if frame.index < self._recv_index:
-                    self._recv_frames.pop(0)
-                    continue
                 break
 
             self._recv_frames.pop(0)
             if frame.flag & 0xfe != 0:
                 self.on_action(frame)
-            if frame.flag & 0x01 != 0:
+            if not self._capped and frame.flag & 0x01 != 0:
                 self.on_read(frame)
             self._recv_index += 1
 

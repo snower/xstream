@@ -193,13 +193,11 @@ class Connection(EventEmitter):
         if reping_timeout <= 0:
             reping_timeout = random.randint(240, 300)
 
-        if self._session._center.ttl <= 250:
+        if self._session._center.ttl <= 400:
             timeout = reping_timeout
-        elif self._session._center.ttl <= 500:
-            timeout = random.randint(120, 180)
-        elif self._session._center.ttl <= 1000:
+        elif self._session._center.ttl <= 800:
             timeout = 120
-        elif self._session._center.ttl <= 2000:
+        elif self._session._center.ttl <= 1800:
             timeout = 60
         elif self._session._center.ttl <= 3000:
             timeout = 30
