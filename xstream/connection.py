@@ -20,6 +20,7 @@ ACTION_NOISE = 0x06
 ACTION_PING = 0x11
 ACTION_PINGACKPING = 0x12
 ACTION_PINGACK = 0x13
+ACTION_PINGACKACK = 0x14
 
 class Connection(EventEmitter):
     def __init__(self, connection, session):
@@ -139,7 +140,7 @@ class Connection(EventEmitter):
         return True
 
     def write_action(self, action, data=b''):
-        data += rand_string(random.randint(1, 128))
+        data += rand_string(random.randint(64, 256))
         data = self._crypto.encrypt(struct.pack("!B", action) + data)
         data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
         self._wdata_len += len(data)
@@ -165,7 +166,10 @@ class Connection(EventEmitter):
         elif action == ACTION_PINGACK:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
+            self.write_action(ACTION_PINGACKACK)
             logging.info("xstream session %s connection %s ping ack", self._session, self)
+        elif action == ACTION_PINGACKACK:
+            logging.info("xstream session %s connection %s ping close", self._session, self)
         elif action == ACTION_CLOSE:
             self._closed = True
             self._finaled = True

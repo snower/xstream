@@ -334,9 +334,7 @@ class Client(EventEmitter):
                         struct.pack("!H", len(ciphres)), ciphres, b'\x01\x00', struct.pack("!H", len(data)), data])
 
         connection.write(b"".join([b'\x16\x03\x03', struct.pack("!H", len(data) + 4), b'\x01\x00', struct.pack("!H", len(data)), data]))
-
         connection.is_connected_xstream = True
-
         logging.info("xstream connection connect %s", connection)
 
     def on_fork_data(self, connection, data):
@@ -380,8 +378,7 @@ class Client(EventEmitter):
                 if not connection:
                     conn.close()
                 else:
-                    connection.write_action(0x05, rand_string(random.randint(128, 256)))
-                    connection.start()
+                    current().add_async(connection.on_ping_loop)
                     def on_expried(is_close = False):
                         if not is_close and len(self._connections) <= 1:
                             self.init_connection(False)

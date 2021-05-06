@@ -247,9 +247,8 @@ class Crypto(object):
         crypto_time = str(crypto_time).encode("utf-8")
         key = self._key.encode('utf-8')
         d1, d2 = key, b''
-        for i in range(5):
+        for i in range(3):
             s = bytes_to_key_digest()
             s.update(b"".join([d1, key, salt, crypto_time]))
-            d2=d1
-            d1=s.digest()
+            d2, d1 = d1, s.digest()
         return (d1+d2)[:key_len]
