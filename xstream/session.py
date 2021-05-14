@@ -411,4 +411,6 @@ class Session(EventEmitter):
         self.close()
 
     def __str__(self):
-        return "<%s %s,%s,%s,%s>" % (super(Session, self).__str__(), self._session_id, self._mss, len(self._connections), len(self._streams))
+        return "<%s %s,%s,%s,%s,%dms>" % (super(Session, self).__str__(), self._session_id, self._mss,
+                                          len(self._connections), len(self._streams),
+                                          self._center.ttl if self._center else 0)
