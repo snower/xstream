@@ -115,9 +115,6 @@ class Connection(EventEmitter):
                 self._rdata_len += len(data) + 5
 
     def write(self, data):
-        if self._closed:
-            return False
-
         if data.__class__ == Frame:
             if data.index > 0:
                 self._wlast_index = data.index

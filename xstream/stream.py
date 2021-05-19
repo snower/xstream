@@ -87,8 +87,8 @@ class Stream(EventEmitter):
         return (self._recv_buffer, self._send_buffer)
 
     def on_data(self):
-        self.emit_data(self, self._recv_buffer)
         self._recv_wait_emit = False
+        self.emit_data(self, self._recv_buffer)
 
     def on_frame(self, frame):
         if frame.index == 0:
