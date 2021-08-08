@@ -308,7 +308,7 @@ class Session(EventEmitter):
 
             if key_exchange_type == 1:
                 data = struct.pack("!BI", 2, self._key_exchanged_count) + rand_string(64)
-                self.write_action(ACTION_KEYEXCHANGE, data, False)
+                self.write_action(ACTION_KEYEXCHANGE, data, True)
                 self._key_exchanged = False
                 self.emit_keyexchange(self)
                 logging.info("xstream session %s start %s key exchange", self, self._key_exchanged_count)
@@ -317,7 +317,7 @@ class Session(EventEmitter):
             if key_exchange_type == 2:
                 self._current_crypto_key = data[5:69]
                 data = struct.pack("!BI", 3, self._key_exchanged_count) + self._current_crypto_key
-                self.write_action(ACTION_KEYEXCHANGE, data, False)
+                self.write_action(ACTION_KEYEXCHANGE, data, True)
                 self._key_exchanged = True
                 self._key_exchanged_count += 1
                 self._key_exchanged_time = time.time()
@@ -353,7 +353,7 @@ class Session(EventEmitter):
             return False
 
         data = struct.pack("!BI", 1, self._key_exchanged_count)
-        self.write_action(ACTION_KEYEXCHANGE, data, False)
+        self.write_action(ACTION_KEYEXCHANGE, data, True)
         self._key_exchanged = False
         self.emit_keyexchange(self)
         logging.info("xstream session %s start %s key exchange", self, self._key_exchanged_count)
