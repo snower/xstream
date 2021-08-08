@@ -6,14 +6,13 @@ import os
 import time
 import logging
 import struct
-import socket
 import random
 import hashlib
 import pickle
 import base64
 from sevent import EventEmitter, tcp, current
 from .session import Session
-from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code, CIPHER_SUITES
+from .crypto import Crypto, rand_string, xor_string, sign_string, CIPHER_SUITES
 from .frame import StreamFrame
 
 class Server(EventEmitter):
@@ -130,7 +129,7 @@ class Server(EventEmitter):
 
     def on_data(self, connection, data):
         connection.is_connected_dataed = True
-        datas = data.join()
+        datas = b"".join([b'', data.join()])
         action = datas[2]
         if action == 1:
             self.on_open_session(connection, data, datas)
@@ -318,7 +317,7 @@ class Server(EventEmitter):
 
                             connection._expried_seconds_timer = current().add_timeout(7200, connection.on_expried)
                         else:
-                            self.emit_connection(self, conn, datas)
+                            conn.close()
                     current().add_async(add_connection, connection)
 
                     connection.is_connected_session = True

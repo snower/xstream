@@ -11,7 +11,7 @@ import random
 import hashlib
 from sevent import EventEmitter, current, tcp
 from .session import Session
-from .crypto import Crypto, rand_string, xor_string, get_crypto_time, sign_string, pack_protocel_code, unpack_protocel_code, CIPHER_SUITES
+from .crypto import Crypto, rand_string, xor_string, sign_string, CIPHER_SUITES
 from .frame import StreamFrame
 
 class Client(EventEmitter):
@@ -346,7 +346,7 @@ class Client(EventEmitter):
             extensions_len, = struct.unpack("!H", data.read(2))
             data.read(extensions_len)
 
-            last_data = data.join()
+            last_data = b''.join([b'', data.join()])
             auth = last_data[11:27]
             key += last_data[27:43]
 
