@@ -127,7 +127,7 @@ class Client(EventEmitter):
             self.init_connection_delay_rate = 1
             
             if not self._session or self._session.closed \
-                    or (self._connections and self._session.key_change):
+                    or (self._connections and not self._session.key_exchanged):
                 return
             
             if len(self._connections) >= self._max_connections:
@@ -138,7 +138,7 @@ class Client(EventEmitter):
 
         if not self._connections:
             do_init_connection()
-        elif not self._session.key_change and not is_delay:
+        elif self._session.key_exchanged and not is_delay:
             do_init_connection()
         else:
             if delay_rate:
@@ -183,7 +183,7 @@ class Client(EventEmitter):
         if session:
             self._session = session
             self._session.on("close", self.on_session_close)
-            self._session.on("keychange", lambda session: self.save_session())
+            self._session.on("keyexchange", lambda session: self.save_session())
             self.emit_session(self, self._session)
 
             self.running = True
@@ -254,7 +254,7 @@ class Client(EventEmitter):
         if auth == sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8")):
             self._session = Session(session_id, self._auth_key, False, connection.crypto, StreamFrame.FRAME_LEN)
             self._session.on("close", self.on_session_close)
-            self._session.on("keychange", lambda session: self.save_session())
+            self._session.on("keyexchange", lambda session: self.save_session())
             self.emit_session(self, self._session)
 
             self.running = True
@@ -377,22 +377,23 @@ class Client(EventEmitter):
                 connection = self._session.add_connection(conn)
                 if not connection:
                     conn.close()
-                else:
-                    current().add_async(connection.on_ping_loop)
-                    def on_expried(is_close = False):
-                        if not is_close and len(self._connections) <= 1:
-                            self.init_connection(False)
-                            current().add_timeout(random.randint(5, 15), on_expried, True)
-                        else:
-                            connection.on_expried()
-                    current().add_timeout(connection._expried_seconds, on_expried)
-                    current().add_timeout(5, connection.on_ping_loop)
+                    return
+
+                current().add_async(connection.on_ping_loop)
+                def on_expried(is_close=False):
+                    if self._session and not self._session.key_exchanged and len(self._connections) <= 1:
+                        current().add_timeout(random.randint(5, 15), on_expried)
+                    elif not is_close and len(self._connections) <= 1:
+                        self.init_connection(False)
+                        current().add_timeout(random.randint(5, 15), on_expried, True)
+                    else:
+                        connection.on_expried()
+                connection._expried_seconds_timer = current().add_timeout(connection._expried_seconds, on_expried)
+                connection._expried_data_timer = current().add_timeout(15, connection.on_check_data_loop)
 
             current().add_async(add_connection, connection)
             self._connecting = None
             self._reconnect_count = 0
-            if len(self._connections) >= 2:
-                self._session.start_key_change()
             self.init_connection()
             connection.is_connected_session = True
             self.fork_auth_session_id = rand_string(32)

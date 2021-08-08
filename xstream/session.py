@@ -22,7 +22,7 @@ STATUS_OPENING = 0x02
 STATUS_CLOSED = 0x03
 
 ACTION_OPENING = 0x01
-ACTION_KEYCHANGE = 0x02
+ACTION_KEYEXCHANGE = 0x02
 
 class Session(EventEmitter):
     def __init__(self, session_id, auth_key, is_server=False, crypto=None, mss=None):
@@ -38,10 +38,9 @@ class Session(EventEmitter):
         self._current_crypto_key = b'0' * 64
         self._last_auth_time = 0
         self._mss = mss
-        self._key_change = False
-        self._key_change_timeout = None
-        self._key_change_count = 0
-        self._key_change_time = 0
+        self._key_exchanged = True
+        self._key_exchanged_count = 1
+        self._key_exchanged_time = 0
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
         self._streams = {}
@@ -72,8 +71,12 @@ class Session(EventEmitter):
         return self._status == STATUS_CLOSED
 
     @property
-    def key_change(self):
-        return self._key_change
+    def key_exchanged(self):
+        return self._key_exchanged
+
+    @property
+    def key_exchanged_time(self):
+        return self._key_exchanged_time
 
     def dumps(self):
         return base64.b64encode(pickle.dumps({
@@ -86,9 +89,9 @@ class Session(EventEmitter):
             "crypto_desecret": list(self._crypto_desecret),
             "current_crypto_key": self._current_crypto_key,
             "last_auth_time": self._last_auth_time,
-            "key_change": self._key_change,
+            "key_exchanged": self._key_exchanged,
             "mss": self._mss,
-            "t": time.time()
+            "timestamp": time.time()
         })).decode("utf-8")
 
     @classmethod
@@ -101,8 +104,8 @@ class Session(EventEmitter):
             session = cls(s["session_id"], s["auth_key"], s["is_server"], crypto, s["mss"])
             session._current_crypto_key = s["current_crypto_key"]
             session._last_auth_time = int(s.get("last_auth_time", 0))
-            session._key_change = s["key_change"]
-            if not s["is_server"] and session._key_change:
+            session._key_exchanged = s.get("key_exchanged", True)
+            if not s["is_server"] and not session._key_exchanged:
                 return None
         except:
             return None
@@ -297,39 +300,37 @@ class Session(EventEmitter):
             else:
                 self._status = STATUS_OPENING
                 logging.info("xstream session %s opening", self)
-        elif action == ACTION_KEYCHANGE:
-            status, key_change_count = struct.unpack("!BI", data[:5])
-            if key_change_count < self._key_change_count:
+        elif action == ACTION_KEYEXCHANGE:
+            key_exchange_type, key_exchanged_count = struct.unpack("!BI", data[:5])
+            if key_exchanged_count < self._key_exchanged_count:
+                logging.info("xstream session %s error key exchange", self)
                 return
-            key_change, self._key_change = self._key_change, False
-            if self._key_change_timeout:
-                current().cancel_timeout(self._key_change_timeout)
-                self._key_change_timeout = None
 
-            if self._is_server:
-                if status == 0:
-                    logging.info("xstream session %s error key change", self)
-                    return
+            if key_exchange_type == 1:
+                data = struct.pack("!BI", 2, self._key_exchanged_count) + rand_string(64)
+                self.write_action(ACTION_KEYEXCHANGE, data, False)
+                self._key_exchanged = False
+                self.emit_keyexchange(self)
+                logging.info("xstream session %s start %s key exchange", self, self._key_exchanged_count)
+                return
 
+            if key_exchange_type == 2:
                 self._current_crypto_key = data[5:69]
-                self._key_change_count += 1
-                self._key_change_time = time.time()
-                self.emit_keychange(self)
-                logging.info("xstream session %s key change", self)
-            else:
-                if not key_change or len(self._connections) < 2 or not self._center or self._center.ttl >= 800:
-                    self.write_action(ACTION_KEYCHANGE, struct.pack("!BI", 0, self._key_change_count) + data[5:69], True)
-                    logging.info("xstream session %s empty key change", self)
-                    return
+                data = struct.pack("!BI", 3, self._key_exchanged_count) + self._current_crypto_key
+                self.write_action(ACTION_KEYEXCHANGE, data, False)
+                self._key_exchanged = True
+                self._key_exchanged_count += 1
+                self._key_exchanged_time = time.time()
+                self.emit_keyexchange(self)
+                logging.info("xstream session %s finish %s key exchange", self, self._key_exchanged_count - 1)
+                return
 
-                self._current_crypto_key = data[5:69]
-                data = struct.pack("!BI", 1, self._key_change_count) + self._current_crypto_key
-                self.write_action(ACTION_KEYCHANGE, data, True)
-                self.write_action(ACTION_KEYCHANGE, data, False)
-                self._key_change_count += 1
-                self._key_change_time = time.time()
-                self.emit_keychange(self)
-                logging.info("xstream session %s key change", self)
+            self._current_crypto_key = data[5:69]
+            self._key_exchanged = True
+            self._key_exchanged_count += 1
+            self._key_exchanged_time = time.time()
+            self.emit_keyexchange(self)
+            logging.info("xstream session %s finish %s key exchange", self, self._key_exchanged_count - 1)
 
     def write_action(self, action, data=b'', index=None, center=False):
         if self._status == STATUS_CLOSED:
@@ -342,32 +343,19 @@ class Session(EventEmitter):
             action = struct.pack("!B", action if center else action | 0x80)
             self._controll_stream.write(action + data)
 
-    def start_key_change(self):
-        if self._key_change:
-            return
+    def start_key_exchange(self):
+        if not self._key_exchanged:
+            return False
 
-        if self._key_change_timeout:
-            current().cancel_timeout(self._key_change_timeout)
-            self._key_change_timeout = None
+        if not self._center or self._center.ttl > 500:
+            return False
 
-        if self._is_server:
-            if not self._center or self._center.ttl >= 800 or time.time() - self._key_change_time < 2 * 60 * 60:
-                return
-
-            data = struct.pack("!BI", 1, self._key_change_count) + rand_string(64)
-            self.write_action(ACTION_KEYCHANGE, data, True)
-            self.write_action(ACTION_KEYCHANGE, data, False)
-            self._key_change = True
-            def on_server_timeout():
-                self._key_change = False
-                self._key_change_timeout = None
-            self._key_change_timeout = current().add_timeout(5, on_server_timeout)
-        else:
-            def on_client_timeout():
-                self._key_change = False
-                self._key_change_timeout = None
-            self._key_change = True
-            self._key_change_timeout = current().add_timeout(15, on_client_timeout)
+        data = struct.pack("!BI", 1, self._key_exchanged_count)
+        self.write_action(ACTION_KEYEXCHANGE, data, False)
+        self._key_exchanged = False
+        self.emit_keyexchange(self)
+        logging.info("xstream session %s start %s key exchange", self, self._key_exchanged_count)
+        return True
 
     def close(self):
         if self._status == STATUS_CLOSED:

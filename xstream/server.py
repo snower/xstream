@@ -74,7 +74,7 @@ class Server(EventEmitter):
                         os.remove(session_path + "/" + filename)
                         logging.info("xstream check session config change remove %s %s", session["session_id"], filename)
 
-                    elif now - session["t"] > 7 * 24 * 60 * 60:
+                    elif now - session["timestamp"] > 7 * 24 * 60 * 60:
                         os.remove(session_path + "/" + filename)
                         logging.info("xstream check session expried remove %s %s", session["session_id"], filename)
                     else:
@@ -173,7 +173,7 @@ class Server(EventEmitter):
                                           b'\x14\x03\x03\x00\x01\x01', b'\x16\x03\x03\x00\x28', rand_string(40)]))
 
                 session.on("close", self.on_session_close)
-                session.on("keychange", self.save_session)
+                session.on("keyexchange", self.save_session)
                 self.emit_session(self, session)
                 self.save_session(session)
                 logging.info("xstream session open %s", session)
@@ -249,7 +249,7 @@ class Server(EventEmitter):
                 if session:
                     self._sessions[session.id] = session
                     session.on("close", self.on_session_close)
-                    session.on("keychange", self.save_session)
+                    session.on("keyexchange", self.save_session)
                     self.emit_session(self, session)
                     is_loaded_session = True
                     logging.info("xstream session open %s", session)
@@ -261,8 +261,8 @@ class Server(EventEmitter):
                     self.emit_connection(self, connection, datas)
                     return
 
-                if session.key_change:
-                    logging.info("xstream connection key_change refuse session closed %s %s %s", session_id, connection, time.time())
+                if not session.key_exchanged:
+                    logging.info("xstream connection key exchanged refuse session closed %s %s %s", session_id, connection, time.time())
                     self.emit_connection(self, connection, datas)
                     return
 
@@ -314,14 +314,15 @@ class Server(EventEmitter):
                                     session.write_action(0x01)
                                 current().add_async(do_write_action)
 
-                            if len(session._connections) >= 2:
-                                def on_timeout_start_key_change():
-                                    if len(session._connections) >= 2:
-                                        session.start_key_change()
-                                current().add_timeout(random.randint(10, 30), on_timeout_start_key_change)
+                            if time.time() - session.key_exchanged_time > 7200:
+                                def on_timeout_start_key_exchange():
+                                    if time.time() - session.key_exchanged_time > 7200:
+                                        session.start_key_exchange()
+                                current().add_timeout(random.randint(15, 60), on_timeout_start_key_exchange)
+
+                            connection._expried_seconds_timer = current().add_timeout(7200, connection.on_expried)
                         else:
                             self.emit_connection(self, conn, datas)
-
                     current().add_async(add_connection, connection)
 
                     connection.is_connected_session = True

@@ -48,6 +48,7 @@ class Connection(EventEmitter):
         self._data_time = time.time()
         self._ping_time = 0
         self._ping_ack_time = 0
+        self._ping_timer = None
         self._ttl = 0
         self._rdata_len = 0
         self._wdata_len = 0
@@ -58,8 +59,10 @@ class Connection(EventEmitter):
         self._rlast_index = 0
         self._wlast_index = 0
         self._expried_seconds = random.randint(180, 1800)
+        self._expried_seconds_timer = None
         self._expried_data = random.randint(8 * 1024 * 1024, 16 * 1024 * 1024)
-        current().add_timeout(15, self.on_check_data_loop)
+        self._expried_data_timer = None
+        self._close_timeout_timer = None
 
     def start(self):
         self.loop.add_async(self.emit_drain, self)
@@ -84,6 +87,18 @@ class Connection(EventEmitter):
         self._closed = True
         self._session, session = None, self._session
         self.remove_all_listeners()
+        if self._ping_timer:
+            self.loop.cancel_timeout(self._ping_timer)
+            self._ping_timer = None
+        if self._expried_seconds_timer:
+            self.loop.cancel_timeout(self._expried_seconds_timer)
+            self._expried_seconds_timer = None
+        if self._expried_data_timer:
+            self.loop.cancel_timeout(self._expried_data_timer)
+            self._expried_data_timer = None
+        if self._close_timeout_timer:
+            self.loop.cancel_timeout(self._close_timeout_timer)
+            self._close_timeout_timer = None
         logging.info("xstream session %s connection %s close %.2fs %s %s %s %s %s %s", session, self,
                      time.time() - self._start_time, 
                      format_data_len(self._rdata_len), self._rfdata_count, self._rpdata_count,
@@ -213,10 +228,10 @@ class Connection(EventEmitter):
             self.write_action(ACTION_PING)
             self._ping_time = time.time()
             self._ping_ack_time = 0
-            current().add_timeout(5, self.on_ping_timeout)
+            self._ping_timer = current().add_timeout(5, self.on_ping_timeout)
             logging.info("xstream session %s connection %s ping", self._session, self)
         else:
-            current().add_timeout(5, self.on_ping_loop, reping_timeout)
+            self._ping_timer = current().add_timeout(5, self.on_ping_loop, reping_timeout)
 
     def on_ping_timeout(self):
         if self._closed:
@@ -224,26 +239,32 @@ class Connection(EventEmitter):
 
         if self._ping_ack_time == 0:
             if time.time() - self._ping_time <= 15:
-                current().add_timeout(5, self.on_ping_timeout)
+                self._ping_timer = current().add_timeout(5, self.on_ping_timeout)
                 return
             self._closed = True
             self._connection.close()
             logging.info("xstream session %s connection %s ping timeout", self._session, self)
         else:
-            current().add_timeout(5, self.on_ping_loop)
+            self._ping_timer = current().add_timeout(5, self.on_ping_loop)
 
     def on_check_data_loop(self):
         if self._closed:
             return
 
         etime = time.time() - self._start_time
-        if self._rdata_len <= self._expried_data:
-            if self._rdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
-                return current().add_timeout(5, self.on_check_data_loop)
+        if self._rdata_len + self._wdata_len <= self._expried_data:
+            if self._rdata_len + self._wdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
+                self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+                return
 
         if etime < self._expried_seconds / 2.0:
-            if etime < self._expried_seconds / (2.0 * float(self._rdata_len) / float(self._expried_data)):
-                return current().add_timeout(5, self.on_check_data_loop)
+            if etime < self._expried_seconds / (2.0 * float(self._rdata_len + self._wdata_len) / float(self._expried_data)):
+                self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+                return
+
+        if not self._session.key_exchanged:
+            self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+            return
 
         self.close()
         logging.info("xstream session %s connection %s data len out", self._session, self)
@@ -254,7 +275,7 @@ class Connection(EventEmitter):
 
         self._closed = True
         self.write_action(ACTION_CLOSE)
-        current().add_timeout(30, self._connection.close)
+        self._close_timeout_timer = current().add_timeout(30, self._connection.close)
 
     def __del__(self):
         self.close()
