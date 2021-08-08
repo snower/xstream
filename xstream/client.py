@@ -367,6 +367,12 @@ class Client(EventEmitter):
         key = crypto.decrypt(key)
 
         if auth == sign_string(self._crypto_key.encode("utf-8") + key + self._auth_key + str(crypto_time).encode("utf-8")):
+            if key in self.session._auth_cache:
+                logging.info("xstream connection auth reuse session closed %s %s", connection, time.time())
+                connection.close()
+                return
+            self.session._auth_cache[key] = time.time()
+
             self._session.set_last_auth_time(crypto_time)
             setattr(connection, "crypto_time", crypto_time)
             connection.crypto.init_decrypt(crypto_time, key)

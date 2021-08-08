@@ -321,6 +321,7 @@ class Session(EventEmitter):
                 self._key_exchanged = True
                 self._key_exchanged_count += 1
                 self._key_exchanged_time = time.time()
+                self._auth_cache = {}
                 self.emit_keyexchange(self)
                 logging.info("xstream session %s finish %s key exchange", self, self._key_exchanged_count - 1)
                 return
@@ -329,6 +330,7 @@ class Session(EventEmitter):
             self._key_exchanged = True
             self._key_exchanged_count += 1
             self._key_exchanged_time = time.time()
+            self._auth_cache = {}
             self.emit_keyexchange(self)
             logging.info("xstream session %s finish %s key exchange", self, self._key_exchanged_count - 1)
 

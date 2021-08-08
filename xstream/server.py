@@ -271,10 +271,6 @@ class Server(EventEmitter):
 
                 if abs(crypto_time - time.time()) < 1800 and session.get_last_auth_time() < crypto_time \
                         and auth == sign_string(self._crypto_key.encode("utf-8") + key + session.auth_key + str(crypto_time).encode("utf-8")):
-
-                    for k, t in list(session._auth_cache.items()):
-                        if time.time() - t > 1800:
-                            session._auth_cache.pop(k)
                     if key in session._auth_cache:
                         logging.info("xstream connection auth reuse session closed %s %s %s", session_id, connection, time.time())
                         connection.close()
