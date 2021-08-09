@@ -254,16 +254,16 @@ class Connection(EventEmitter):
         etime = time.time() - self._start_time
         if self._rdata_len + self._wdata_len <= self._expried_data:
             if self._rdata_len + self._wdata_len <= self._expried_data / 2.0 or etime < self._expried_seconds * 0.6:
-                self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+                self._expried_data_timer = current().add_timeout(15, self.on_check_data_loop)
                 return
 
         if etime < self._expried_seconds / 2.0:
             if etime < self._expried_seconds / (2.0 * float(self._rdata_len + self._wdata_len) / float(self._expried_data)):
-                self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+                self._expried_data_timer = current().add_timeout(15, self.on_check_data_loop)
                 return
 
         if not self._session.key_exchanged:
-            self._expried_data_timer = current().add_timeout(5, self.on_check_data_loop)
+            self._expried_data_timer = current().add_timeout(15, self.on_check_data_loop)
             return
 
         self.close()

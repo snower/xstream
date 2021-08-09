@@ -159,19 +159,21 @@ class Client(EventEmitter):
             else:
                 self.init_connection_delay_rate = 1
 
-    def on_init_connection_timeout(self, session, last_rdata_lens=None):
+    def on_init_connection_timeout(self, session, last_rdata_lens):
         if not self._session or self._session != session:
             return
 
-        last_rdata_lens = last_rdata_lens or {}
-        rdata_counts = {}
-        rdata_count = 0
-        for conn in self._session._connections:
-            rdata_count += conn._rdata_len - last_rdata_lens.get(id(conn), 0)
-            rdata_counts[id(conn)] = conn._rdata_len
+        if len(self._session._connections) >= self._max_connections:
+            current().add_timeout(5, self.on_init_connection_timeout, self._session, {})
+            return
 
-        if len(self._session._connections) < self._max_connections:
-            if rdata_count > len(self._session._connections) * 1280 * 1024:
+        rdata_counts, rdata_count = {}, 0
+        for conn in self._session._connections:
+            rdata_count += conn._rdata_len + conn._wdata_len - last_rdata_lens.get(id(conn), 0)
+            rdata_counts[id(conn)] = conn._rdata_len + conn._wdata_len
+
+        if last_rdata_lens:
+            if rdata_count > len(self._session._connections) * 1310720:
                 self.init_connection(False)
             elif self._session._center.ttl >= len(self._session._connections) * 720:
                 self.init_connection(False)
@@ -188,7 +190,7 @@ class Client(EventEmitter):
 
             self.running = True
             self.init_connection(False)
-            current().add_timeout(5, self.on_init_connection_timeout, self._session)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session, {})
             self._session.write_action(0x01)
             logging.info("xstream client %s session open", self)
             return
@@ -263,7 +265,7 @@ class Client(EventEmitter):
             self._session_removed = False
             self.save_session()
             self._session.write_action(0x01)
-            current().add_timeout(5, self.on_init_connection_timeout, self._session)
+            current().add_timeout(5, self.on_init_connection_timeout, self._session, {})
             logging.info("xstream client %s session %s open", self, self._session)
             return
         connection.close()
