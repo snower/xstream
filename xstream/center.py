@@ -41,6 +41,7 @@ class Center(EventEmitter):
         self.ttl = 50
         self.ttl_index = 0
         self.ttl_changing = False
+        self.ttl_remote_delay = 0
         self.closed = False
         self.ready_streams_lookup_timeout = None
         self.droped_count = 0
@@ -269,7 +270,10 @@ class Center(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_ACK:
-            pass
+            start_time, remote_time = struct.unpack("!QQ", data[:16])
+            self.ttl_remote_delay = time.time() * 1000000 - remote_time
+            if start_time:
+                self.on_ttl_ack(time.time() * 1000 - float(start_time) / 1000)
         elif action == ACTION_RESEND:
             resend_count, = struct.unpack("!I", data[:4])
             now = time.time()
@@ -339,7 +343,8 @@ class Center(EventEmitter):
             logging.info("stream session %s center %s index reset ack action", self.session, self)
         elif action == ACTION_TTL:
             self.write_action(ACTION_TTL_ACK, data[:12], index=0, sort_ttl=False)
-            ttl, = struct.unpack("!I", data[12:16])
+            remote_time, ttl_index, ttl, = struct.unpack("!QII", data[:16])
+            self.ttl_remote_delay = time.time() * 1000000 - remote_time
             self.ttl = max((self.ttl + float(ttl) / 1000.0) / 2.0, 50)
             logging.info("stream session %s center passive <%s, (%s %s %s %s) (%s %s %s %s) (%s %s %s %s) > ttl %.3fms %s",
                          self.session, self,
@@ -394,16 +399,19 @@ class Center(EventEmitter):
             self.ack_loop = False
             return
 
+        now = time.time()
         if self.sframe_count != last_sframe_count:
-            current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
+            current().add_timeout(3, self.on_ack_loop, self.sframe_count, now)
             return
 
-        if self.recv_index - self.send_ack_index <= 8 and time.time() - start_time <= 300:
-            current().add_timeout(3, self.on_ack_loop, self.sframe_count, start_time or time.time())
+        if self.recv_index - self.send_ack_index <= 8 and (start_time <= 0 or now - start_time < 12):
+            current().add_timeout(3, self.on_ack_loop, self.sframe_count, (now - 2) if start_time <= 0 else start_time)
             return
 
-        current().add_timeout(3, self.on_ack_loop, self.sframe_count + 1, start_time or time.time())
-        self.write_action(ACTION_ACK, b'', 0)
+        current().add_timeout(3, self.on_ack_loop, self.sframe_count + 1, now)
+        now = int(time.time() * 1000000)
+        data = struct.pack("!QQ", int(now - self.ttl_remote_delay) if self.ttl_remote_delay else 0, now)
+        self.write_action(ACTION_ACK, data, 0)
 
     def on_ack_timeout_loop(self):
         if not self.recv_frames or self.closed or not self.session:
@@ -518,6 +526,10 @@ class Center(EventEmitter):
                     if self.ttl > 1000:
                         require_write = True
                     elif p_send_index >= 359 or p_recv_index >= 359:
+                        require_write = True
+                    elif self.recv_frames and len(self.recv_frames) < 8 and now - self.recv_frames[0].recv_time >= 16:
+                        require_write = True
+                    elif self.send_frames and len(self.send_frames) < 16 and now - self.send_frames[0].send_time >= 16:
                         require_write = True
                     elif len(self.recv_frames) >= 16 and p_recv_index <= 16:
                         require_write = True

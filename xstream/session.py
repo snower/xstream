@@ -90,6 +90,7 @@ class Session(EventEmitter):
             "current_crypto_key": self._current_crypto_key,
             "last_auth_time": self._last_auth_time,
             "key_exchanged": self._key_exchanged,
+            "key_exchanged_count": self._key_exchanged_count,
             "mss": self._mss,
             "timestamp": time.time()
         })).decode("utf-8")
@@ -105,6 +106,7 @@ class Session(EventEmitter):
             session._current_crypto_key = s["current_crypto_key"]
             session._last_auth_time = int(s.get("last_auth_time", 0))
             session._key_exchanged = s.get("key_exchanged", True)
+            session._key_exchanged_count = int(s.get("key_exchanged_count", 1))
             if not s["is_server"] and not session._key_exchanged:
                 return None
         except:
