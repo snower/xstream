@@ -273,7 +273,8 @@ class Center(EventEmitter):
             start_time, remote_time = struct.unpack("!QQ", data[:16])
             self.ttl_remote_delay = time.time() * 1000000 - remote_time
             if start_time:
-                self.on_ttl_ack(time.time() * 1000 - float(start_time) / 1000)
+                ack_time = time.time() * 1000 - float(start_time) / 1000
+                self.ttl = max(float(self.ttl + ack_time) / 2.0, 50)
         elif action == ACTION_RESEND:
             resend_count, = struct.unpack("!I", data[:4])
             now = time.time()
