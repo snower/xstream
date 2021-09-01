@@ -173,19 +173,18 @@ class Connection(EventEmitter):
             self._ping_time = time.time()
             self._ping_ack_time = 0
             self.write_action(ACTION_PINGACKPING)
-            logging.info("xstream session %s connection %s ping", self._session, self)
         elif action == ACTION_PINGACKPING:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
             self.write_action(ACTION_PINGACK)
-            logging.info("xstream session %s connection %s ping ack", self._session, self)
+            logging.info("xstream session %s connection %s ping", self._session, self)
         elif action == ACTION_PINGACK:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
             self.write_action(ACTION_PINGACKACK)
-            logging.info("xstream session %s connection %s ping ack", self._session, self)
+            logging.info("xstream session %s connection %s ping", self._session, self)
         elif action == ACTION_PINGACKACK:
-            logging.info("xstream session %s connection %s ping close", self._session, self)
+            pass
         elif action == ACTION_CLOSE:
             self._closed = True
             self._finaled = True
@@ -213,27 +212,29 @@ class Connection(EventEmitter):
         if reping_timeout <= 0:
             reping_timeout = random.randint(240, 300)
 
-        if self._session._center.ttl <= 400:
+        session_ttl = self._session._center.ttl
+        if self._ttl > 3000:
+            timeout = 15
+        elif session_ttl <= 400:
             timeout = reping_timeout
-        elif self._session._center.ttl <= 800:
+        elif session_ttl <= 800:
             timeout = 120
-        elif self._session._center.ttl <= 1800:
+        elif session_ttl <= 1800:
             timeout = 60
-        elif self._session._center.ttl <= 3000:
+        elif session_ttl <= 3000:
             timeout = 30
-        elif self._session._center.ttl <= 4000:
+        elif session_ttl <= 4000:
             timeout = 20
         else:
             timeout = 15
-        if self._ttl <= 0 or time.time() - self._data_time >= timeout \
-                or (time.time() - self._ping_time >= timeout
-                    and ((len(self._session._connections) == 2 and self._session._center.ttl >= 3000)
-                    or (len(self._session._connections) > 2 and self._session._center.ttl >= 1000))):
+
+        session_delayed = (session_ttl >= 3000) if len(self._session._connections) <= 2 else (session_ttl >= 1000)
+        if self._ttl <= 0 or time.time() - self._data_time >= reping_timeout \
+            or (time.time() - self._ping_time >= timeout and (self._ttl > 3000 or session_delayed)):
             self.write_action(ACTION_PING)
             self._ping_time = time.time()
             self._ping_ack_time = 0
             self._ping_timer = current().add_timeout(5, self.on_ping_timeout)
-            logging.info("xstream session %s connection %s ping", self._session, self)
         else:
             self._ping_timer = current().add_timeout(5, self.on_ping_loop, reping_timeout)
 
