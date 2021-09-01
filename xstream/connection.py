@@ -23,6 +23,10 @@ ACTION_PINGACK = 0x13
 ACTION_PINGACKACK = 0x14
 
 class Connection(EventEmitter):
+    FRAME_STRUCT = struct.Struct("!BBII")
+    STREAM_FRAME_STRUCT = struct.Struct("!BBIIHBI")
+    LEN_STRUCT = struct.Struct("!H")
+
     def __init__(self, connection, session):
         super(Connection, self).__init__()
         self.loop = current()
@@ -109,7 +113,7 @@ class Connection(EventEmitter):
             data = buffer.read(self._brdata_len)
             if self._wait_head:
                 self._wait_head = False
-                self._brdata_len, = struct.unpack("!H", data[3:])
+                self._brdata_len, = self.LEN_STRUCT.unpack(data[3:])
             else:
                 self._wait_head = True
                 self._brdata_len = 5
@@ -117,11 +121,11 @@ class Connection(EventEmitter):
 
                 if data[0] == 0:
                     if data[1] == 0 and len(data) >= 17:
-                        unpack_data = struct.unpack("!BIIHBI", data[1:17])
+                        unpack_data = Frame.STREAM_FRAME_STRUCT.unpack(data[1:17])
                         stream_frame = StreamFrame(*unpack_data[3:], data=data[17:])
                         frame = Frame(*unpack_data[:3], data=stream_frame, connection=self)
                     else:
-                        frame = Frame(*struct.unpack("!BII", data[1:10]), data=data[10:], connection=self)
+                        frame = Frame(*Frame.FRAME_STRUCT.unpack(data[1:10]), data=data[10:], connection=self)
                     self._rlast_index = frame.index or self._rlast_index
                     self.emit_frame(self, frame)
                     self._rfdata_count += 1
@@ -134,14 +138,14 @@ class Connection(EventEmitter):
             if data.index > 0:
                 self._wlast_index = data.index
             if data.data.__class__ == StreamFrame:
-                data = self._crypto.encrypt(struct.pack("!BBIIHBI", 0, data.action, data.index, data.ack,
+                data = self._crypto.encrypt(self.STREAM_FRAME_STRUCT.pack(0, data.action, data.index, data.ack,
                                                         data.data.stream_id, data.data.flag,
                                                         data.data.index) + data.data.data)
             else:
-                data = self._crypto.encrypt(struct.pack("!BBII", 0, data.action, data.index, data.ack) + data.data)
+                data = self._crypto.encrypt(self.FRAME_STRUCT.pack(0, data.action, data.index, data.ack) + data.data)
         else:
             data = self._crypto.encrypt(b'\x00' + data)
-        data = b"".join([b'\x17\x03\x03', struct.pack("!H", len(data)), data])
+        data = b"".join([b'\x17\x03\x03', self.LEN_STRUCT.pack(len(data)), data])
         self._wdata_len += len(data)
         self._wpdata_count += 1
         self._wfdata_count += 1
