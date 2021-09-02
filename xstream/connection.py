@@ -53,6 +53,7 @@ class Connection(EventEmitter):
         self._ping_time = 0
         self._ping_ack_time = 0
         self._ping_timer = None
+        self._ping_delayed_count = 0
         self._ttl = 0
         self._rdata_len = 0
         self._wdata_len = 0
@@ -170,19 +171,21 @@ class Connection(EventEmitter):
 
     def on_action(self, action, data):
         if action == ACTION_PING:
+            self.write_action(ACTION_PINGACKPING)
             self._ping_time = time.time()
             self._ping_ack_time = 0
-            self.write_action(ACTION_PINGACKPING)
         elif action == ACTION_PINGACKPING:
-            self._ping_ack_time = time.time()
-            self._ttl = (self._ping_ack_time - self._ping_time) * 1000
             self.write_action(ACTION_PINGACK)
-            logging.info("xstream session %s connection %s ping", self._session, self)
-        elif action == ACTION_PINGACK:
             self._ping_ack_time = time.time()
             self._ttl = (self._ping_ack_time - self._ping_time) * 1000
+            logging.info("xstream session %s connection %s ping %.2fms", self._session, self, self._ttl)
+            self.check_ping_delayed()
+        elif action == ACTION_PINGACK:
             self.write_action(ACTION_PINGACKACK)
-            logging.info("xstream session %s connection %s ping", self._session, self)
+            self._ping_ack_time = time.time()
+            self._ttl = (self._ping_ack_time - self._ping_time) * 1000
+            logging.info("xstream session %s connection %s ping %.2fms", self._session, self, self._ttl)
+            self.check_ping_delayed()
         elif action == ACTION_PINGACKACK:
             pass
         elif action == ACTION_CLOSE:
@@ -213,9 +216,7 @@ class Connection(EventEmitter):
             reping_timeout = random.randint(240, 300)
 
         session_ttl = self._session._center.ttl
-        if self._ttl > 3000:
-            timeout = 15
-        elif session_ttl <= 400:
+        if session_ttl <= 400:
             timeout = reping_timeout
         elif session_ttl <= 800:
             timeout = 120
@@ -227,6 +228,11 @@ class Connection(EventEmitter):
             timeout = 20
         else:
             timeout = 15
+
+        if self._ttl > 4000:
+            timeout = min(30, timeout)
+        elif self._ttl > 8000:
+            timeout = min(15, timeout)
 
         session_delayed = (session_ttl >= 3000) if len(self._session._connections) <= 2 else (session_ttl >= 1000)
         if self._ttl <= 0 or time.time() - self._data_time >= reping_timeout \
@@ -251,6 +257,19 @@ class Connection(EventEmitter):
             logging.info("xstream session %s connection %s ping timeout", self._session, self)
         else:
             self._ping_timer = current().add_timeout(5, self.on_ping_loop)
+
+    def check_ping_delayed(self):
+        if self._ttl > 4000:
+            self._ping_delayed_count += 1
+        elif self._ttl > 8000:
+            self._ping_delayed_count += 2
+        else:
+            self._ping_delayed_count = 0
+        if self._ping_delayed_count < 6:
+            return
+        self._closed = True
+        self._connection.close()
+        logging.info("xstream session %s connection %s ping delayed", self._session, self)
 
     def on_check_data_loop(self):
         if self._closed:

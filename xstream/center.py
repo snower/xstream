@@ -406,7 +406,7 @@ class Center(EventEmitter):
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, now)
             return
 
-        if self.recv_index - self.send_ack_index <= 8 and (start_time <= 0 or now - start_time < 12):
+        if self.recv_index - self.send_ack_index <= 8 and (start_time <= 0 or now - start_time < 8):
             current().add_timeout(3, self.on_ack_loop, self.sframe_count, (now - 2) if start_time <= 0 else start_time)
             return
 
@@ -426,7 +426,7 @@ class Center(EventEmitter):
             current_index, last_index = self.recv_index, self.recv_frames[-1].index
 
             now = time.time()
-            index, cdata, max_timeout = 0, [], max(self.ttl / 500 * 4, 8)
+            index, cdata, max_timeout = 0, [], max(self.ttl / 1000 * 6, 6)
             while current_index <= last_index:
                 if index >= len(self.recv_frames):
                     break
@@ -530,9 +530,9 @@ class Center(EventEmitter):
                         require_write = True
                     elif p_send_index >= 538 or p_recv_index >= 538:
                         require_write = True
-                    elif self.recv_frames and len(self.recv_frames) < 8 and now - self.recv_frames[0].recv_time >= 16:
+                    elif self.recv_frames and len(self.recv_frames) < 8 and now - self.recv_frames[0].recv_time >= 12:
                         require_write = True
-                    elif self.send_frames and len(self.send_frames) < 16 and now - self.send_frames[0].send_time >= 16:
+                    elif self.send_frames and len(self.send_frames) < 16 and now - self.send_frames[0].send_time >= 12:
                         require_write = True
                     elif len(self.recv_frames) >= 16 and p_recv_index <= 16:
                         require_write = True
