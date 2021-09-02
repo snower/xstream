@@ -265,7 +265,7 @@ class Connection(EventEmitter):
             self._ping_delayed_count += 2
         else:
             self._ping_delayed_count = 0
-        if self._ping_delayed_count < 6:
+        if self._ping_delayed_count < 4:
             return
         self._closed = True
         self._connection.close()
