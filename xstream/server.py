@@ -92,7 +92,7 @@ class Server(EventEmitter):
                 with open(session_path + "/" + session_key, encoding="utf-8") as fp:
                     session = Session.loads(fp.read())
                     if session:
-                        logging.info("xstream load session %s %s", self, session)
+                        logging.info("xstream load session %s", self, session)
                         return session
         except Exception as e:
             logging.error("xstream load session fail %s", self)
@@ -350,7 +350,7 @@ class Server(EventEmitter):
                     except Exception as e:
                         logging.info("xstream session timeout close error %s %s", session, e)
                     else:
-                        logging.info("xstream session timeout close %s %s", session)
+                        logging.info("xstream session timeout close %s", session)
         finally:
             current().add_timeout(120, self.on_check_session_timeout)
 
