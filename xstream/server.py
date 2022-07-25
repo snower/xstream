@@ -92,7 +92,7 @@ class Server(EventEmitter):
                 with open(session_path + "/" + session_key, encoding="utf-8") as fp:
                     session = Session.loads(fp.read())
                     if session:
-                        logging.info("xstream load session %s", self, session)
+                        logging.info("xstream load session %s %s", self, session)
                         return session
         except Exception as e:
             logging.error("xstream load session fail %s", self)
