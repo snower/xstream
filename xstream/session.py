@@ -351,7 +351,7 @@ class Session(EventEmitter):
         if not self._key_exchanged:
             return False
 
-        if not self._center or self._center.ttl > 500:
+        if not self._center or self._center.ttl > 500 or len(self._connections) <= 1:
             return False
 
         data = struct.pack("!BI", 1, self._key_exchanged_count)

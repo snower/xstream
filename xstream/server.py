@@ -260,11 +260,6 @@ class Server(EventEmitter):
                     self.emit_connection(self, connection, datas)
                     return
 
-                if not session.key_exchanged:
-                    logging.info("xstream connection key exchanged refuse session closed %s %s %s", session_id, connection, time.time())
-                    self.emit_connection(self, connection, datas)
-                    return
-
                 crypto = session.get_decrypt_crypto(crypto_time)
                 key = crypto.decrypt(key)
 
@@ -313,7 +308,7 @@ class Server(EventEmitter):
                                 def on_timeout_start_key_exchange():
                                     if time.time() - session.key_exchanged_time > 7200:
                                         session.start_key_exchange()
-                                current().add_timeout(random.randint(15, 60), on_timeout_start_key_exchange)
+                                current().add_timeout(random.randint(0, 3), on_timeout_start_key_exchange)
 
                             connection._expried_seconds_timer = current().add_timeout(7200, connection.on_expried)
                         else:
@@ -327,6 +322,11 @@ class Server(EventEmitter):
                         logging.info("xstream connection close %s %s", session, connection)
                     connection.on("close", on_fork_connection_close)
                     logging.info("xstream connection connect %s %s", session, connection)
+                    return
+
+                if not session.key_exchanged:
+                    logging.info("xstream connection key exchanged refuse session closed %s %s %s", session_id, connection, time.time())
+                    self.emit_connection(self, connection, datas)
                     return
 
         def on_fork_fail_connection_close(connection):
