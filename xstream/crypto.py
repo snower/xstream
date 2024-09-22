@@ -66,6 +66,16 @@ def get_cryptography():
     ffi_buf = backend._ffi.cast("unsigned char *", backend._ffi.from_buffer(buf))
     outlen = backend._ffi.new("int *")
 
+    class HashDigest(object):
+        def __init__(self, s):
+            self.s = s
+
+        def update(self, *args, **kwargs):
+            return self.s.update(*args, **kwargs)
+
+        def digest(self, *args, **kwargs):
+            return self.s.finalize(*args, **kwargs)
+
     def update_warp(backend, cryptor, buf, ffi_buf, outlen):
         def update(data):
             data_len = len(data)
@@ -98,9 +108,7 @@ def get_cryptography():
         return d
 
     def bytes_to_key_digest():
-        s = Hash(SHA1(), backend=backend)
-        setattr(s, "digest", s.finalize)
-        return s
+        return HashDigest(Hash(SHA1(), backend=backend))
 
     return get_evp, rand_string, sign_string, bytes_to_key_digest
 
