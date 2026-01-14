@@ -304,11 +304,11 @@ class Server(EventEmitter):
                                     session.write_action(0x01)
                                 current().add_async(do_write_action)
 
-                            if time.time() - session.key_exchanged_time > 7200:
-                                def on_timeout_start_key_exchange():
-                                    if time.time() - session.key_exchanged_time > 7200:
-                                        session.start_key_exchange()
-                                current().add_timeout(random.randint(0, 3), on_timeout_start_key_exchange)
+                            # if time.time() - session.key_exchanged_time > 7200:
+                            #     def on_timeout_start_key_exchange():
+                            #         if time.time() - session.key_exchanged_time > 7200:
+                            #             session.start_key_exchange()
+                            #     current().add_timeout(random.randint(0, 3), on_timeout_start_key_exchange)
 
                             connection._expried_seconds_timer = current().add_timeout(7200, connection.on_expried)
                         else:
