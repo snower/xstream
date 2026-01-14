@@ -43,6 +43,7 @@ class Session(EventEmitter):
         self._key_exchanged_time = 0
         self._current_stream_id = 1 if is_server else 2
         self._connections = []
+        self._last_connection_time = 0
         self._streams = {}
         self._center = Center(self)
         self._data_time = time.time()
@@ -153,7 +154,7 @@ class Session(EventEmitter):
             connection = Connection(conn, self)
             self._connections.append(connection)
             self._center.add_connection(connection)
-
+            self._last_connection_time = time.time()
             self.update_mss()
 
             return connection
@@ -183,12 +184,19 @@ class Session(EventEmitter):
                     self.emit_close(self)
                     self.remove_all_listeners()
             else:
+                def do_close_streams():
+                    if not self._connections and self._streams:
+                        for stream_id, stream in tuple(self._streams.items()):
+                            stream.do_close()
+
                 def on_exit():
                     if not self._connections:
                         self.do_close()
 
                 if self._status == STATUS_OPENING:
-                    current().add_timeout(15 * 60, on_exit)
+                    current().add_timeout(5 * 60, on_exit)
+                    if self._streams:
+                        current().add_timeout(30, do_close_streams)
                 else:
                     current().add_async(on_exit)
 
@@ -262,8 +270,11 @@ class Session(EventEmitter):
         stream = self.create_stream(**kwargs)
         if callable(callback):
             callback(self, stream)
-        if self._status == STATUS_CLOSED:
-            current().add_async(stream.do_close)
+        if self._status == STATUS_CLOSED or not self._connections:
+            def do_close():
+                if self._status == STATUS_CLOSED or not self._connections:
+                    stream.do_close()
+            current().add_timeout(2 if self._status == STATUS_CLOSED else 15, do_close)
         return stream
 
     def close_stream(self, stream):
@@ -309,6 +320,8 @@ class Session(EventEmitter):
                 return
 
             if key_exchange_type == 1:
+                if not self._key_exchanged or not self._connections:
+                    return
                 data = struct.pack("!BI", 2, self._key_exchanged_count) + rand_string(64)
                 self.write_action(ACTION_KEYEXCHANGE, data, True)
                 self._key_exchanged = False

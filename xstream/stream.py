@@ -270,6 +270,9 @@ class Stream(EventEmitter):
         
         self._state = STATE_CLOSED
         def do_close():
+            if not self._session:
+                return
+
             if self._send_is_set_ready:
                 self._session.ready_write(self, False)
                 self._send_is_set_ready = False

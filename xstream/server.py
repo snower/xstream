@@ -304,9 +304,9 @@ class Server(EventEmitter):
                                     session.write_action(0x01)
                                 current().add_async(do_write_action)
 
-                            if time.time() - session.key_exchanged_time > 7200:
+                            if time.time() - session.key_exchanged_time > 604800:
                                 def on_timeout_start_key_exchange():
-                                    if time.time() - session.key_exchanged_time > 7200:
+                                    if time.time() - session.key_exchanged_time > 604800:
                                         session.start_key_exchange()
                                 current().add_timeout(random.randint(0, 3), on_timeout_start_key_exchange)
 
