@@ -58,7 +58,7 @@ ALG_KEY_IV_LEN = {
     }
 
 def get_cryptography():
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.ciphers import Cipher as BaseCipher, algorithms, modes
     from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1
     from cryptography.hazmat.backends import default_backend
     backend = default_backend()
@@ -76,8 +76,8 @@ def get_cryptography():
         def digest(self, *args, **kwargs):
             return self.s.finalize(*args, **kwargs)
 
-    def update_warp(backend, cryptor, buf, ffi_buf, outlen):
-        def update(data):
+    class Cipher(BaseCipher):
+        def update(self, data):
             data_len = len(data)
             if data_len > 261120:
                 udata = b''
@@ -86,14 +86,12 @@ def get_cryptography():
                 return udata
             backend._lib.EVP_CipherUpdate(cryptor._ctx._ctx, ffi_buf, outlen, backend._ffi.from_buffer(data), data_len)
             return bytes(buf[:outlen[0]])
-        return update
 
     def get_evp(alg_key, key, iv, op):
         if "aes" not in alg_key:
             return
         cipher = Cipher(algorithms.AES(key), getattr(modes, alg_key.split("_")[-1].upper())(iv), backend=backend)
         cryptor = cipher.encryptor() if op == 1 else cipher.decryptor()
-        setattr(cryptor, "update", update_warp(backend, cryptor, buf, ffi_buf, outlen))
         return cryptor
 
     def rand_string(length):
