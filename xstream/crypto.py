@@ -82,7 +82,7 @@ def get_cryptography():
             if data_len > 261120:
                 udata = b''
                 for i in range((data_len % 261120) + 1):
-                    udata += update(data[i*261120: (i+1) * 261120])
+                    udata += self.update(data[i*261120: (i+1) * 261120])
                 return udata
             backend._lib.EVP_CipherUpdate(cryptor._ctx._ctx, ffi_buf, outlen, backend._ffi.from_buffer(data), data_len)
             return bytes(buf[:outlen[0]])
